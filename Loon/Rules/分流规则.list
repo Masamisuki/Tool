@@ -1,6 +1,4 @@
-#danmu
 DOMAIN-SUFFIX,dandanplay.net
-#Porn Streaming Modules
 DOMAIN-KEYWORD,javday
 DOMAIN-SUFFIX,pornhub.com
 DOMAIN-SUFFIX,phncdn.com
@@ -14,18 +12,14 @@ DOMAIN-SUFFIX,jable.tv
 DOMAIN-SUFFIX,mushroomtrack.com
 DOMAIN-SUFFIX,javrate.com
 DOMAIN-SUFFIX,b-cdn.net
-#Media Metadata Sources
 DOMAIN-SUFFIX,imdb.com
 DOMAIN-SUFFIX,media-imdb.com
 DOMAIN-SUFFIX,tmdb.org
-#VOD Modules
 DOMAIN-SUFFIX,heimuer.tv
 DOMAIN-SUFFIX,dytt8vip.com
 DOMAIN-SUFFIX,imgzy360.com
 DOMAIN-SUFFIX,iill.top
-#Trailer Cover
 DOMAIN-SUFFIX,googlevideo.com
-#Infinite API
 DOMAIN-SUFFIX,malaysla.com
 DOMAIN-SUFFIX,biggggg.com
 DOMAIN-SUFFIX,nivod4.tv
@@ -33,3 +27,14 @@ DOMAIN-SUFFIX,ulivetv.net
 DOMAIN-SUFFIX,efhie.com
 DOMAIN-SUFFIX,newpppp.com
 DOMAIN-SUFFIX,ceres9350.com
+DOMAIN-SUFFIX,ipinfo.io,Proxy
+DOMAIN-SUFFIX,ip-score.com,Proxy
+DOMAIN-SUFFIX,ipwhois.app,Proxy
+DOMAIN-SUFFIX,ip-api.com,Proxy
+DOMAIN-SUFFIX,api-ipv4.ip.sb,Proxy
+DOMAIN,m.mobaiemby.site
+DOMAIN,link00.okemby.org
+DOMAIN,link01.okemby.org
+DOMAIN,www.lilyemby.com
+DOMAIN,tx.lilyemby.com
+DOMAIN,aliyun.lilyemby.com
