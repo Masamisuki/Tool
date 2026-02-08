@@ -20,3 +20,5 @@ DOMAIN-SUFFIX,api.zhuishushenqi.com
 DOMAIN-SUFFIX,admin-app.edifier.com
 DOMAIN-SUFFIX,api.bilibili.com
 DOMAIN-SUFFIX,api.live.bilibili.com
+##Emby
+DOMAIN,cdn.lilyemby.com
