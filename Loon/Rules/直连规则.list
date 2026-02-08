@@ -1,7 +1,7 @@
 ##QQ音乐统计直连
 DOMAIN,stat.y.qq.com
 DOMAIN,stat6.y.qq.com
-##网络信息 𝕏
+##网络信息 𝕏模块
 DOMAIN-SUFFIX,cip.cc
 DOMAIN-SUFFIX,appc.qixin.com
 DOMAIN-SUFFIX,forge.speedtest.cn
