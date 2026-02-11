@@ -17,10 +17,10 @@ jobs:
 
       - name: Process and Sync Rules
         run: |
-          # 明确目标目录为仓库根目录下的路径
-          TARGET_DIR="Tool/Egern/Rules"
+          # 修正：直接指向仓库根目录下的 Egern/Rules
+          # 这样文件就会保存在 Masamisuki/Tool 仓库的 Egern/Rules 文件夹内
+          TARGET_DIR="Egern/Rules"
           
-          # 确保目录存在（不会重复创建 Tool/Tool）
           mkdir -p "$TARGET_DIR"
 
           # 1. GeositeCN
@@ -54,8 +54,8 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           
-          # 强制添加正确的路径
-          git add Tool/Egern/Rules/
+          # 只添加根目录下的 Egern 文件夹
+          git add Egern/Rules/
           
           if ! git diff --staged --quiet; then
             git commit -m "Auto Update Rules: $(date +'%Y-%m-%d %H:%M:%S')"
