@@ -28,20 +28,20 @@ jobs:
 
       - name: Process sgmodule (remove QQ stat domains)
         run: |
-          # 修正路径：直接指向仓库根目录下的 Surge/sgmodule
-          # 这样文件就会保存在 Masamisuki/Tool 仓库的 Surge/sgmodule 文件夹内
-          mkdir -p Surge/sgmodule
+          # 路径修正：使用大写的 Sgmodule，并直接从根目录 Surge 开始
+          mkdir -p Surge/Sgmodule
           grep -v -E 'stat\.y\.qq\.com|stat6\.y\.qq\.com' \
             /tmp/广告平台拦截器.sgmodule \
-            > Surge/sgmodule/广告平台拦截器.sgmodule
-          echo "Generated file in Surge/sgmodule:"
-          ls -l Surge/sgmodule
+            > Surge/Sgmodule/广告平台拦截器.sgmodule
+          echo "Generated file in Surge/Sgmodule:"
+          ls -l Surge/Sgmodule
 
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # 只添加根目录下的 Surge 文件夹
-          git add Surge/sgmodule/广告平台拦截器.sgmodule
+          
+          # 确保 git add 路径也同步修改为大写
+          git add Surge/Sgmodule/广告平台拦截器.sgmodule
           git commit -m "chore: 自动更新 广告平台拦截器.sgmodule（移除 QQ 统计域名）" || exit 0
           git push
