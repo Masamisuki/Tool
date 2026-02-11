@@ -1,0 +1,47 @@
+name: Update 广告平台拦截器.sgmodule
+
+on:
+  schedule:
+    # 每天北京时间 24:00（UTC 16:00）
+    - cron: "0 16 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Download upstream sgmodule
+        run: |
+          curl -L \
+          https://raw.githubusercontent.com/QingRex/LoonKissSurge/refs/heads/main/Surge/广告平台拦截器.sgmodule \
+          -o /tmp/广告平台拦截器.sgmodule
+
+      - name: Process sgmodule (remove QQ stat domains)
+        run: |
+          # 修正路径：直接指向仓库根目录下的 Surge/sgmodule
+          # 这样文件就会保存在 Masamisuki/Tool 仓库的 Surge/sgmodule 文件夹内
+          mkdir -p Surge/sgmodule
+          grep -v -E 'stat\.y\.qq\.com|stat6\.y\.qq\.com' \
+            /tmp/广告平台拦截器.sgmodule \
+            > Surge/sgmodule/广告平台拦截器.sgmodule
+          echo "Generated file in Surge/sgmodule:"
+          ls -l Surge/sgmodule
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # 只添加根目录下的 Surge 文件夹
+          git add Surge/sgmodule/广告平台拦截器.sgmodule
+          git commit -m "chore: 自动更新 广告平台拦截器.sgmodule（移除 QQ 统计域名）" || exit 0
+          git push
