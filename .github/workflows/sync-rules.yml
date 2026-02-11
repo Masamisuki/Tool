@@ -2,7 +2,6 @@ name: Sync & Update Egern Rules
 
 on:
   schedule:
-    # 每天北京时间上午 8:00 (UTC 0:00) 运行
     - cron: '0 0 * * *'
   workflow_dispatch:
 
@@ -16,55 +15,50 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Environment
-        run: mkdir -p Tool/Egern/Rules/
-
-      - name: Process GeositeCN & ChinaMax
+      - name: Process Rules
         run: |
+          # 定义统一的目标路径
+          TARGET_DIR="Tool/Egern/Rules"
+          mkdir -p "$TARGET_DIR"
+
           # 1. 处理 GeositeCN
           curl -sSL https://raw.githubusercontent.com/Accademia/Additional_Rule_For_Clash/refs/heads/main/GeositeCN/GeositeCN.yaml -o raw_cn.txt
           grep "DOMAIN" raw_cn.txt | sed -E 's/^[[:space:]]*-?[[:space:]]*//g; s/ //g; s/#.*//g' | sort -u > temp_cn.txt
           COUNT_CN=$(wc -l < temp_cn.txt)
-          printf "# 规则名称: GeositeCN\n# 规则统计: $COUNT_CN\n# 最后更新: $(date '+%Y-%m-%d %H:%M:%S') (GMT)\n\n" > Tool/Egern/Rules/GeositeCN.list
-          cat temp_cn.txt >> Tool/Egern/Rules/GeositeCN.list
+          printf "# 规则名称: GeositeCN\n# 规则统计: $COUNT_CN\n# 最后更新: $(date '+%Y-%m-%d %H:%M:%S') (GMT)\n\n" > "$TARGET_DIR/GeositeCN.list"
+          cat temp_cn.txt >> "$TARGET_DIR/GeositeCN.list"
 
           # 2. 处理 ChinaMax
           curl -sSL https://raw.githubusercontent.com/Accademia/Additional_Rule_For_Clash/refs/heads/main/ChinaMax/ChinaMax.yaml -o raw_max.txt
           grep "DOMAIN" raw_max.txt | sed -E 's/^[[:space:]]*-?[[:space:]]*//g; s/ //g; s/#.*//g' | sort -u > temp_max.txt
           COUNT_MAX=$(wc -l < temp_max.txt)
-          printf "# 规则名称: ChinaMax\n# 规则统计: $COUNT_MAX\n# 最后更新: $(date '+%Y-%m-%d %H:%M:%S') (GMT)\n\n" > Tool/Egern/Rules/ChinaMax.list
-          cat temp_max.txt >> Tool/Egern/Rules/ChinaMax.list
+          printf "# 规则名称: ChinaMax\n# 规则统计: $COUNT_MAX\n# 最后更新: $(date '+%Y-%m-%d %H:%M:%S') (GMT)\n\n" > "$TARGET_DIR/ChinaMax.list"
+          cat temp_max.txt >> "$TARGET_DIR/ChinaMax.list"
 
-      - name: Sync SukkaW Reject Rules
-        run: |
-          # 下载拦截规则
-          curl -L "https://ruleset.skk.moe/List/domainset/reject.conf" -o "Tool/Egern/Rules/Sukka-Reject_Base.conf"
-          curl -L "https://ruleset.skk.moe/List/non_ip/reject.conf" -o "Tool/Egern/Rules/Sukka-Reject_Non-IP.conf"
-          
-          # 清理特征行
-          sed -i -e '/this_ruleset_is_made_by_sukkaw/d; /th1s_rule5et_1s_m4d3_by_5ukk4w/d; /this_rule_set_is_made_by_sukkaw/d; /7h1s_rul35et_i5_mad3_by_5ukk4w/d' Tool/Egern/Rules/Sukka-Reject_*.conf
+          # 3. 同步 SukkaW 拦截规则
+          curl -L "https://ruleset.skk.moe/List/domainset/reject.conf" -o "$TARGET_DIR/Sukka-Reject_Base.conf"
+          curl -L "https://ruleset.skk.moe/List/non_ip/reject.conf" -o "$TARGET_DIR/Sukka-Reject_Non-IP.conf"
 
-      - name: Sync SukkaW DNS Mapping
-        run: |
-          # 下载 DNS 映射
-          curl -L "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/alibaba.conf" -o "Tool/Egern/Rules/Alibaba.conf"
-          curl -L "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/tencent.conf" -o "Tool/Egern/Rules/Tencent.conf"
-          curl -L "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/bilibili.conf" -o "Tool/Egern/Rules/Bilibili.conf"
-          curl -L "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/bytedance.conf" -o "Tool/Egern/Rules/ByteDance.conf"
-          curl -L "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/baidu.conf" -o "Tool/Egern/Rules/Baidu.conf"
+          # 4. 同步 SukkaW DNS 映射
+          curl -L "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/alibaba.conf" -o "$TARGET_DIR/Alibaba.conf"
+          curl -L "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/tencent.conf" -o "$TARGET_DIR/Tencent.conf"
+          curl -L "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/bilibili.conf" -o "$TARGET_DIR/Bilibili.conf"
+          curl -L "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/bytedance.conf" -o "$TARGET_DIR/ByteDance.conf"
+          curl -L "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/baidu.conf" -o "$TARGET_DIR/Baidu.conf"
 
-          # 批量清理 DNS 配置文件中的特征行
-          sed -i -e '/this_ruleset_is_made_by_sukkaw/d; /th1s_rule5et_1s_m4d3_by_5ukk4w/d; /this_rule_set_is_made_by_sukkaw/d; /7h1s_rul35et_i5_mad3_by_5ukk4w/d' Tool/Egern/Rules/*.conf
+          # 5. 批量清理所有 .conf 文件中的特征行
+          sed -i -e '/this_ruleset_is_made_by_sukkaw/d; /th1s_rule5et_1s_m4d3_by_5ukk4w/d; /this_rule_set_is_made_by_sukkaw/d; /7h1s_rul35et_i5_mad3_by_5ukk4w/d' "$TARGET_DIR"/*.conf
 
       - name: Git Push Changes
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
+          
+          # 确保 git add 的也是定义的路径
           git add Tool/Egern/Rules/
           
-          # 只有在有变动时才提交
           if ! git diff --staged --quiet; then
-            git commit -m "Auto Update Rules & DNS Mapping: $(date +'%Y-%m-%d %H:%M:%S')"
+            git commit -m "Auto Update Rules: $(date +'%Y-%m-%d %H:%M:%S')"
             git push
           else
             echo "No changes detected, skipping push."
