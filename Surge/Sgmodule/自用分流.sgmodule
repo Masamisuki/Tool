@@ -1,5 +1,5 @@
 #!name=📦 自用分流修正合集
-#!desc=Emby 分流｜网络信息 𝕏｜QQ 音乐统计直连｜Forward Widget Filter
+#!desc=Emby 分流｜网络信息 𝕏｜QQ 音乐统计直连
 #!author=粲
 #!category=分流修正
 #!arguments=proxy:Proxy
@@ -63,49 +63,3 @@ DOMAIN-SUFFIX,api-ipv4.ip.sb,Proxy
 
 DOMAIN,stat.y.qq.com,DIRECT
 DOMAIN,stat6.y.qq.com,DIRECT
-
-
-# ==================================================
-# Forward Widget Filter
-# ==================================================
-
-# danmu
-DOMAIN-SUFFIX,dandanplay.net,{{{proxy}}}
-
-# Porn Streaming Modules
-DOMAIN-KEYWORD,javday,{{{proxy}}}
-DOMAIN-SUFFIX,jable.tv,{{{proxy}}}
-DOMAIN-SUFFIX,javrate.com,{{{proxy}}}
-DOMAIN-SUFFIX,pornhub.com,{{{proxy}}}
-DOMAIN-SUFFIX,phncdn.com,{{{proxy}}}
-DOMAIN-SUFFIX,xvideos.com,{{{proxy}}}
-DOMAIN-SUFFIX,xvideos-cdn.com,{{{proxy}}}
-DOMAIN-SUFFIX,91porn.com,{{{proxy}}}
-DOMAIN-SUFFIX,mushroomtrack.com,{{{proxy}}}
-DOMAIN-KEYWORD,btc620,{{{proxy}}}
-DOMAIN-KEYWORD,killcovid2021,{{{proxy}}}
-DOMAIN-KEYWORD,cdn77,{{{proxy}}}
-DOMAIN-SUFFIX,b-cdn.net,{{{proxy}}}
-
-# Media Metadata Sources
-DOMAIN-SUFFIX,imdb.com,{{{proxy}}}
-DOMAIN-SUFFIX,media-imdb.com,{{{proxy}}}
-DOMAIN-SUFFIX,tmdb.org,{{{proxy}}}
-
-# VOD Modules
-DOMAIN-SUFFIX,heimuer.tv,{{{proxy}}}
-DOMAIN-SUFFIX,dytt8vip.com,{{{proxy}}}
-DOMAIN-SUFFIX,imgzy360.com,{{{proxy}}}
-DOMAIN-SUFFIX,iill.top,{{{proxy}}}
-
-# Trailer Cover
-DOMAIN-SUFFIX,googlevideo.com,{{{proxy}}}
-
-# Infinite API
-DOMAIN-SUFFIX,malaysla.com,{{{proxy}}}
-DOMAIN-SUFFIX,biggggg.com,{{{proxy}}}
-DOMAIN-SUFFIX,nivod4.tv,{{{proxy}}}
-DOMAIN-SUFFIX,ulivetv.net,{{{proxy}}}
-DOMAIN-SUFFIX,efhie.com,{{{proxy}}}
-DOMAIN-SUFFIX,newpppp.com,{{{proxy}}}
-DOMAIN-SUFFIX,ceres9350.com,{{{proxy}}}
