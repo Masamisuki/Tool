@@ -1,29 +1,9 @@
 #!name=📦 自用分流修正合集
-#!desc=Emby 分流｜网络信息 𝕏｜QQ 音乐统计直连
+#!desc=网络信息 𝕏｜QQ 音乐统计直连
 #!author=粲
 #!category=分流修正
-#!arguments=proxy:Proxy
-#!arguments-desc=proxy:Emby / 媒体相关服务使用的代理策略组
 
 [Rule]
-
-# ==================================================
-# Emby 服务分流（使用模块参数 proxy）
-# ==================================================
-
-# 墨云阁
-DOMAIN,m.mobaiemby.site,{{{proxy}}}
-
-# OkEmby
-DOMAIN,link00.okemby.org,{{{proxy}}}
-DOMAIN,link01.okemby.org,{{{proxy}}}
-
-# LilyEmby
-DOMAIN,cdn.lilyemby.com,DIRECT
-DOMAIN,www.lilyemby.com,{{{proxy}}}
-DOMAIN,tx.lilyemby.com,{{{proxy}}}
-DOMAIN,aliyun.lilyemby.com,{{{proxy}}}
-
 
 # ==================================================
 # 网络信息 𝕏
