@@ -1,10 +1,13 @@
 name: Sync Egern Module
 
-# 每天 00:00 UTC 自动运行
 on:
   schedule:
     - cron: '0 0 * * *'
   workflow_dispatch:
+
+# 🔥 关键权限
+permissions:
+  contents: write
 
 jobs:
   sync:
@@ -22,11 +25,8 @@ jobs:
 
     - name: Sync Module folder
       run: |
-        # 删除旧的
         rm -rf Surge/Sgmodule
-        # 如果不存在的话创建
         mkdir -p Surge/Sgmodule
-        # 复制上游 Module 到指定目录
         cp -r upstream/Module/* Surge/Sgmodule/
 
     - name: Commit and push changes
@@ -34,7 +34,6 @@ jobs:
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
         git add Surge/Sgmodule
-        # 如果没有变化则退出不提交
         git diff --quiet --cached && echo "No changes" && exit 0
-        git commit -m "🔄 Sync Egern Module into Surge/Sgmodule"
+        git commit -m "🔄 Sync Egern Module"
         git push
