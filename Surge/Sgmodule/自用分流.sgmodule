@@ -4,11 +4,7 @@
 #!category=分流修正
 
 [Rule]
-
-# ==================================================
-# 网络信息 𝕏
-# ==================================================
-
+### 网络信息 𝕏
 # 国内直连
 DOMAIN-SUFFIX,cip.cc,DIRECT
 DOMAIN-SUFFIX,appc.qixin.com,DIRECT
@@ -28,7 +24,6 @@ DOMAIN-SUFFIX,api.zhuishushenqi.com,DIRECT
 DOMAIN-SUFFIX,admin-app.edifier.com,DIRECT
 DOMAIN-SUFFIX,api.bilibili.com,DIRECT
 DOMAIN-SUFFIX,api.live.bilibili.com,DIRECT
-
 # 国外代理
 DOMAIN-SUFFIX,ipinfo.io,Proxy
 DOMAIN-SUFFIX,ip-score.com,Proxy
@@ -36,10 +31,6 @@ DOMAIN-SUFFIX,ipwhois.app,Proxy
 DOMAIN-SUFFIX,ip-api.com,Proxy
 DOMAIN-SUFFIX,api-ipv4.ip.sb,Proxy
 
-
-# ==================================================
-# QQ 音乐统计直连补丁
-# ==================================================
-
+### QQ 音乐统计直连补丁
 DOMAIN,stat.y.qq.com,DIRECT
 DOMAIN,stat6.y.qq.com,DIRECT
