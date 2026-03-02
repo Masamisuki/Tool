@@ -1,8 +1,8 @@
-name: Sync & Update Egern Rules
+name: Sync Egern Rules
 
 on:
   schedule:
-    - cron: '0 0 * * *'   # UTC 00:00（如果你想北京时间00:00告诉我）
+    - cron: '0 0 * * *'   # UTC 00:00（北京时间08:00）
   workflow_dispatch:
 
 jobs:
@@ -12,13 +12,17 @@ jobs:
       contents: write
 
     steps:
+      ##########################################################
+      # 1️⃣ 拉取你的仓库
+      ##########################################################
+
       - name: Checkout Your Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       ##########################################################
-      # 一、同步 Repcz 上游规则（保留你自己的规则）
+      # 2️⃣ 同步 Repcz 上游规则（保留你的规则）
       ##########################################################
 
       - name: Clone Upstream Repo
@@ -37,27 +41,7 @@ jobs:
           rsync -av --exclude='.git' upstream/Egern/Rules/ "$TARGET_DIR/"
 
       ##########################################################
-      # 二、生成 GeositeCN / ChinaMax 规则
-      ##########################################################
-
-      - name: Generate GeositeCN & ChinaMax
-        run: |
-          TARGET_DIR="Egern/Rules"
-
-          # 1. GeositeCN
-          curl -sSL https://raw.githubusercontent.com/Accademia/Additional_Rule_For_Clash/refs/heads/main/GeositeCN/GeositeCN.yaml -o raw_cn.txt
-          grep "DOMAIN" raw_cn.txt | sed -E 's/^[[:space:]]*-?[[:space:]]*//g; s/ //g; s/#.*//g' | sort -u > temp_cn.txt
-          printf "# 规则名称: GeositeCN\n# 规则统计: $(wc -l < temp_cn.txt)\n# 最后更新: $(date '+%Y-%m-%d %H:%M:%S') (UTC)\n\n" > "$TARGET_DIR/GeositeCN.list"
-          cat temp_cn.txt >> "$TARGET_DIR/GeositeCN.list"
-
-          # 2. ChinaMax
-          curl -sSL https://raw.githubusercontent.com/Accademia/Additional_Rule_For_Clash/refs/heads/main/ChinaMax/ChinaMax.yaml -o raw_max.txt
-          grep "DOMAIN" raw_max.txt | sed -E 's/^[[:space:]]*-?[[:space:]]*//g; s/ //g; s/#.*//g' | sort -u > temp_max.txt
-          printf "# 规则名称: ChinaMax\n# 规则统计: $(wc -l < temp_max.txt)\n# 最后更新: $(date '+%Y-%m-%d %H:%M:%S') (UTC)\n\n" > "$TARGET_DIR/ChinaMax.list"
-          cat temp_max.txt >> "$TARGET_DIR/ChinaMax.list"
-
-      ##########################################################
-      # 三、下载 Sukka DNS Mapping
+      # 3️⃣ 下载 Sukka DNS Mapping
       ##########################################################
 
       - name: Download Sukka DNS Mapping
@@ -71,7 +55,7 @@ jobs:
           curl -L "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/baidu.conf" -o "$TARGET_DIR/Baidu.conf"
 
       ##########################################################
-      # 四、提交更新
+      # 4️⃣ 提交更新
       ##########################################################
 
       - name: Commit and Push Changes
@@ -82,7 +66,7 @@ jobs:
           git add Egern/Rules/
 
           if ! git diff --staged --quiet; then
-            git commit -m "Auto Sync & Update Egern Rules: $(date +'%Y-%m-%d %H:%M:%S') UTC"
+            git commit -m "Auto Sync Egern Rules: $(date +'%Y-%m-%d %H:%M:%S') UTC"
             git push
           else
             echo "No changes detected."
