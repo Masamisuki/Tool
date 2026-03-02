@@ -2,7 +2,7 @@ name: Sync Egern Rules
 
 on:
   schedule:
-    - cron: '0 0 * * *'   # UTC 00:00（北京时间08:00）
+    - cron: '0 0 * * *'
   workflow_dispatch:
 
 jobs:
@@ -12,33 +12,26 @@ jobs:
       contents: write
 
     steps:
-      ##########################################################
-      # 1️⃣ 拉取你的仓库
-      ##########################################################
+      # 1️⃣ Checkout repository
       - name: Checkout Your Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      ##########################################################
-      # 2️⃣ 同步 Repcz 上游规则（保留你的规则）
-      ##########################################################
+      # 2️⃣ Clone upstream
       - name: Clone Upstream Repo
         run: |
           git clone --depth=1 --branch X https://github.com/Repcz/Tool.git upstream
 
+      # 3️⃣ Sync upstream rules
       - name: Sync Upstream Rules
         run: |
           TARGET_DIR="Egern/Rules"
           mkdir -p "$TARGET_DIR"
-          # 删除上游的 Emby.yaml（优先保留你的）
           rm -f upstream/Egern/Rules/Emby.yaml
-          # 同步文件（不会删除你已有的文件）
           rsync -av --exclude='.git' upstream/Egern/Rules/ "$TARGET_DIR/"
 
-      ##########################################################
-      # 3️⃣ 下载 Sukka DNS Mapping
-      ##########################################################
+      # 4️⃣ Download Sukka DNS Mapping
       - name: Download Sukka DNS Mapping
         run: |
           TARGET_DIR="Egern/Rules"
@@ -48,22 +41,15 @@ jobs:
           curl -sL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/bytedance.conf -o "$TARGET_DIR/ByteDance.conf"
           curl -sL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/baidu.conf -o "$TARGET_DIR/Baidu.conf"
 
-      ##########################################################
-      # 4️⃣ 下载并处理 AdBlock_Egern 规则
-      ##########################################################
+      # 5️⃣ Download and process AdBlock_Egern
       - name: Download and Process AdBlock_Egern
         run: |
           TARGET_DIR="Egern/Rules"
           TEMP_FILE="temp_adblock.list"
           FINAL_FILE="$TARGET_DIR/AdBlock_Egern.list"
 
-          # 下载最新上游文件
           curl -sL https://raw.githubusercontent.com/217heidai/adblockfilters/main/rules/adblocksurge.list -o "$TEMP_FILE"
 
-          # 处理规则：
-          # 1. 只保留 #!name= 和 #!desc=
-          # 2. 删除其它 # 开头的行
-          # 3. 替换 Surge 为 Egern
           awk '
             /^#!name=/ { gsub(/Surge/, "Egern"); print; next }
             /^#!desc=/ { gsub(/Surge/, "Egern"); print; next }
@@ -73,23 +59,22 @@ jobs:
 
           rm -f "$TEMP_FILE"
 
-      ##########################################################
-      # 5️⃣ 删除包含 stat.y.qq.com 和 stat6.y.qq.com 的行
-      ##########################################################
+      # 6️⃣ Remove stat.y.qq.com lines
       - name: Filter QQ Stat URLs
         run: |
           TARGET_FILE="Egern/Rules/AdBlock_Egern.list"
           grep -v -e "stat.y.qq.com" -e "stat6.y.qq.com" "$TARGET_FILE" > "${TARGET_FILE}.tmp"
           mv "${TARGET_FILE}.tmp" "$TARGET_FILE"
 
-      ##########################################################
-      # 6️⃣ 提交更新
-      ##########################################################
+      # 7️⃣ Commit and push changes
       - name: Commit and Push Changes
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
+
           git add Egern/Rules/
+
+          # 注意：if/then/else/fi 缩进必须统一，不要混 Tab
           if ! git diff --staged --quiet; then
             git commit -m "Auto Sync Egern Rules: $(date +'%Y-%m-%d %H:%M:%S') UTC"
             git push
