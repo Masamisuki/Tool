@@ -2,7 +2,7 @@ name: Sync Egern Rules
 
 on:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 0 * * *'   # UTC 00:00（北京时间08:00）
   workflow_dispatch:
 
 jobs:
@@ -60,7 +60,7 @@ jobs:
           TEMP_FILE="temp_adblock.list"
           FINAL_FILE="$TARGET_DIR/AdBlock_Egern.list"
 
-          # 下载原始文件
+          # 下载最新上游文件
           curl -sL https://raw.githubusercontent.com/217heidai/adblockfilters/main/rules/adblocksurge.list -o "$TEMP_FILE"
 
           # 处理规则：
@@ -85,7 +85,17 @@ jobs:
           rm -f "$TEMP_FILE"
 
       ##########################################################
-      # 5️⃣ 提交更新
+      # 5️⃣ 删除包含 stat.y.qq.com 和 stat6.y.qq.com 的行
+      ##########################################################
+      - name: Filter QQ Stat URLs
+        run: |
+          TARGET_FILE="Egern/Rules/AdBlock_Egern.list"
+          # 删除包含指定网址的行
+          grep -v -e "stat.y.qq.com" -e "stat6.y.qq.com" "$TARGET_FILE" > "${TARGET_FILE}.tmp"
+          mv "${TARGET_FILE}.tmp" "$TARGET_FILE"
+
+      ##########################################################
+      # 6️⃣ 提交更新
       ##########################################################
       - name: Commit and Push Changes
         run: |
@@ -99,4 +109,3 @@ jobs:
             git push
           else
             echo "No changes detected."
-          fi
