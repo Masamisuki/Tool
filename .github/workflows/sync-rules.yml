@@ -15,7 +15,6 @@ jobs:
       ##########################################################
       # 1️⃣ 拉取你的仓库
       ##########################################################
-
       - name: Checkout Your Repository
         uses: actions/checkout@v4
         with:
@@ -24,7 +23,6 @@ jobs:
       ##########################################################
       # 2️⃣ 同步 Repcz 上游规则（保留你的规则）
       ##########################################################
-
       - name: Clone Upstream Repo
         run: |
           git clone --depth=1 --branch X https://github.com/Repcz/Tool.git upstream
@@ -43,7 +41,6 @@ jobs:
       ##########################################################
       # 3️⃣ 下载 Sukka DNS Mapping
       ##########################################################
-
       - name: Download Sukka DNS Mapping
         run: |
           TARGET_DIR="Egern/Rules"
@@ -55,9 +52,17 @@ jobs:
           curl -L "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/baidu.conf" -o "$TARGET_DIR/Baidu.conf"
 
       ##########################################################
-      # 4️⃣ 提交更新
+      # 4️⃣ 下载 AdBlock Egern 规则
       ##########################################################
+      - name: Download AdBlock Egern
+        run: |
+          TARGET_DIR="Egern/Rules"
+          curl -L "https://raw.githubusercontent.com/217heidai/adblockfilters/main/rules/adblocksurge.list" \
+          -o "$TARGET_DIR/AdBlock Egern.list"
 
+      ##########################################################
+      # 5️⃣ 提交更新
+      ##########################################################
       - name: Commit and Push Changes
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
