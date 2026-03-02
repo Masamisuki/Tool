@@ -55,7 +55,7 @@ jobs:
           curl -sL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/baidu.conf -o "$TARGET_DIR/Baidu.conf"
 
       ##########################################################
-      # 4️⃣ 下载并处理 AdBlock_Egern 规则 (已添加黑名单过滤)
+      # 4️⃣ 下载并处理 AdBlock_Egern 规则
       ##########################################################
       - name: Download and Process AdBlock_Egern
         run: |
@@ -68,13 +68,15 @@ jobs:
           curl -sL https://raw.githubusercontent.com/217heidai/adblockfilters/main/rules/adblocksurge.list -o "$TEMP_FILE"
 
           # 处理规则：
-          # 1. 过滤掉 stat.y.qq.com 和 stat6.y.qq.com
+          # 1. 精确删除这两条规则：
+          #    DOMAIN-SUFFIX, stat.y.qq.com
+          #    DOMAIN-SUFFIX, stat6.y.qq.com
           # 2. 只保留 #!name= 和 #!desc=
           # 3. 删除其它 # 开头的行
           # 4. 替换 Surge 为 Egern
           awk '
-            /stat\.y\.qq\.com/ { next }
-            /stat6\.y\.qq\.com/ { next }
+            /^DOMAIN-SUFFIX, stat\.y\.qq\.com$/ { next }
+            /^DOMAIN-SUFFIX, stat6\.y\.qq\.com$/ { next }
             /^#!name=/ {
               gsub(/Surge/, "Egern")
               print
