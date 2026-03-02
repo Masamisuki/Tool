@@ -2,7 +2,7 @@ name: Sync Egern Rules
 
 on:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 0 * * *'   # UTC 00:00（北京时间08:00）
   workflow_dispatch:
 
 jobs:
@@ -12,61 +12,81 @@ jobs:
       contents: write
 
     steps:
-      # 1️⃣ Checkout repository
+      ##########################################################
+      # 1️⃣ 拉取你的仓库
+      ##########################################################
       - name: Checkout Your Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2️⃣ Clone upstream
+      ##########################################################
+      # 2️⃣ 同步 Repcz 上游规则（保留你的规则）
+      ##########################################################
       - name: Clone Upstream Repo
         run: |
           git clone --depth=1 --branch X https://github.com/Repcz/Tool.git upstream
 
-      # 3️⃣ Sync upstream rules
       - name: Sync Upstream Rules
         run: |
           TARGET_DIR="Egern/Rules"
           mkdir -p "$TARGET_DIR"
+
+          # 删除上游的 Emby.yaml（优先保留你的）
           rm -f upstream/Egern/Rules/Emby.yaml
+
+          # 同步文件（不会删除你已有的文件）
           rsync -av --exclude='.git' upstream/Egern/Rules/ "$TARGET_DIR/"
 
-      # 4️⃣ Download Sukka DNS Mapping
+      ##########################################################
+      # 3️⃣ 下载 Sukka DNS Mapping
+      ##########################################################
       - name: Download Sukka DNS Mapping
         run: |
           TARGET_DIR="Egern/Rules"
+
           curl -sL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/alibaba.conf -o "$TARGET_DIR/Alibaba.conf"
           curl -sL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/tencent.conf -o "$TARGET_DIR/Tencent.conf"
           curl -sL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/bilibili.conf -o "$TARGET_DIR/Bilibili.conf"
           curl -sL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/bytedance.conf -o "$TARGET_DIR/ByteDance.conf"
           curl -sL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/baidu.conf -o "$TARGET_DIR/Baidu.conf"
 
-      # 5️⃣ Download and process AdBlock_Egern
+      ##########################################################
+      # 4️⃣ 下载并处理 AdBlock_Egern 规则
+      ##########################################################
       - name: Download and Process AdBlock_Egern
         run: |
           TARGET_DIR="Egern/Rules"
           TEMP_FILE="temp_adblock.list"
           FINAL_FILE="$TARGET_DIR/AdBlock_Egern.list"
 
+          # 下载最新上游文件
           curl -sL https://raw.githubusercontent.com/217heidai/adblockfilters/main/rules/adblocksurge.list -o "$TEMP_FILE"
 
+          # 处理规则：
+          # 1. 只保留 #!name= 和 #!desc=
+          # 2. 删除其它 # 开头的行
+          # 3. 替换 Surge 为 Egern
           awk '
-            /^#!name=/ { gsub(/Surge/, "Egern"); print; next }
-            /^#!desc=/ { gsub(/Surge/, "Egern"); print; next }
+            /^#!name=/ {
+              gsub(/Surge/, "Egern")
+              print
+              next
+            }
+            /^#!desc=/ {
+              gsub(/Surge/, "Egern")
+              print
+              next
+            }
             /^#/ { next }
             { print }
           ' "$TEMP_FILE" > "$FINAL_FILE"
 
           rm -f "$TEMP_FILE"
 
-      # 6️⃣ Remove stat.y.qq.com lines
-      - name: Filter QQ Stat URLs
-        run: |
-          TARGET_FILE="Egern/Rules/AdBlock_Egern.list"
-          grep -v -e "stat.y.qq.com" -e "stat6.y.qq.com" "$TARGET_FILE" > "${TARGET_FILE}.tmp"
-          mv "${TARGET_FILE}.tmp" "$TARGET_FILE"
-
-      # 7️⃣ Commit and push changes
+      ##########################################################
+      # 5️⃣ 提交更新
+      ##########################################################
       - name: Commit and Push Changes
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
@@ -74,7 +94,6 @@ jobs:
 
           git add Egern/Rules/
 
-          # 注意：if/then/else/fi 缩进必须统一，不要混 Tab
           if ! git diff --staged --quiet; then
             git commit -m "Auto Sync Egern Rules: $(date +'%Y-%m-%d %H:%M:%S') UTC"
             git push
