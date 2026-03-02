@@ -7,5 +7,5 @@ domain_set:
   - aliyun.lilyemby.com
   - emby.nebula-media.org
   - m.mobaiemby.site
-domain_keyword:
+domain_keyword_set:
   - okemby
