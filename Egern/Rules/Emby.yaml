@@ -1,21 +1,11 @@
 # 规则名称: Emby
-# 规则统计: 196
+# 规则统计: 5
 
 no_resolve: true
 domain_set:
-  - cc.coemn.com
-  - cdn1.nebula-media.org
-  - cf-cdn1.nebula-media.org
-  - cminf.sfcat.link
-  - cuinf.sfcat.link
-  - emby-cdn1.nebula-media.org
+  - www.lilyemby.com
+  - aliyun.lilyemby.com
   - emby.nebula-media.org
-  - global.uhdnow.com
-  - notnetflix.cos.cat
-  - starharn-cf.nebula-media.org
-  - starharn.nebula-media.org
-  - v1.uhdnow.com
-  - web-starharn.nebula-media.org
-  - web.nebula-media.org
-domain_suffix_set:
-  - 114514.quest
+  - m.mobaiemby.site
+domain_keyword:
+  - okemby
