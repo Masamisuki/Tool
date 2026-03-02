@@ -5,7 +5,6 @@ on:
     - cron: '0 0 * * *'
   workflow_dispatch:
 
-# 🔥 关键权限
 permissions:
   contents: write
 
@@ -25,15 +24,27 @@ jobs:
 
     - name: Sync Module folder
       run: |
+        # 清空原目录
         rm -rf Surge/Sgmodule
+        rm -rf Egern/Module
+
+        # 创建新目录
         mkdir -p Surge/Sgmodule
+        mkdir -p Egern/Module
+
+        # 同步文件到两个目录
         cp -r upstream/Module/* Surge/Sgmodule/
+        cp -r upstream/Module/* Egern/Module/
 
     - name: Commit and push changes
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
         git add Surge/Sgmodule
+        git add Egern/Module
+
         git diff --quiet --cached && echo "No changes" && exit 0
+
         git commit -m "🔄 Sync Egern Module"
         git push
