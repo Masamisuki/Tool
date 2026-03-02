@@ -52,13 +52,13 @@ jobs:
           curl -sL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/baidu.conf -o "$TARGET_DIR/Baidu.conf"
 
       ##########################################################
-      # 4️⃣ 下载并处理 AdBlock Egern 规则
+      # 4️⃣ 下载并处理 AdBlock_Egern 规则
       ##########################################################
-      - name: Download and Process AdBlock Egern
+      - name: Download and Process AdBlock_Egern
         run: |
           TARGET_DIR="Egern/Rules"
           TEMP_FILE="temp_adblock.list"
-          FINAL_FILE="$TARGET_DIR/AdBlock Egern.list"
+          FINAL_FILE="$TARGET_DIR/AdBlock_Egern.list"
 
           # 下载原始文件
           curl -sL https://raw.githubusercontent.com/217heidai/adblockfilters/main/rules/adblocksurge.list -o "$TEMP_FILE"
