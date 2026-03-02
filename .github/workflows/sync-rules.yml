@@ -31,10 +31,8 @@ jobs:
         run: |
           TARGET_DIR="Egern/Rules"
           mkdir -p "$TARGET_DIR"
-
           # 删除上游的 Emby.yaml（优先保留你的）
           rm -f upstream/Egern/Rules/Emby.yaml
-
           # 同步文件（不会删除你已有的文件）
           rsync -av --exclude='.git' upstream/Egern/Rules/ "$TARGET_DIR/"
 
@@ -67,16 +65,8 @@ jobs:
           # 2. 删除其它 # 开头的行
           # 3. 替换 Surge 为 Egern
           awk '
-            /^#!name=/ {
-              gsub(/Surge/, "Egern")
-              print
-              next
-            }
-            /^#!desc=/ {
-              gsub(/Surge/, "Egern")
-              print
-              next
-            }
+            /^#!name=/ { gsub(/Surge/, "Egern"); print; next }
+            /^#!desc=/ { gsub(/Surge/, "Egern"); print; next }
             /^#/ { next }
             { print }
           ' "$TEMP_FILE" > "$FINAL_FILE"
@@ -99,9 +89,7 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-
           git add Egern/Rules/
-
           if ! git diff --staged --quiet; then
             git commit -m "Auto Sync Egern Rules: $(date +'%Y-%m-%d %H:%M:%S') UTC"
             git push
