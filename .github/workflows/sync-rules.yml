@@ -21,21 +21,23 @@ jobs:
           fetch-depth: 0
 
       ##########################################################
-      # 2️⃣ 同步 Repcz 上游规则（保留你的规则）
+      # 2️⃣ 同步 Repcz 上游规则
       ##########################################################
       - name: Clone Upstream Repo
         run: |
+          set -e
           git clone --depth=1 --branch X https://github.com/Repcz/Tool.git upstream
 
       - name: Sync Upstream Rules
         run: |
+          set -e
           TARGET_DIR="Egern/Rules"
           mkdir -p "$TARGET_DIR"
 
           # 删除上游的 Emby.yaml（优先保留你的）
           rm -f upstream/Egern/Rules/Emby.yaml
 
-          # 同步文件（不会删除你已有的文件）
+          # 同步文件
           rsync -av --exclude='.git' upstream/Egern/Rules/ "$TARGET_DIR/"
 
       ##########################################################
@@ -43,6 +45,7 @@ jobs:
       ##########################################################
       - name: Download Sukka DNS Mapping
         run: |
+          set -e
           TARGET_DIR="Egern/Rules"
 
           curl -sL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/alibaba.conf -o "$TARGET_DIR/Alibaba.conf"
@@ -52,10 +55,11 @@ jobs:
           curl -sL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/baidu.conf -o "$TARGET_DIR/Baidu.conf"
 
       ##########################################################
-      # 4️⃣ 下载并处理 AdBlock_Egern 规则
+      # 4️⃣ 下载并处理 AdBlock_Egern 规则 (已添加黑名单过滤)
       ##########################################################
       - name: Download and Process AdBlock_Egern
         run: |
+          set -e
           TARGET_DIR="Egern/Rules"
           TEMP_FILE="temp_adblock.list"
           FINAL_FILE="$TARGET_DIR/AdBlock_Egern.list"
@@ -64,10 +68,13 @@ jobs:
           curl -sL https://raw.githubusercontent.com/217heidai/adblockfilters/main/rules/adblocksurge.list -o "$TEMP_FILE"
 
           # 处理规则：
-          # 1. 只保留 #!name= 和 #!desc=
-          # 2. 删除其它 # 开头的行
-          # 3. 替换 Surge 为 Egern
+          # 1. 过滤掉 stat.y.qq.com 和 stat6.y.qq.com
+          # 2. 只保留 #!name= 和 #!desc=
+          # 3. 删除其它 # 开头的行
+          # 4. 替换 Surge 为 Egern
           awk '
+            /stat\.y\.qq\.com/ { next }
+            /stat6\.y\.qq\.com/ { next }
             /^#!name=/ {
               gsub(/Surge/, "Egern")
               print
