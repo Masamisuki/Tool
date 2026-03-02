@@ -44,7 +44,6 @@ jobs:
       - name: Download Sukka DNS Mapping
         run: |
           TARGET_DIR="Egern/Rules"
-
           curl -sL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/alibaba.conf -o "$TARGET_DIR/Alibaba.conf"
           curl -sL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/tencent.conf -o "$TARGET_DIR/Tencent.conf"
           curl -sL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/bilibili.conf -o "$TARGET_DIR/Bilibili.conf"
@@ -90,7 +89,6 @@ jobs:
       - name: Filter QQ Stat URLs
         run: |
           TARGET_FILE="Egern/Rules/AdBlock_Egern.list"
-          # 删除包含指定网址的行
           grep -v -e "stat.y.qq.com" -e "stat6.y.qq.com" "$TARGET_FILE" > "${TARGET_FILE}.tmp"
           mv "${TARGET_FILE}.tmp" "$TARGET_FILE"
 
