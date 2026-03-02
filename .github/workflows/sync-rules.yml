@@ -10,17 +10,14 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    
+    
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Process and Sync Rules
         run: |
-          # 修正：直接指向仓库根目录下的 Egern/Rules
-          # 这样文件就会保存在 Masamisuki/Tool 仓库的 Egern/Rules 文件夹内
           TARGET_DIR="Egern/Rules"
-          
           mkdir -p "$TARGET_DIR"
 
           # 1. GeositeCN
@@ -35,24 +32,20 @@ jobs:
           printf "# 规则名称: ChinaMax\n# 规则统计: $(wc -l < temp_max.txt)\n# 最后更新: $(date '+%Y-%m-%d %H:%M:%S') (GMT)\n\n" > "$TARGET_DIR/ChinaMax.list"
           cat temp_max.txt >> "$TARGET_DIR/ChinaMax.list"
 
-          # 3. SukkaW DNS Mapping
+          # 3. SukkaW DNS Mapping（保留）
           curl -L "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/alibaba.conf" -o "$TARGET_DIR/Alibaba.conf"
           curl -L "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/tencent.conf" -o "$TARGET_DIR/Tencent.conf"
           curl -L "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/bilibili.conf" -o "$TARGET_DIR/Bilibili.conf"
           curl -L "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/bytedance.conf" -o "$TARGET_DIR/ByteDance.conf"
           curl -L "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/baidu.conf" -o "$TARGET_DIR/Baidu.conf"
 
-          # 4. 清理特征行
-          sed -i -e '/this_ruleset_is_made_by_sukkaw/d; /th1s_rule5et_1s_m4d3_by_5ukk4w/d; /this_rule_set_is_made_by_sukkaw/d; /7h1s_rul35et_i5_mad3_by_5ukk4w/d' "$TARGET_DIR"/*.conf
-
       - name: Git Push Changes
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          
-          # 只添加根目录下的 Egern 文件夹
+          
           git add Egern/Rules/
-          
+          
           if ! git diff --staged --quiet; then
             git commit -m "Auto Update Rules: $(date +'%Y-%m-%d %H:%M:%S')"
             git push
