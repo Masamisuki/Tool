@@ -2,7 +2,7 @@ name: Sync Egern Rules
 
 on:
   schedule:
-    - cron: '0 0 * * *'   # UTC 00:00（北京时间08:00）
+    - cron: '0 0 * * *'
   workflow_dispatch:
 
 jobs:
@@ -45,20 +45,44 @@ jobs:
         run: |
           TARGET_DIR="Egern/Rules"
 
-          curl -L "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/alibaba.conf" -o "$TARGET_DIR/Alibaba.conf"
-          curl -L "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/tencent.conf" -o "$TARGET_DIR/Tencent.conf"
-          curl -L "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/bilibili.conf" -o "$TARGET_DIR/Bilibili.conf"
-          curl -L "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/bytedance.conf" -o "$TARGET_DIR/ByteDance.conf"
-          curl -L "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/baidu.conf" -o "$TARGET_DIR/Baidu.conf"
+          curl -sL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/alibaba.conf -o "$TARGET_DIR/Alibaba.conf"
+          curl -sL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/tencent.conf -o "$TARGET_DIR/Tencent.conf"
+          curl -sL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/bilibili.conf -o "$TARGET_DIR/Bilibili.conf"
+          curl -sL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/bytedance.conf -o "$TARGET_DIR/ByteDance.conf"
+          curl -sL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/baidu.conf -o "$TARGET_DIR/Baidu.conf"
 
       ##########################################################
-      # 4️⃣ 下载 AdBlock Egern 规则
+      # 4️⃣ 下载并处理 AdBlock Egern 规则
       ##########################################################
-      - name: Download AdBlock Egern
+      - name: Download and Process AdBlock Egern
         run: |
           TARGET_DIR="Egern/Rules"
-          curl -L "https://raw.githubusercontent.com/217heidai/adblockfilters/main/rules/adblocksurge.list" \
-          -o "$TARGET_DIR/AdBlock Egern.list"
+          TEMP_FILE="temp_adblock.list"
+          FINAL_FILE="$TARGET_DIR/AdBlock Egern.list"
+
+          # 下载原始文件
+          curl -sL https://raw.githubusercontent.com/217heidai/adblockfilters/main/rules/adblocksurge.list -o "$TEMP_FILE"
+
+          # 处理规则：
+          # 1. 只保留 #!name= 和 #!desc=
+          # 2. 删除其它 # 开头的行
+          # 3. 替换 Surge 为 Egern
+          awk '
+            /^#!name=/ {
+              gsub(/Surge/, "Egern")
+              print
+              next
+            }
+            /^#!desc=/ {
+              gsub(/Surge/, "Egern")
+              print
+              next
+            }
+            /^#/ { next }
+            { print }
+          ' "$TEMP_FILE" > "$FINAL_FILE"
+
+          rm -f "$TEMP_FILE"
 
       ##########################################################
       # 5️⃣ 提交更新
