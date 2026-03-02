@@ -2,7 +2,7 @@ name: Sync Egern Rules
 
 on:
   schedule:
-    - cron: '0 0 * * *'   # UTC 00:00（北京时间08:00）
+    - cron: '0 0 * * *'
   workflow_dispatch:
 
 jobs:
@@ -60,7 +60,7 @@ jobs:
           TEMP_FILE="temp_adblock.list"
           FINAL_FILE="$TARGET_DIR/AdBlock_Egern.list"
 
-          # 下载最新上游文件
+          # 下载原始文件
           curl -sL https://raw.githubusercontent.com/217heidai/adblockfilters/main/rules/adblocksurge.list -o "$TEMP_FILE"
 
           # 处理规则：
@@ -99,3 +99,4 @@ jobs:
             git push
           else
             echo "No changes detected."
+          fi
