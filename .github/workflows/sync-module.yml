@@ -28,20 +28,18 @@ jobs:
         mkdir -p Surge/Sgmodule
         mkdir -p Egern/Module
 
-        # 2. 同步上游仓库的文件 (只复制覆盖，保留你原有的其他文件)
+        # 2. 同步上游仓库的文件
         cp -r upstream/Module/* Surge/Sgmodule/
         cp -r upstream/Module/* Egern/Module/
 
-        # 3. 从本地仓库复制自定义模块 (覆盖掉上游可能存在的同名文件)
+        # 3. 从本地仓库复制自定义模块
         cp LocalModules/BlockAdvertisers.sgmodule Surge/Sgmodule/
         cp LocalModules/BlockAdvertisers.sgmodule Egern/Module/
 
         # 4. 删除模块中特定的配置行
-        # 对 Surge 文件夹下的文件进行处理
         sed -i '/DOMAIN,stat.y.qq.com,REJECT/d' Surge/Sgmodule/BlockAdvertisers.sgmodule
         sed -i '/DOMAIN,stat6.y.qq.com,REJECT/d' Surge/Sgmodule/BlockAdvertisers.sgmodule
         
-        # 对 Egern 文件夹下的文件进行处理
         sed -i '/DOMAIN,stat.y.qq.com,REJECT/d' Egern/Module/BlockAdvertisers.sgmodule
         sed -i '/DOMAIN,stat6.y.qq.com,REJECT/d' Egern/Module/BlockAdvertisers.sgmodule
 
@@ -49,11 +47,7 @@ jobs:
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
         git add .
-
-        # 检查是否有变更，没有变更则直接退出
         git diff --quiet --cached && echo "No changes detected, skipping commit." && exit 0
-
         git commit -m "🔄 Sync Egern Module & Custom Mod"
         git push
