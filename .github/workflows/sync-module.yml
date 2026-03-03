@@ -24,22 +24,24 @@ jobs:
 
     - name: Sync Module folder
       run: |
-        # 确保目录存在
+        # 1. 确保目录存在
         mkdir -p Surge/Sgmodule
         mkdir -p Egern/Module
 
-        # 1. 同步上游仓库的文件
+        # 2. 同步上游仓库的文件 (只复制覆盖，保留你原有的其他文件)
         cp -r upstream/Module/* Surge/Sgmodule/
         cp -r upstream/Module/* Egern/Module/
 
-        # 2. 下载指定的额外模块
-        curl -o Surge/Sgmodule/BlockAdvertisers.sgmodule https://kelvinlab.wuyra.com/Module/BlockAdvertisers.sgmodule
-        curl -o Egern/Module/BlockAdvertisers.sgmodule https://kelvinlab.wuyra.com/Module/BlockAdvertisers.sgmodule
+        # 3. 从本地仓库复制自定义模块 (覆盖掉上游可能存在的同名文件)
+        cp LocalModules/BlockAdvertisers.sgmodule Surge/Sgmodule/
+        cp LocalModules/BlockAdvertisers.sgmodule Egern/Module/
 
-        # 3. 删除模块中特定的配置行 (在 Surge 和 Egern 文件夹下分别操作)
+        # 4. 删除模块中特定的配置行
+        # 对 Surge 文件夹下的文件进行处理
         sed -i '/DOMAIN,stat.y.qq.com,REJECT/d' Surge/Sgmodule/BlockAdvertisers.sgmodule
         sed -i '/DOMAIN,stat6.y.qq.com,REJECT/d' Surge/Sgmodule/BlockAdvertisers.sgmodule
-        
+        
+        # 对 Egern 文件夹下的文件进行处理
         sed -i '/DOMAIN,stat.y.qq.com,REJECT/d' Egern/Module/BlockAdvertisers.sgmodule
         sed -i '/DOMAIN,stat6.y.qq.com,REJECT/d' Egern/Module/BlockAdvertisers.sgmodule
 
