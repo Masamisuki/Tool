@@ -28,21 +28,30 @@ jobs:
         mkdir -p Surge/Sgmodule
         mkdir -p Egern/Module
 
-        # 同步文件：只复制覆盖，保留你手动添加的其他文件
+        # 1. 同步上游仓库的文件
         cp -r upstream/Module/* Surge/Sgmodule/
         cp -r upstream/Module/* Egern/Module/
+
+        # 2. 下载指定的额外模块
+        curl -o Surge/Sgmodule/BlockAdvertisers.sgmodule https://kelvinlab.wuyra.com/Module/BlockAdvertisers.sgmodule
+        curl -o Egern/Module/BlockAdvertisers.sgmodule https://kelvinlab.wuyra.com/Module/BlockAdvertisers.sgmodule
+
+        # 3. 删除模块中特定的配置行 (在 Surge 和 Egern 文件夹下分别操作)
+        sed -i '/DOMAIN,stat.y.qq.com,REJECT/d' Surge/Sgmodule/BlockAdvertisers.sgmodule
+        sed -i '/DOMAIN,stat6.y.qq.com,REJECT/d' Surge/Sgmodule/BlockAdvertisers.sgmodule
+        
+        sed -i '/DOMAIN,stat.y.qq.com,REJECT/d' Egern/Module/BlockAdvertisers.sgmodule
+        sed -i '/DOMAIN,stat6.y.qq.com,REJECT/d' Egern/Module/BlockAdvertisers.sgmodule
 
     - name: Commit and push changes
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-        # 添加修改
-        git add Surge/Sgmodule
-        git add Egern/Module
+        git add .
 
-        # 检查是否有变更，没有变更则直接退出，避免产生空 commit
+        # 检查是否有变更，没有变更则直接退出
         git diff --quiet --cached && echo "No changes detected, skipping commit." && exit 0
 
-        git commit -m "🔄 Sync Egern Module"
+        git commit -m "🔄 Sync Egern Module & Custom Mod"
         git push
