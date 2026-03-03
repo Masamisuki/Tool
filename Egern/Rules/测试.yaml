@@ -1,4 +1,4 @@
 url_regex_set:
-  - "/\d+/resolve"
-  - "/\d+/sign_d"
-  - "/igd\.xml"
+  - '/\d+/resolve'
+  - '/\d+/sign_d'
+  - '/igd\.xml'
