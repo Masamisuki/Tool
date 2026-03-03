@@ -1,5 +1,5 @@
 name: "QQ音乐统计直连"
-description: "将 QQ 音乐统计域名强制直连"
+description: "将QQ音乐统计域名强制直连"
 
 rules:
   - domain:
