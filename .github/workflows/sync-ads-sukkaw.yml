@@ -1,91 +1,90 @@
-name: Auto Update Ads_SukkaW - Convert to Single Quotes
+name: Auto Update Ads_SukkaW & Replace Quotes
 
 on:
   schedule:
-    - cron: '0 10 * * *'      # 每天 UTC 10:00（可自行调整）
-  workflow_dispatch:          # 支持手动触发
+    # 每天 UTC 10:00 执行（北京时间 18:00，洛杉矶时间 02:00）
+    - cron: '0 10 * * *'
+  workflow_dispatch:    # 允许手动触发
 
 permissions:
-  contents: write
+  contents: write       # 必须要有写仓库的权限
 
 jobs:
-  process:
+  update:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0    # 需要完整历史才能 commit
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Process file - replace double quotes with single quotes in url_regex_set
+      - name: Download upstream file and process
         run: |
+          # 下载上游文件
+          curl -fsSL "https://raw.githubusercontent.com/Repcz/Tool/refs/heads/X/Egern/Rules/Ads_SukkaW.yaml" -o upstream.yaml
+
+          # 使用 Python 处理（更可靠，处理多行和未来新增规则更稳）
           python3 - <<'EOF'
           import re
-          import os
 
-          FILE_PATH = "Egern/Rules/Ads_SukkaW.yaml"   # ← 确认这是你仓库里的实际路径！
-
-          if not os.path.exists(FILE_PATH):
-              print(f"错误：文件 {FILE_PATH} 不存在！请检查路径。")
-              exit(1)
-
-          with open(FILE_PATH, encoding="utf-8") as f:
-              lines = f.readlines()
+          INPUT_FILE = "upstream.yaml"
+          OUTPUT_FILE = "Egern/Rules/Ads_SukkaW.yaml"   # ← 修改成你仓库里想存放的路径
 
           in_block = False
-          modified = False
-          new_lines = []
+          lines = []
 
-          for line in lines:
-              stripped = line.rstrip("\n")
+          with open(INPUT_FILE, encoding="utf-8") as f:
+              for line in f:
+                  stripped = line.rstrip("\n")
 
-              if stripped.strip().startswith("url_regex_set:"):
-                  in_block = True
-                  new_lines.append(line)
-                  continue
-
-              if in_block and stripped.strip().startswith("- "):
-                  # 匹配   - "内容"  →   - '内容'
-                  match = re.match(r'^(\s*-\s*)"([^"]*)"$', stripped)
-                  if match:
-                      indent = match.group(1)
-                      content = match.group(2)
-                      new_line = f"{indent}'{content}'\n"
-                      if new_line != line:
-                          modified = True
-                      new_lines.append(new_line)
+                  if stripped.startswith("url_regex_set:"):
+                      in_block = True
+                      lines.append(stripped)
                       continue
 
-              # 块结束判断（非 - 开头的非空行）
-              if in_block and stripped.strip() and not stripped.strip().startswith("-"):
-                  in_block = False
+                  if in_block:
+                      # 匹配   - "内容" 这种格式
+                      match = re.match(r'^(\s*-\s*)"([^"]*)"$', stripped)
+                      if match:
+                          indent = match.group(1)
+                          content = match.group(2)
+                          new_line = f'{indent}"{content}"'.replace('"', "'", 2)   # 前后两个 " 改成 '
+                          # 更保险的写法：直接拼接单引号
+                          new_line = f"{indent}'{content}'"
+                          lines.append(new_line)
+                      else:
+                          # 不是我们要改的行，保持原样（缩进、注释、空行等）
+                          lines.append(stripped)
+                          # 如果下一行不是 - 开头，说明块结束了
+                          if not stripped.strip().startswith("-"):
+                              in_block = False
+                  else:
+                      lines.append(stripped)
 
-              new_lines.append(line)
-
-          # 只有真正修改了才写回文件
-          if modified:
-              with open(FILE_PATH, "w", encoding="utf-8") as f:
-                  f.writelines(new_lines)
-              print("已修改 url_regex_set 中的双引号为单引号，并保存文件")
-          else:
-              print("url_regex_set 部分没有双引号需要转换，无需修改")
+          # 写回文件
+          with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+              f.write("\n".join(lines) + "\n")
+          print("处理完成")
           EOF
 
-      - name: Commit and push if changed
+      - name: Commit changes if any
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
 
           git add -A
           if git diff --staged --quiet; then
-            echo "文件无变化，跳过 commit"
+            echo "没有变化，跳过提交"
           else
-            git commit -m "chore: convert double quotes to single quotes in Ads_SukkaW url_regex_set"
+            git commit -m "chore: auto update Ads_SukkaW & convert quotes to single quotes"
             git push
-            echo "已提交修改"
           fi
+
+      - name: Cleanup
+        if: always()
+        run: rm -f upstream.yaml
