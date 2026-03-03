@@ -1,56 +1,91 @@
-name: Format YAML Quotes
-# 可通過手動在 GitHub 倉庫頁面點擊 "Run workflow" 觸發
+name: Auto Update Ads_SukkaW - Convert to Single Quotes
+
 on:
-  workflow_dispatch:
-  # 或設定定期執行
   schedule:
-    - cron: '0 16 * * *' # UTC 16:00 即北京時間 00:00
+    - cron: '0 10 * * *'      # 每天 UTC 10:00（可自行调整）
+  workflow_dispatch:          # 支持手动触发
+
+permissions:
+  contents: write
 
 jobs:
-  format-file:
+  process:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
-      - name: Normalize Quotes in url_regex_set
-        run: |
-          # 直接修改倉庫中的文件
-          # 這裡假設文件路徑為 Egern/Rules/Ads_SukkaW.yaml
-          # 如果您倉庫中文件路徑不同，請修改此處
-          FILE_PATH="Egern/Rules/Ads_SukkaW.yaml"
-          
-          # 使用 sed 命令進行替換
-          # 1. 匹配以 'url_regex_set:' 開頭的行及其後續行，直到遇到一個不以 '- ' 開頭的行（即列表結束）。
-          # 2. 在匹配到的區塊內，將所有雙引號 " 替換為單引號 '。
-          sed -i.bak '/url_regex_set:/,/^[^[:space:]-]/s/"/'"'"'/g' "$FILE_PATH"
-          
-          # 刪除備份文件
-          rm -f "$FILE_PATH.bak"
-          
-          # 顯示修改後的內容以供檢查
-          echo "修改後的文件內容："
-          cat "$FILE_PATH"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-      - name: Check for Changes
-        id: file_changed
+      - name: Process file - replace double quotes with single quotes in url_regex_set
         run: |
-          # 檢查文件是否有變更
-          if git diff --no-ext-diff --quiet Egern/Rules/Ads_SukkaW.yaml; then
-            echo "No changes detected."
-            echo "changes_made=false" >> "$GITHUB_OUTPUT"
+          python3 - <<'EOF'
+          import re
+          import os
+
+          FILE_PATH = "Egern/Rules/Ads_SukkaW.yaml"   # ← 确认这是你仓库里的实际路径！
+
+          if not os.path.exists(FILE_PATH):
+              print(f"错误：文件 {FILE_PATH} 不存在！请检查路径。")
+              exit(1)
+
+          with open(FILE_PATH, encoding="utf-8") as f:
+              lines = f.readlines()
+
+          in_block = False
+          modified = False
+          new_lines = []
+
+          for line in lines:
+              stripped = line.rstrip("\n")
+
+              if stripped.strip().startswith("url_regex_set:"):
+                  in_block = True
+                  new_lines.append(line)
+                  continue
+
+              if in_block and stripped.strip().startswith("- "):
+                  # 匹配   - "内容"  →   - '内容'
+                  match = re.match(r'^(\s*-\s*)"([^"]*)"$', stripped)
+                  if match:
+                      indent = match.group(1)
+                      content = match.group(2)
+                      new_line = f"{indent}'{content}'\n"
+                      if new_line != line:
+                          modified = True
+                      new_lines.append(new_line)
+                      continue
+
+              # 块结束判断（非 - 开头的非空行）
+              if in_block and stripped.strip() and not stripped.strip().startswith("-"):
+                  in_block = False
+
+              new_lines.append(line)
+
+          # 只有真正修改了才写回文件
+          if modified:
+              with open(FILE_PATH, "w", encoding="utf-8") as f:
+                  f.writelines(new_lines)
+              print("已修改 url_regex_set 中的双引号为单引号，并保存文件")
+          else:
+              print("url_regex_set 部分没有双引号需要转换，无需修改")
+          EOF
+
+      - name: Commit and push if changed
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+          git add -A
+          if git diff --staged --quiet; then
+            echo "文件无变化，跳过 commit"
           else
-            echo "Changes detected, preparing to commit."
-            echo "changes_made=true" >> "$GITHUB_OUTPUT"
+            git commit -m "chore: convert double quotes to single quotes in Ads_SukkaW url_regex_set"
+            git push
+            echo "已提交修改"
           fi
-
-      - name: Commit and Push Changes
-        if: steps.file_changed.outputs.changes_made == 'true'
-        run: |
-          git config --global user.name 'GitHub Actions Bot'
-          git config --global user.email 'actions@github.com'
-          git add Egern/Rules/Ads_SukkaW.yaml
-          git commit -m "chore(config): standardize quotes in url_regex_set to single quotes [Automated]"
-          git push
