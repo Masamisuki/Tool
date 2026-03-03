@@ -24,16 +24,30 @@ jobs:
 
     - name: Sync Module folder
       run: |
-        # 1. 复制上游内容 (保留你原有的文件，只覆盖更新)
+        # 【诊断步骤】打印出仓库里的所有文件，帮你确认文件位置
+        echo "--- 正在检查仓库文件结构 ---"
+        find . -maxdepth 3 -not -path '*/.*'
+        echo "---------------------------"
+
+        # 1. 确保目录存在
+        mkdir -p Surge/Sgmodule
+        mkdir -p Egern/Module
+
+        # 2. 同步上游仓库的文件
         cp -r upstream/Module/* Surge/Sgmodule/
         cp -r upstream/Module/* Egern/Module/
 
-        # 2. 将根目录的自定义模块复制到目标文件夹
-        # 假设你已经把 BlockAdvertisers.sgmodule 放在仓库根目录了
-        cp BlockAdvertisers.sgmodule Surge/Sgmodule/
-        cp BlockAdvertisers.sgmodule Egern/Module/
+        # 3. 复制自定义模块 (如果上面诊断显示文件不在根目录，请根据显示的路径修改此处)
+        # 这里假设它就在根目录下
+        if [ -f "BlockAdvertisers.sgmodule" ]; then
+            cp BlockAdvertisers.sgmodule Surge/Sgmodule/
+            cp BlockAdvertisers.sgmodule Egern/Module/
+        else
+            echo "错误：找不到 BlockAdvertisers.sgmodule，请查看上面的诊断输出！"
+            exit 1
+        fi
 
-        # 3. 删除特定规则
+        # 4. 删除特定规则
         sed -i '/DOMAIN,stat.y.qq.com,REJECT/d' Surge/Sgmodule/BlockAdvertisers.sgmodule
         sed -i '/DOMAIN,stat6.y.qq.com,REJECT/d' Surge/Sgmodule/BlockAdvertisers.sgmodule
         
