@@ -1,0 +1,56 @@
+name: Sync Ads_SukkaW
+
+on:
+  schedule:
+    - cron: '0 0 * * *'   # 每天0点自动运行
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download upstream file
+        run: |
+          curl -L -o Ads_SukkaW.yaml \
+          https://raw.githubusercontent.com/Masamisuki/Tool/refs/heads/main/Egern/Rules/Ads_SukkaW.yaml
+
+      - name: Convert double quotes to single quotes in url_regex_set
+        run: |
+          awk '
+          /^url_regex_set:/ { 
+              print; 
+              in_block=1; 
+              next 
+          }
+
+          in_block && /^  - / {
+              gsub(/"/, "'\''")
+              print
+              next
+          }
+
+          in_block && !/^  - / {
+              in_block=0
+          }
+
+          { print }
+          ' Ads_SukkaW.yaml > temp.yaml
+
+          mv temp.yaml Ads_SukkaW.yaml
+
+      - name: Commit and Push if changed
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add Ads_SukkaW.yaml
+          if ! git diff --staged --quiet; then
+            git commit -m "Auto Sync Ads_SukkaW (convert url_regex_set quotes)"
+            git push
+          fi
