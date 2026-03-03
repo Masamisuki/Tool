@@ -24,15 +24,11 @@ jobs:
 
     - name: Sync Module folder
       run: |
-        # 清空原目录
-        rm -rf Surge/Sgmodule
-        rm -rf Egern/Module
-
-        # 创建新目录
+        # 确保目录存在
         mkdir -p Surge/Sgmodule
         mkdir -p Egern/Module
 
-        # 同步文件到两个目录
+        # 同步文件：只复制覆盖，保留你手动添加的其他文件
         cp -r upstream/Module/* Surge/Sgmodule/
         cp -r upstream/Module/* Egern/Module/
 
@@ -41,10 +37,12 @@ jobs:
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+        # 添加修改
         git add Surge/Sgmodule
         git add Egern/Module
 
-        git diff --quiet --cached && echo "No changes" && exit 0
+        # 检查是否有变更，没有变更则直接退出，避免产生空 commit
+        git diff --quiet --cached && echo "No changes detected, skipping commit." && exit 0
 
         git commit -m "🔄 Sync Egern Module"
         git push
