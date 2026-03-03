@@ -2,57 +2,55 @@ name: Auto Fix & Update Ads_SukkaW.yaml
 
 on:
   schedule:
-    - cron: '0 5 * * *'          # 每天 UTC 5:00 运行（北京时间中午13:00左右）
-  workflow_dispatch:             # 支持手动触发（在 Actions 页面点 Run workflow）
+    - cron: '0 5 * * *'          # Daily at 05:00 UTC (~13:00 Beijing time)
+  workflow_dispatch:
 
 permissions:
-  contents: write                # 允许 workflow 推送 commit
+  contents: write
 
 jobs:
   update-and-fix:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout current repository
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: main                    # 假设你的默认分支是 main，改成 master 也行
+          ref: main
 
-      - name: Download latest upstream Ads_SukkaW.yaml
+      - name: Download latest version
         run: |
-          curl -L -o Ads_SukkaW.yaml.new \
+          curl -L -o Egern/Rules/Ads_SukkaW.yaml.new \
             https://raw.githubusercontent.com/Masamisuki/Tool/refs/heads/main/Egern/Rules/Ads_SukkaW.yaml
-          # ↑ 这里用你仓库自己的 raw 链接作为“上游”，因为你说上游就是这个
-          # 如果以后有真正的上游（如 SukkaW 原版），可以改成那个链接
 
-      - name: Fix url_regex_set syntax (add single quotes)
+      - name: Fix url_regex_set YAML syntax
         run: |
-          # 备份原文件（可选）
-          cp Egern/Rules/Ads_SukkaW.yaml Egern/Rules/Ads_SukkaW.yaml.bak || true
-          
-          # 使用 sed 替换三种常见错误写法 → 加单引号
-          sed -i 's|^\s*-\s*/\d\+/resolve\s*$|  - '\''/\d\+/resolve'\''|' Egern/Rules/Ads_SukkaW.yaml.new || true
-          sed -i 's|^\s*-\s*/\d\+/sign_d\s*$|   - '\''/\d\+/sign_d'\''|'   Egern/Rules/Ads_SukkaW.yaml.new || true
-          sed -i 's|^\s*-\s*/igd\\.xml\s*$|     - '\''/igd\\.xml'\''|'     Egern/Rules/Ads_SukkaW.yaml.new || true
-          
-          # 如果已经有双引号但没正确转义，也修复成单引号
-          sed -i 's|^\s*-\s*"/\d\+/resolve"\s*$|  - '\''/\d\+/resolve'\''|' Egern/Rules/Ads_SukkaW.yaml.new || true
-          sed -i 's|^\s*-\s*"/\d\+/sign_d"\s*$|   - '\''/\d\+/sign_d'\''|'   Egern/Rules/Ads_SukkaW.yaml.new || true
-          sed -i 's|^\s*-\s*"/igd\\.xml"\s*$|     - '\''/igd\\.xml'\''|'     Egern/Rules/Ads_SukkaW.yaml.new || true
+          # Optional backup (won't fail if original missing)
+          cp Egern/Rules/Ads_SukkaW.yaml Egern/Rules/Ads_SukkaW.yaml.bak 2>/dev/null || true
 
-      - name: Check if file changed and commit
+          # Fix the three lines — add single quotes
+          sed -i 's|^\(\s*-\s*\)/\d\+/resolve\s*$|\1'\''/\d\+/resolve'\''|' Egern/Rules/Ads_SukkaW.yaml.new || true
+          sed -i 's|^\(\s*-\s*\)/\d\+/sign_d\s*$|\1'\''/\d\+/sign_d'\''|'   Egern/Rules/Ads_SukkaW.yaml.new || true
+          sed -i 's|^\(\s*-\s*\)/igd\\.xml\s*$|\1'\''/igd\\.xml'\''|'       Egern/Rules/Ads_SukkaW.yaml.new || true
+
+          # Also handle cases where double quotes exist without proper escape
+          sed -i 's|^\(\s*-\s*\)"/\d\+/resolve"\s*$|\1'\''/\d\+/resolve'\''|' Egern/Rules/Ads_SukkaW.yaml.new || true
+          sed -i 's|^\(\s*-\s*\)"/\d\+/sign_d"\s*$|\1'\''/\d\+/sign_d'\''|'   Egern/Rules/Ads_SukkaW.yaml.new || true
+          sed -i 's|^\(\s*-\s*\)"/igd\\.xml"\s*$|\1'\''/igd\\.xml'\''|'       Egern/Rules/Ads_SukkaW.yaml.new || true
+
+      - name: Commit changes if any
         run: |
           mv Egern/Rules/Ads_SukkaW.yaml.new Egern/Rules/Ads_SukkaW.yaml || true
-          
-          git config --global user.name "GitHub Actions Bot"
-          git config --global user.email "actions@github.com"
-          
-          git add Egern/Rules/Ads_SukkaW.yaml
-          
-          # 只在有实际变化时 commit
-          git diff --staged --quiet || git commit -m "auto: fix url_regex_set syntax & update from upstream"
-          
-          git push origin main || echo "No changes to push or push failed (maybe no diff)"
 
-      - name: Show last commit (for debug)
-        run: git log -1 --pretty=%B
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+
+          git add Egern/Rules/Ads_SukkaW.yaml
+
+          # Commit only if there is a real difference
+          git diff --staged --quiet || git commit -m "chore: auto-fix url_regex_set YAML syntax"
+
+          git push origin main || echo "No changes or push skipped"
+
+      - name: Show last commit (debug)
+        run: git log -1 --pretty=%B || true
