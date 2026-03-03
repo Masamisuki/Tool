@@ -1,4 +1,4 @@
-name: Sync Egern Module
+Name: Sync Egern Module
 
 on:
   schedule:
@@ -24,41 +24,37 @@ jobs:
 
     - name: Sync Module folder
       run: |
-        # 【诊断步骤】打印出仓库里的所有文件，帮你确认文件位置
-        echo "--- 正在检查仓库文件结构 ---"
-        find . -maxdepth 3 -not -path '*/.*'
-        echo "---------------------------"
-
-        # 1. 确保目录存在
+        # 创建目录（防止首次运行不存在）
         mkdir -p Surge/Sgmodule
         mkdir -p Egern/Module
 
-        # 2. 同步上游仓库的文件
-        cp -r upstream/Module/* Surge/Sgmodule/
-        cp -r upstream/Module/* Egern/Module/
+        # 同步上游模块（不删除您原有的模块，仅覆盖同名文件）
+        cp -r upstream/Module/* Surge/Sgmodule/ 2>/dev/null || true
+        cp -r upstream/Module/* Egern/Module/ 2>/dev/null || true
 
-        # 3. 复制自定义模块 (如果上面诊断显示文件不在根目录，请根据显示的路径修改此处)
-        # 这里假设它就在根目录下
-        if [ -f "BlockAdvertisers.sgmodule" ]; then
-            cp BlockAdvertisers.sgmodule Surge/Sgmodule/
-            cp BlockAdvertisers.sgmodule Egern/Module/
-        else
-            echo "错误：找不到 BlockAdvertisers.sgmodule，请查看上面的诊断输出！"
-            exit 1
-        fi
+    - name: 下载并自定义 BlockAdvertisers.sgmodule
+      run: |
+        # 下载原始模块
+        curl -L -o /tmp/BlockAdvertisers.sgmodule https://kelvinlab.wuyra.com/Module/BlockAdvertisers.sgmodule
 
-        # 4. 删除特定规则
-        sed -i '/DOMAIN,stat.y.qq.com,REJECT/d' Surge/Sgmodule/BlockAdvertisers.sgmodule
-        sed -i '/DOMAIN,stat6.y.qq.com,REJECT/d' Surge/Sgmodule/BlockAdvertisers.sgmodule
-        
-        sed -i '/DOMAIN,stat.y.qq.com,REJECT/d' Egern/Module/BlockAdvertisers.sgmodule
-        sed -i '/DOMAIN,stat6.y.qq.com,REJECT/d' Egern/Module/BlockAdvertisers.sgmodule
+        # 删除指定的两条规则（精确匹配整行）
+        sed '/^DOMAIN,stat\.y\.qq\.com,REJECT$/d;/^DOMAIN,stat6\.y\.qq\.com,REJECT$/d' /tmp/BlockAdvertisers.sgmodule Surge/Sgmodule/BlockAdvertisers.sgmodule
+
+        # 复制到另一个文件夹
+        cp Surge/Sgmodule/BlockAdvertisers.sgmodule Egern/Module/BlockAdvertisers.sgmodule
+
+        # 清理临时文件
+        rm -f /tmp/BlockAdvertisers.sgmodule
 
     - name: Commit and push changes
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git add .
-        git diff --quiet --cached && echo "No changes detected, skipping commit." && exit 0
-        git commit -m "🔄 Sync Egern Module & Custom Mod"
+
+        git add Surge/Sgmodule
+        git add Egern/Module
+
+        git diff --quiet --cached && echo "No changes" && exit 0
+
+        git commit -m "🔄 Sync Egern Module"
         git push
