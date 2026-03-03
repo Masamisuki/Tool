@@ -1,4 +1,4 @@
-Name: Sync Egern Module
+name: Sync Egern Module
 
 on:
   schedule:
@@ -30,15 +30,15 @@ jobs:
 
         # 同步上游模块（不删除您原有的模块，仅覆盖同名文件）
         cp -r upstream/Module/* Surge/Sgmodule/ 2>/dev/null || true
-        cp -r upstream/Module/* Egern/Module/ 2>/dev/null || true
+        cp -r upstream/Module/* Egern/Module/   2>/dev/null || true
 
     - name: 下载并自定义 BlockAdvertisers.sgmodule
       run: |
         # 下载原始模块
         curl -L -o /tmp/BlockAdvertisers.sgmodule https://kelvinlab.wuyra.com/Module/BlockAdvertisers.sgmodule
 
-        # 删除指定的两条规则（精确匹配整行）
-        sed '/^DOMAIN,stat\.y\.qq\.com,REJECT$/d;/^DOMAIN,stat6\.y\.qq\.com,REJECT$/d' /tmp/BlockAdvertisers.sgmodule Surge/Sgmodule/BlockAdvertisers.sgmodule
+        # 删除指定的两条规则（精确匹配整行，注意转义点号）
+        sed '/^DOMAIN,stat\.y\.qq\.com,REJECT$/d; /^DOMAIN,stat6\.y\.qq\.com,REJECT$/d' /tmp/BlockAdvertisers.sgmodule > Surge/Sgmodule/BlockAdvertisers.sgmodule
 
         # 复制到另一个文件夹
         cp Surge/Sgmodule/BlockAdvertisers.sgmodule Egern/Module/BlockAdvertisers.sgmodule
@@ -54,7 +54,8 @@ jobs:
         git add Surge/Sgmodule
         git add Egern/Module
 
-        git diff --quiet --cached && echo "No changes" && exit 0
+        # 如果没有实际变化，就不提交
+        git diff --quiet --cached && echo "No changes to commit" && exit 0
 
-        git commit -m "🔄 Sync Egern Module"
+        git commit -m "🔄 Sync Egern Module + custom BlockAdvertisers"
         git push
