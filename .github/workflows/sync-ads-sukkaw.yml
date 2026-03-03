@@ -2,8 +2,8 @@ name: Auto Update Ads_SukkaW & Replace Quotes
 
 on:
   schedule:
-    # 每天 UTC 10:00 执行（北京时间 18:00，洛杉矶时间 02:00）
-    - cron: '0 10 * * *'
+    # 每天 UTC 23:00 执行
+    - cron: '0 15 * * *'
   workflow_dispatch:    # 允许手动触发
 
 permissions:
