@@ -24,14 +24,19 @@ jobs:
 
     - name: Sync Module folder
       run: |
-        mkdir -p Surge/Sgmodule
-        mkdir -p Egern/Module
+        # 1. 复制上游内容 (保留你原有的文件，只覆盖更新)
         cp -r upstream/Module/* Surge/Sgmodule/
         cp -r upstream/Module/* Egern/Module/
-        cp LocalModules/BlockAdvertisers.sgmodule Surge/Sgmodule/
-        cp LocalModules/BlockAdvertisers.sgmodule Egern/Module/
+
+        # 2. 将根目录的自定义模块复制到目标文件夹
+        # 假设你已经把 BlockAdvertisers.sgmodule 放在仓库根目录了
+        cp BlockAdvertisers.sgmodule Surge/Sgmodule/
+        cp BlockAdvertisers.sgmodule Egern/Module/
+
+        # 3. 删除特定规则
         sed -i '/DOMAIN,stat.y.qq.com,REJECT/d' Surge/Sgmodule/BlockAdvertisers.sgmodule
         sed -i '/DOMAIN,stat6.y.qq.com,REJECT/d' Surge/Sgmodule/BlockAdvertisers.sgmodule
+        
         sed -i '/DOMAIN,stat.y.qq.com,REJECT/d' Egern/Module/BlockAdvertisers.sgmodule
         sed -i '/DOMAIN,stat6.y.qq.com,REJECT/d' Egern/Module/BlockAdvertisers.sgmodule
 
