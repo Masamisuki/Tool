@@ -1,0 +1,38 @@
+name: Auto Update Ads_SukkaW
+
+on:
+  schedule:
+    - cron: '0 4 * * *'          # 每天 UTC 4:00（北京时间中午12:00）运行一次
+  workflow_dispatch:             # 允许手动触发
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download latest Ads_SukkaW.yaml from upstream
+        run: |
+          curl -L -o Egern/Rules/Ads_SukkaW.yaml.new \
+            https://raw.githubusercontent.com/Masamisuki/Tool/refs/heads/main/Egern/Rules/Ads_SukkaW.yaml
+          # ↑ 如果你的规则是 fork 或复制自 SukkaW 的，可以改成上游地址
+
+      - name: Fix YAML syntax (add quotes to url_regex_set)
+        run: |
+          sed -i 's|^\s*-\s*/\d\+/resolve\s*$|  - '\''/\d\+/resolve'\''|' Egern/Rules/Ads_SukkaW.yaml.new
+          sed -i 's|^\s*-\s*/\d\+/sign_d\s*$|   - '\''/\d\+/sign_d'\''|'   Egern/Rules/Ads_SukkaW.yaml.new
+          sed -i 's|^\s*-\s*/igd\\.xml\s*$|     - '\''/igd\\.xml'\''|'     Egern/Rules/Ads_SukkaW.yaml.new
+          # 可以加更多 sed 规则来修复其他常见问题
+
+      - name: Commit changes if updated
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          
+          mv Egern/Rules/Ads_SukkaW.yaml.new Egern/Rules/Ads_SukkaW.yaml || true
+          
+          git add Egern/Rules/Ads_SukkaW.yaml
+          git diff --staged --quiet || git commit -m "Auto update Ads_SukkaW.yaml with syntax fix"
+          git push || echo "No changes or push failed"
