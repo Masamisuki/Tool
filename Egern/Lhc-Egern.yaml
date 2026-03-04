@@ -97,7 +97,7 @@ policy_groups:
     name: Node
     type: select
     urls:
-    - https://oss.aliyun.kunlunaq.o3.syouuser.com/oss/images/sign?token=dc12a9822b8344f73c5c3963de1e6eaa
+    - XXX
     icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Global.png
     hidden: false
 - select:
