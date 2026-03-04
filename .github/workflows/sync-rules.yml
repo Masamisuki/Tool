@@ -34,8 +34,9 @@ jobs:
           TARGET_DIR="Egern/Rules"
           mkdir -p "$TARGET_DIR"
 
-          # 删除上游的 Emby.yaml（优先保留你的）
+          # 删除上游的 规则（优先保留你的）
           rm -f upstream/Egern/Rules/Emby.yaml
+          rm -f upstream/Egern/Rules/Ads_SukkaW.yaml
 
           # 同步文件
           rsync -av --exclude='.git' upstream/Egern/Rules/ "$TARGET_DIR/"
