@@ -1,0 +1,56 @@
+name: Daily Sync Surge Rules from Upstream (exclude Emby.list)
+
+on:
+  schedule:
+    - cron: '0 3 * * *'          # UTC 3:00 ≈ 北京时间 11:00，每天一次
+  workflow_dispatch:             # 支持手动触发测试
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout your repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.UPSTREAM_PAT }}   # 用于后续 push
+          fetch-depth: 0
+
+      - name: Setup git sparse-checkout for upstream folder
+        run: |
+          git remote add upstream https://github.com/Repcz/Tool.git
+          git fetch upstream X --depth=1
+
+          # 只拉取 Surge/Rules 目录
+          git sparse-checkout init --cone
+          git sparse-checkout set "Surge/Rules"
+          git checkout -f upstream/X -- Surge/Rules
+
+      - name: Sync files (exclude Emby.list)
+        run: |
+          cd Surge/Rules
+
+          # 先删除本地所有 .list 文件（但保护 Emby.list）
+          find . -type f -name "*.list" ! -name "Emby.list" -delete
+
+          # 把上游的文件拷贝过来（Emby.list 自动跳过因为没删）
+          cp -r ../Surge/Rules/* .  2>/dev/null || true
+
+          # 清理多余的（如果上游删除了文件，本地也会删）
+          # 注意：因为我们只处理 .list，且上游都是 .list，所以基本够用
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add Surge/Rules/
+          
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: daily sync Surge/Rules from upstream (exclude Emby.list) [$(date '+%Y-%m-%d')]"
+            git push origin main
+          fi
