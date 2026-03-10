@@ -2,40 +2,56 @@ name: Sync Surge Rules
 
 on:
   schedule:
-    # 每天凌晨 0 点运行
-    - cron: '0 0 * * *'
-  workflow_dispatch: # 允许你手动在 GitHub 页面点击运行
+    - cron: '0 3 * * *'   # 每天 UTC 03:00 (北京时间11点)
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   sync:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # 必须开启写入权限
+
     steps:
-      - name: Checkout downstream repository
+      - name: Checkout your repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Setup temporary directory
-        run: mkdir -p upstream_tmp
-
-      - name: Clone upstream repository
+      - name: Clone upstream repo
         run: |
-          git clone --depth 1 https://github.com/Repcz/Tool.git upstream_tmp
+          git clone --depth=1 -b X https://github.com/Repcz/Tool.git upstream
 
-      - name: Sync files with exclusion
+      - name: Sync Rules
         run: |
-          # 使用 rsync 同步，--exclude 确保 Emby.list 不被覆盖
-          # 请根据实际路径调整，这里假设上游仓库文件夹结构为 Surge/Rules
-          rsync -av --exclude='Emby.list' upstream_tmp/X/Surge/Rules/ ./Surge/Rules/
+          mkdir -p Surge/Rules
 
-      - name: Commit and Push
+          # 备份自己的 Emby.list
+          if [ -f Surge/Rules/Emby.list ]; then
+            cp Surge/Rules/Emby.list Emby.list.bak
+          fi
+
+          # 删除旧规则
+          rm -rf Surge/Rules/*
+
+          # 复制上游规则
+          cp -r upstream/Surge/Rules/* Surge/Rules/
+
+          # 恢复自己的 Emby.list
+          if [ -f Emby.list.bak ]; then
+            mv Emby.list.bak Surge/Rules/Emby.list
+          fi
+
+      - name: Commit changes
         run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add ./Surge/Rules/
-          if git diff --quiet && git diff --staged --quiet; then
-            echo "No changes to sync."
-          else
-            git commit -m "Auto-sync rules from Repcz/Tool, excluding Emby.list"
+          git config --local user.email "github-actions@github.com"
+          git config --local user.name "github-actions"
+
+          git add Surge/Rules
+
+          if ! git diff --staged --quiet; then
+            git commit -m "Auto Sync Surge Rules"
             git push
+          else
+            echo "No changes"
           fi
