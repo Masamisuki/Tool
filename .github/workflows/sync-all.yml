@@ -34,7 +34,7 @@ jobs:
           # 处理 Surge 规则
           mkdir -p Surge/Rules
           [ -f Surge/Rules/Emby.list ] && cp Surge/Rules/Emby.list Emby.list.bak
-          rm -f Surge/Rules/*
+          rm -rf Surge/Rules/*
           cp -r upstream_repcz/Surge/Rules/* Surge/Rules/
           [ -f Emby.list.bak ] && mv Emby.list.bak Surge/Rules/Emby.list
           
@@ -44,14 +44,15 @@ jobs:
           rsync -av --exclude='Emby.yaml' --exclude='Ads_SukkaW.yaml' upstream_repcz/Egern/Rules/ Egern/Rules/
 
       ##########################################################
-      # 2. 特殊处理 Ads_SukkaW (Surge 删除行 / Egern Python 替换引号)
+      # 2. 特殊处理 Ads_SukkaW (Surge 删除特定行 / Egern Python 替换引号)
       ##########################################################
       - name: Process Ads_SukkaW
         run: |
-          # Surge 版：删除包含 stat.y.qq.com 的行
+          # Surge 版：删除包含特定域名的行 (stat.y.qq.com 和 dataflow.biliapi.com)
           sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Surge/Rules/Ads_SukkaW.list
+          sed -i '/DOMAIN-SUFFIX,dataflow.biliapi.com/d' Surge/Rules/Ads_SukkaW.list
 
-          # Egern 版：Python 处理双引号转单引号
+          # Egern 版：Python 处理 url_regex_set 双引号转单引号
           python3 - <<'EOF'
           import re
           import os
@@ -67,11 +68,14 @@ jobs:
                           lines.append(stripped)
                           continue
                       if in_block:
+                          # 匹配缩进、横杠、双引号内容
                           match = re.match(r'^(\s*-\s*)"([^"]*)"$', stripped)
                           if match:
+                              # 转换为单引号
                               lines.append(f"{match.group(1)}'{match.group(2)}'")
                           else:
                               lines.append(stripped)
+                              # 判断块是否结束
                               if stripped.strip() and not stripped.lstrip().startswith(('-', '#')):
                                   in_block = False
                       else:
@@ -91,7 +95,7 @@ jobs:
             curl -sL "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/${site}.conf" -o "$TARGET_DIR/${site^}.conf"
           done
 
-          # AdBlock_Egern 处理
+          # AdBlock_Egern 处理 (过滤并替换 Surge 为 Egern)
           curl -sL https://raw.githubusercontent.com/217heidai/adblockfilters/main/rules/adblocksurge.list -o temp_adblock.list
           awk '
             /^\.stat6?\.y\.qq\.com$/ { next }
