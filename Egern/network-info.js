@@ -23,10 +23,19 @@ function flag(country) {
     "United Kingdom": "🇬🇧",
     Germany: "🇩🇪",
     France: "🇫🇷",
-    Canada: "🇨🇦"
+    Canada: "🇨🇦",
+    Australia: "🇦🇺"
   };
 
   return map[country] || "🌍";
+}
+
+function line(name, value) {
+
+  const pad = 8;
+  const space = " ".repeat(Math.max(1, pad - name.length));
+
+  return `${name}${space}${value}`;
 }
 
 (async () => {
@@ -42,19 +51,21 @@ function flag(country) {
     const exitFlag = flag(exit.country);
 
     const content =
-`IP: ${local.query}
-位置: ${localFlag} ${local.country} ${local.regionName} ${local.city}
-运营商: ${local.isp}
 
-入口IP:
-${local.query}
+`📍 本机信息
+${line("IP", local.query)}
+${line("位置", `${localFlag} ${local.regionName} ${local.city}`)}
+${line("运营商", local.isp)}
 
-落地IP:
-${exit.ip}
-位置: ${exitFlag} ${exit.country} ${exit.region} ${exit.city}
-运营商: ${exit.isp}
+🚪 入口信息
+${line("入口IP", local.query)}
 
-节点:
+🌍 出口信息
+${line("出口IP", exit.ip)}
+${line("位置", `${exitFlag} ${exit.region} ${exit.city}`)}
+${line("运营商", exit.isp)}
+
+🚀 当前节点
 ${node}`;
 
     $done({
