@@ -1,12 +1,12 @@
-name: Network Info Widget
-description: 网络信息小组件
+name: Network Info Pro
+description: 高级网络信息组件
 author: Masamisuki
 icon: network
 
 scriptings:
   - generic:
       name: network-info
-      script_url: https://raw.githubusercontent.com/Masamisuki/Tool/main/Egern/network-info.js
+      script_url: https://raw.githubusercontent.com/Masamisuki/Tool/main/Egern/network-info-pro.js
       timeout: 10
       update_interval: 600
 
