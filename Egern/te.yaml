@@ -1,16 +1,16 @@
-name: "网络链路信息组件"
-description: "仿 net-lsp-x 效果，展示本地及落地 IP 信息"
+name: "网络信息增强小组件 (Pro)"
+description: "实时显示本地出口 IP、中转入口、落地 IP 及节点信息。适配 Egern 小组件 UI。"
 
 scriptings:
   - schedule:
-      name: "network_check_task"
-      cron: "*/5 * * * *" # 每5分钟自动更新
-      script_url: "https://你的脚本地址/network_info.js" # 替换为你的脚本链接
-      timeout: 10
+      name: "network_info_pro_task"
+      cron: "*/5 * * * *"
+      script_url: "https://raw.githubusercontent.com/Masamisuki/Tool/main/Egern/network-info-pro.js"
+      timeout: 15
 
 widgets:
   - script:
-      name: "网络信息"
-      title: "链路追踪"
-      script_name: "network_check_task"
+      name: "网络追踪 Pro"
+      title: "链路信息"
+      script_name: "network_info_pro_task"
       update_interval: 60
