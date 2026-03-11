@@ -1,0 +1,16 @@
+name: Network Info
+description: 网络信息小组件
+author: Masamisuki
+icon: network
+
+scriptings:
+  - generic:
+      name: network-info
+      script_url: https://raw.githubusercontent.com/Masamisuki/Tool/refs/heads/main/Egern/network-info.js
+      update_interval: 86400
+      timeout: 10
+
+panels:
+  - name: network-info
+    title: 网络信息
+    icon: network
