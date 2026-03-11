@@ -1,4 +1,4 @@
-name: Network Info
+name: Network Info Widget
 description: 网络信息小组件
 author: Masamisuki
 icon: network
@@ -6,9 +6,9 @@ icon: network
 scriptings:
   - generic:
       name: network-info
-      script_url: https://raw.githubusercontent.com/Masamisuki/Tool/refs/heads/main/Egern/network-info.js
-      update_interval: 86400
+      script_url: https://raw.githubusercontent.com/Masamisuki/Tool/main/Egern/network-info.js
       timeout: 10
+      update_interval: 600
 
 panels:
   - name: network-info
