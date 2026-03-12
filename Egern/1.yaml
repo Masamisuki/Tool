@@ -1,7 +1,15 @@
+#!name=精致黄历组件
+#!desc=包含公历、农历、每日宜忌的简约美观组件
+#!category=工具
+
 widgets:
-  - arguments:
-      script-path: "scripts/calendar.js" # 脚本路径
-      update-interval: 3600 # 每小时更新一次
-    type: script
-    title: "精致黄历"
-    description: "显示日期、农历及每日宜忌"
+  - type: script
+    title: "每日黄历"
+    description: "实时显示农历、干支及宜忌"
+    arguments:
+      # 建议将脚本保存为 calendar.js 并存放在 scripts 目录下
+      script-path: "scripts/calendar.js"
+      update-interval: 3600
+    # 针对不同尺寸的适配设置
+    container-style:
+      backgroundColor: "#F2F2F7"
