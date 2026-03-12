@@ -1,20 +1,9 @@
-#!name=精致农历黄历组件
-#!desc=集成公历、农历、干支及每日宜忌。采用极简日历卡片设计，美观且实用。
-#!category=工具
-#!author=Gemini
+#!name = Elegant Huangli Calendar Pro
+#!desc = 顶级UI月历 + 黄历组件
 
 widgets:
-  - type: script
-    title: "每日黄历"
-    description: "显示农历与宜忌详情"
-    arguments:
-      # 使用你指定的脚本路径
-      script-path: "https://raw.githubusercontent.com/Masamisuki/Tool/refs/heads/main/Egern/nl.js"
-      update-interval: 3600
-    # 容器样式美化：使用淡雅背景色和阴影感
-    container-style:
-      backgroundColor: "#FFFFFF"
-      padding: 10
-      cornerRadius: 15
-    # 针对不同尺寸的预览设置
-    size: medium
+  huangli-calendar-pro:
+    title: 日历
+    description: 月历 + 农历 + 宜忌
+    script:
+      url: https://raw.githubusercontent.com/yourrepo/widgets/main/huangli-calendar.js
