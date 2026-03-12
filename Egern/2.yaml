@@ -1,9 +1,0 @@
-#!name = Elegant Huangli Calendar Pro
-#!desc = 顶级UI月历 + 黄历组件
-
-widgets:
-  huangli-calendar-pro:
-    title: 日历
-    description: 月历 + 农历 + 宜忌
-    script:
-      url: https://raw.githubusercontent.com/Masamisuki/Tool/refs/heads/main/Egern/nl.js
