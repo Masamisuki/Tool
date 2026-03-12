@@ -1,0 +1,7 @@
+widgets:
+  - arguments:
+      script-path: "scripts/calendar.js" # 脚本路径
+      update-interval: 3600 # 每小时更新一次
+    type: script
+    title: "精致黄历"
+    description: "显示日期、农历及每日宜忌"
