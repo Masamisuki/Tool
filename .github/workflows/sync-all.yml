@@ -1,4 +1,4 @@
-name: Unified Rules Sync & Update
+Name: Unified Rules Sync & Update
 
 on:
   schedule:
@@ -31,16 +31,19 @@ jobs:
           set -e
           git clone --depth=1 -b X https://github.com/Repcz/Tool.git upstream_repcz
           
-          # 处理 Surge 规则
+          # 处理 Surge 规则 (改为覆盖/增量模式，不再清空目录)
           mkdir -p Surge/Rules
+          # 备份可能被覆盖的本地特殊文件
           [ -f Surge/Rules/Emby.list ] && cp Surge/Rules/Emby.list Emby.list.bak
-          rm -rf Surge/Rules/*
-          cp -r upstream_repcz/Surge/Rules/* Surge/Rules/
+          
+          # 使用 rsync 同步，不使用 --delete 选项，从而保留本地独有文件
+          rsync -av upstream_repcz/Surge/Rules/ Surge/Rules/
+          
+          # 恢复备份
           [ -f Emby.list.bak ] && mv Emby.list.bak Surge/Rules/Emby.list
           
           # 处理 Egern 规则
           mkdir -p Egern/Rules
-          # 排除掉需要特殊处理或保留的文件，其余同步
           rsync -av --exclude='Emby.yaml' --exclude='Ads_SukkaW.yaml' upstream_repcz/Egern/Rules/ Egern/Rules/
 
       ##########################################################
@@ -48,9 +51,11 @@ jobs:
       ##########################################################
       - name: Process Ads_SukkaW
         run: |
-          # Surge 版：删除包含特定域名的行 (stat.y.qq.com 和 dataflow.biliapi.com)
-          sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Surge/Rules/Ads_SukkaW.list
-          sed -i '/DOMAIN-SUFFIX,dataflow.biliapi.com/d' Surge/Rules/Ads_SukkaW.list
+          # Surge 版：删除包含特定域名的行
+          if [ -f Surge/Rules/Ads_SukkaW.list ]; then
+            sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Surge/Rules/Ads_SukkaW.list
+            sed -i '/DOMAIN-SUFFIX,dataflow.biliapi.com/d' Surge/Rules/Ads_SukkaW.list
+          fi
 
           # Egern 版：Python 处理 url_regex_set 双引号转单引号
           python3 - <<'EOF'
@@ -68,14 +73,11 @@ jobs:
                           lines.append(stripped)
                           continue
                       if in_block:
-                          # 匹配缩进、横杠、双引号内容
                           match = re.match(r'^(\s*-\s*)"([^"]*)"$', stripped)
                           if match:
-                              # 转换为单引号
                               lines.append(f"{match.group(1)}'{match.group(2)}'")
                           else:
                               lines.append(stripped)
-                              # 判断块是否结束
                               if stripped.strip() and not stripped.lstrip().startswith(('-', '#')):
                                   in_block = False
                       else:
@@ -89,13 +91,11 @@ jobs:
       ##########################################################
       - name: Download DNS and AdBlock
         run: |
-          # Sukka DNS Mapping
           TARGET_DIR="Egern/Rules"
           for site in alibaba tencent bilibili bytedance baidu; do
             curl -sL "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/${site}.conf" -o "$TARGET_DIR/${site^}.conf"
           done
 
-          # AdBlock_Egern 处理 (过滤并替换 Surge 为 Egern)
           curl -sL https://raw.githubusercontent.com/217heidai/adblockfilters/main/rules/adblocksurge.list -o temp_adblock.list
           awk '
             /^\.stat6?\.y\.qq\.com$/ { next }
@@ -116,7 +116,17 @@ jobs:
           cp -r upstream_egern/Module/* Egern/Module/
 
       ##########################################################
-      # 5. 提交变更
+      # 5. 临时文件清理
+      ##########################################################
+      - name: Cleanup Temporary Files
+        run: |
+          rm -rf upstream_repcz
+          rm -rf upstream_egern
+          rm -f *.bak
+          echo "Cleanup completed."
+
+      ##########################################################
+      # 6. 提交变更
       ##########################################################
       - name: Commit and Push
         run: |
