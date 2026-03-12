@@ -1,107 +1,40 @@
-async function createWidget() {
-  const family = ctx.widgetFamily || "systemSmall";
+// network-info-minimal.js   ── 极简调试版，先确保能显示再说
 
-  // ── 网络信息 ──
-  const wifiSSID   = ctx.device.wifi?.ssid   || "未连接";
-  const localIP    = ctx.device.ipv4?.address || ctx.device.ipv6?.address || "无 IP";
-  const carrier    = ctx.device.cellular?.carrier || ctx.device.cellular?.radio || "";
-  const isWiFi     = wifiSSID !== "未连接" && wifiSSID !== "";
+async function createWidget(ctx) {
+  // 先取最基本的信息，避免访问可能不存在的深层字段导致崩溃
+  const family = ctx.widgetFamily || 'systemSmall';
+  const wifi = ctx.device?.wifi?.ssid || '无 Wi-Fi';
+  const ip = ctx.device?.ipv4?.address || '无 IP';
+  const carrier = ctx.device?.cellular?.carrier || '';
 
-  let netType = carrier ? "蜂窝" : (isWiFi ? "Wi-Fi" : "无网络");
-  let icon = isWiFi ? "wifi" : (carrier ? "cellularbars" : "wifi.slash");
-  let iconColor = isWiFi ? "#34C759" : (carrier ? "#5856D6" : "#FF3B30");
+  let title = carrier || wifi;
+  if (!title || title === 'Wi-Fi') title = '网络信息';
 
-  // 简单外网延迟测试（可选，如果超时就显示 —）
-  let ping = "—";
-  try {
-    const t0 = Date.now();
-    await ctx.http.get("https://www.apple.com/library/test/success.html", { timeout: 4000 });
-    const ms = Date.now() - t0;
-    ping = ms < 9999 ? ms.toString() : ">9s";
-  } catch {}
-
-  // ── Widget DSL ──
+  // 构建最简单的 widget（只用 text，避免 image/gradient 问题）
   const widget = {
     type: "widget",
-    padding: family.includes("Small") ? 12 : 16,
-    backgroundGradient: {
-      type: "linear",
-      colors: ["#0f172a", "#1e293b", "#334155"],
-      stops: [0, 0.5, 1],
-      startPoint: { x: 0, y: 0 },
-      endPoint: { x: 1, y: 1 }
-    },
-    borderRadius: "auto",
+    padding: family.includes('Small') ? 10 : 16,
+    backgroundColor: "#1e293b",          // 深灰背景，确保可见
     children: [
-      // 标题 + 图标
       {
-        type: "stack",
-        direction: "row",
-        alignItems: "center",
-        gap: 8,
-        children: [
-          {
-            type: "image",
-            src: `sf-symbol:${icon}`,
-            width: family.includes("Small") ? 20 : 28,
-            height: family.includes("Small") ? 20 : 28,
-            color: iconColor
-          },
-          {
-            type: "text",
-            text: netType,
-            font: { size: family.includes("Small") ? "subheadline" : "title3", weight: "semibold" },
-            textColor: "#f1f5f9"
-          }
-        ]
+        type: "text",
+        text: title,
+        font: { size: "headline", weight: "bold" },   // 用文档出现过的值
+        textColor: "#ffffff"
       },
-
-      // 分隔（中大尺寸）
-      ...(family.includes("Small") ? [] : [{
-        type: "spacer",
-        length: 4
-      }, {
-        type: "stack",
-        height: 1,
-        backgroundColor: "#47556980"
-      }]),
-
-      // 主信息
       {
-        type: "stack",
-        gap: family.includes("Small") ? 4 : 8,
-        children: [
-          {
-            type: "text",
-            text: carrier || wifiSSID,
-            font: { size: "caption1", weight: "medium" },
-            textColor: "#94a3b8",
-            maxLines: 1
-          },
-          {
-            type: "stack",
-            direction: "row",
-            alignItems: "center",
-            gap: 12,
-            children: [
-              {
-                type: "text",
-                text: localIP,
-                font: { size: family.includes("Small") ? "caption1" : "callout", family: "Menlo" },
-                textColor: "#cbd5e1"
-              },
-              {
-                type: "spacer"
-              },
-              {
-                type: "text",
-                text: ping === "—" ? "—" : ping + "ms",
-                font: { size: "caption2", weight: "semibold", family: "Menlo" },
-                textColor: ping === "—" ? "#64748b" : "#10b981"
-              }
-            ]
-          }
-        ]
+        type: "text",
+        text: ip || '获取 IP 失败',
+        font: { size: "body" },
+        textColor: "#a5b4fc",
+        padding: { top: 4 }
+      },
+      {
+        type: "text",
+        text: new Date().toLocaleTimeString('zh-CN', {hour12: false}),
+        font: { size: "caption" },
+        textColor: "#94a3b8",
+        padding: { top: 8 }
       }
     ]
   };
@@ -109,4 +42,6 @@ async function createWidget() {
   return widget;
 }
 
-$widget.setWidget(await createWidget());
+// 关键：直接 return，不要用 $widget.setWidget
+// Egern 文档里根本没有这个 API，之前是我想当然加的
+return createWidget(ctx);
