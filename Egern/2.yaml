@@ -6,4 +6,4 @@ widgets:
     title: 日历
     description: 月历 + 农历 + 宜忌
     script:
-      url: https://raw.githubusercontent.com/yourrepo/widgets/main/huangli-calendar.js
+      url: https://raw.githubusercontent.com/Masamisuki/Tool/refs/heads/main/Egern/nl.js
