@@ -1,0 +1,33 @@
+name: Force Delete Upstream Folder
+
+on:
+  workflow_dispatch: # 仅支持手动触发，点一下运行一次
+
+jobs:
+  delete-folder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Your Repository
+        uses: actions/checkout@v4
+
+      - name: Force Remove Upstream
+        run: |
+          # 配置 Git 身份
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # 1. 尝试从 git 索引中删除（解决带箭头的子模块问题）
+          git rm -rf --cached upstream || true
+          
+          # 2. 物理删除文件夹
+          rm -rf upstream || true
+
+          # 3. 检查是否有隐藏的 .gitmodules 文件并清理
+          if [ -f ".gitmodules" ]; then
+            sed -i '/upstream/I,+2d' .gitmodules || true
+          fi
+
+          # 提交更改
+          git add .
+          git commit -m "Force delete stubborn upstream folder" || echo "No changes to commit"
+          git push origin main
