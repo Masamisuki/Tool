@@ -1,0 +1,71 @@
+name: Egern-sync
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # 每天北京时间上午 8 点自动运行
+  workflow_dispatch: # 允许你点击按钮手动触发同步
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Your Repository
+        uses: actions/checkout@v4
+        with:
+          path: main-repo
+          # 默认 GITHUB_TOKEN 具有读写权限
+
+      - name: Sync From sooyaaabo/Egern
+        run: |
+          # 克隆上游仓库到临时目录
+          git clone --depth 1 https://github.com/sooyaaabo/Egern.git upstream-egern
+          
+          # 确保目标父目录存在
+          mkdir -p main-repo/Egern/
+          
+          # 复制 Module 和 Sgmodule 文件夹及其内容
+          cp -rf upstream-egern/Module main-repo/Egern/
+          cp -rf upstream-egern/Sgmodule main-repo/Egern/
+          echo "sooyaaabo/Egern folders synced."
+
+      - name: Sync From Repcz/Tool (With Emby.list Protection)
+        run: |
+          # 1. 克隆上游仓库 X 分支
+          git clone --depth 1 -b X https://github.com/Repcz/Tool.git upstream-repcz
+          
+          # 2. 检查你仓库中现有的 Emby.list 是否存在，存在则备份
+          if [ -f "main-repo/Egern/Rules/Emby.list" ]; then
+            echo "Found your local Emby.list, backing up..."
+            cp main-repo/Egern/Rules/Emby.list /tmp/Emby.list.bak
+            HAS_BACKUP=true
+          else
+            echo "Local Emby.list not found, will use upstream if exists."
+            HAS_BACKUP=false
+          fi
+
+          # 3. 同步 Rules 文件夹 (先清空目标文件夹确保完全一致，或直接覆盖)
+          mkdir -p main-repo/Egern/Rules/
+          cp -rf upstream-repcz/Surge/Rules/* main-repo/Egern/Rules/
+
+          # 4. 如果有备份，则用备份还原，强制保留你自己的版本
+          if [ "$HAS_BACKUP" = true ]; then
+            echo "Restoring your local Emby.list..."
+            cp /tmp/Emby.list.bak main-repo/Egern/Rules/Emby.list
+          fi
+          echo "Repcz/Tool Rules synced."
+
+      - name: Commit and Push Changes
+        run: |
+          cd main-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          git add .
+          
+          # 检查是否有内容变更，避免空提交报错
+          if git diff --quiet && git diff --staged --quiet; then
+            echo "No changes detected, skipping push."
+          else
+            git commit -m "Auto-sync: $(date +'%Y-%m-%d %H:%M:%S') (Emby.list preserved)"
+            git push
+          fi
