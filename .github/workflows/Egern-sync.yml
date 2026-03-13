@@ -2,7 +2,7 @@ name: Sync Upstream Folders to Egern
 
 on:
   schedule:
-    - cron: '0 15 * * *' # 北京时间 23:00 自动运行 (23-8=15)
+    - cron: '0 15 * * *' # 北京时间 23:00 自动运行
   workflow_dispatch: # 支持手动触发
 
 jobs:
@@ -19,7 +19,6 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/sooyaaabo/Egern.git upstream-egern
           mkdir -p main-repo/Egern/Module
-          # 直接覆盖同名文件，不删除原本存在的文件
           cp -rf upstream-egern/Module/* main-repo/Egern/Module/
 
       # --- 2. 同步 QingRex 的 Sgmodule (覆盖模式，排除 Beta/Official) ---
@@ -27,26 +26,31 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/QingRex/LoonKissSurge.git upstream-qing
           mkdir -p main-repo/Egern/Sgmodule
-          # 使用 rsync 进行覆盖同步，不加 --delete 参数即为覆盖不清空
           rsync -av --exclude='Beta' --exclude='Official' upstream-qing/Surge/ main-repo/Egern/Sgmodule/
 
-      # --- 3. 下载 DNS Mapping (Sukka DNS Mapping) ---
+      # --- 3. 下载 DNS Mapping 并特殊处理 ByteDance 命名 ---
       - name: Download DNS Mapping
         run: |
           TARGET_DIR="main-repo/Egern/Rules"
           mkdir -p "$TARGET_DIR"
-          # 循环下载并首字母大写重命名
           for site in alibaba tencent bilibili bytedance baidu; do
-            curl -sL "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/${site}.conf" -o "$TARGET_DIR/${site^}.conf"
+            # 默认首字母大写
+            FILENAME="${site^}.conf"
+            
+            # 针对 bytedance 进行特殊命名处理
+            if [ "$site" = "bytedance" ]; then
+              FILENAME="ByteDance.conf"
+            fi
+            
+            curl -sL "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/${site}.conf" -o "$TARGET_DIR/$FILENAME"
           done
-          echo "DNS Mapping downloaded and renamed."
+          echo "DNS Mapping downloaded. ByteDance.conf named correctly."
 
       # --- 4. 同步 Repcz 的 Rules (覆盖模式，保护 Emby.list) ---
       - name: Sync From Repcz/Tool (Rules)
         run: |
           git clone --depth 1 -b X https://github.com/Repcz/Tool.git upstream-repcz
           
-          # 备份本地 Emby.list
           if [ -f "main-repo/Egern/Rules/Emby.list" ]; then
             cp main-repo/Egern/Rules/Emby.list /tmp/Emby.list.bak
             HAS_BACKUP=true
@@ -55,10 +59,8 @@ jobs:
           fi
 
           mkdir -p main-repo/Egern/Rules/
-          # 覆盖模式同步
           cp -rf upstream-repcz/Surge/Rules/* main-repo/Egern/Rules/
 
-          # 还原本地 Emby.list (即使覆盖了也换回你自己的)
           if [ "$HAS_BACKUP" = true ]; then
             cp /tmp/Emby.list.bak main-repo/Egern/Rules/Emby.list
           fi
@@ -69,12 +71,10 @@ jobs:
           cd main-repo
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          
           git add .
-          
           if git diff --quiet && git diff --staged --quiet; then
             echo "No changes detected."
           else
-            git commit -m "Auto-sync to /Egern: $(date +'%Y-%m-%d %H:%M:%S') (Overlay & DNS Mapping)"
+            git commit -m "Auto-sync to /Egern: $(date +'%Y-%m-%d %H:%M:%S') (ByteDance Fixed)"
             git push
           fi
