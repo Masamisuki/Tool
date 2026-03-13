@@ -1,0 +1,69 @@
+name: Surge-sync
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # 每天北京时间上午 8 点运行
+  workflow_dispatch: # 支持手动点击按钮触发
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Your Repository
+        uses: actions/checkout@v4
+        with:
+          path: main-repo
+
+      # 1. 处理 sooyaaabo 的 Module
+      - name: Sync From sooyaaabo (Module)
+        run: |
+          git clone --depth 1 https://github.com/sooyaaabo/Egern.git upstream-egern
+          mkdir -p main-repo/Surge/Module
+          # 清理旧文件，确保同步
+          rm -rf main-repo/Surge/Module/*
+          cp -rf upstream-egern/Module/* main-repo/Surge/Module/
+
+      # 2. 处理 QingRex 的 Surge (存入你的 Sgmodule，排除 Beta 和 Official)
+      - name: Sync From QingRex (Sgmodule)
+        run: |
+          git clone --depth 1 https://github.com/QingRex/LoonKissSurge.git upstream-qing
+          mkdir -p main-repo/Surge/Sgmodule
+          rm -rf main-repo/Surge/Sgmodule/*
+          # 使用 rsync 排除特定文件夹
+          rsync -av --exclude='Beta' --exclude='Official' upstream-qing/Surge/ main-repo/Surge/Sgmodule/
+
+      # 3. 处理 Repcz 的 Rules (存入你的 Rules，保护 Emby.list)
+      - name: Sync From Repcz (Rules)
+        run: |
+          git clone --depth 1 -b X https://github.com/Repcz/Tool.git upstream-repcz
+          
+          # 备份你仓库里现有的 Emby.list
+          if [ -f "main-repo/Surge/Rules/Emby.list" ]; then
+            cp main-repo/Surge/Rules/Emby.list /tmp/Emby.list.bak
+            HAS_BACKUP=true
+          else
+            HAS_BACKUP=false
+          fi
+
+          mkdir -p main-repo/Surge/Rules/
+          rm -rf main-repo/Surge/Rules/*
+          cp -rf upstream-repcz/Surge/Rules/* main-repo/Surge/Rules/
+
+          # 还原你自己的 Emby.list，覆盖上游同名文件
+          if [ "$HAS_BACKUP" = true ]; then
+            cp /tmp/Emby.list.bak main-repo/Surge/Rules/Emby.list
+          fi
+
+      # 4. 提交更改
+      - name: Commit and Push Changes
+        run: |
+          cd main-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          if git diff --quiet && git diff --staged --quiet; then
+            echo "No changes"
+          else
+            git commit -m "Auto-sync to /Surge: $(date +'%Y-%m-%d %H:%M:%S')"
+            git push
+          fi
