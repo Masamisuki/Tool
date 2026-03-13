@@ -1,0 +1,61 @@
+name: Sync and Patch Rules
+
+on:
+  schedule:
+    - cron: '0 15 * * *' # 北京时间 23:00
+  workflow_dispatch:
+
+jobs:
+  sync-and-patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Your Repository
+        uses: actions/checkout@v4
+        with:
+          path: main-repo
+
+      # 1. 执行你之前的同步逻辑 (这里以 Egern 目录为例)
+      # ... (此处省略之前已确认的 clone 和 cp 步骤，保持逻辑一致) ...
+
+      - name: Patch Specific Files
+        run: |
+          cd main-repo
+          
+          # --- 处理 .sgmodule 文件 ---
+          # 定义需要处理的 sgmodule 路径
+          SG_FILES=("Egern/Sgmodule/广告平台拦截器.sgmodule" "Surge/Sgmodule/广告平台拦截器.sgmodule")
+          
+          for file in "${SG_FILES[@]}"; do
+            if [ -f "$file" ]; then
+              echo "Patching $file..."
+              # 删除包含 stat.y.qq.com 和 stat6.y.qq.com 的行
+              sed -i '/stat.y.qq.com,REJECT/d' "$file"
+              sed -i '/stat6.y.qq.com,REJECT/d' "$file"
+            fi
+          done
+
+          # --- 处理 .list 规则集文件 ---
+          # 定义需要处理的 list 路径
+          LIST_FILES=("Egern/Rules/Ads_SukkaW.list" "Surge/Rules/Ads_SukkaW.list")
+          
+          for file in "${LIST_FILES[@]}"; do
+            if [ -f "$file" ]; then
+              echo "Patching $file..."
+              # 删除指定的两行
+              sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' "$file"
+              sed -i '/DOMAIN-SUFFIX,dataflow.biliapi.com/d' "$file"
+            fi
+          done
+
+      - name: Commit and Push Changes
+        run: |
+          cd main-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          if git diff --quiet && git diff --staged --quiet; then
+            echo "No changes detected."
+          else
+            git commit -m "Auto-sync and Patch: Remove QQ Music & Bilibili stats rules"
+            git push
+          fi
