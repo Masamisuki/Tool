@@ -1,8 +1,9 @@
-name: Egern-sync
+name: Sync Upstream Folders to Egern
+
 on:
   schedule:
-    - cron: '0 0 * * *'
-  workflow_dispatch:
+    - cron: '0 0 * * *' # 每天凌晨自动运行
+  workflow_dispatch: # 支持手动触发
 
 jobs:
   sync:
@@ -13,41 +14,46 @@ jobs:
         with:
           path: main-repo
 
-      - name: Sync From sooyaaabo/Egern
+      - name: Sync From sooyaaabo/Egern (Module)
         run: |
           git clone --depth 1 https://github.com/sooyaaabo/Egern.git upstream-egern
+          # 创建并清空目标 Module 目录
           mkdir -p main-repo/Egern/Module
+          rm -rf main-repo/Egern/Module/*
+          # 同步 Module 文件夹内容
           cp -rf upstream-egern/Module/* main-repo/Egern/Module/
 
-      - name: Sync From QingRex (Excluding Beta/Official)
+      - name: Sync From QingRex (Sgmodule, Excluding Beta/Official)
         run: |
           git clone --depth 1 https://github.com/QingRex/LoonKissSurge.git upstream-qing
+          # 创建并清空目标 Sgmodule 目录
           mkdir -p main-repo/Egern/Sgmodule
+          rm -rf main-repo/Egern/Sgmodule/*
           
-          # 进入上游 Surge 目录
-          cd upstream-qing/Surge
-          # 复制所有内容到你的 Sgmodule 目录，但排除 Beta 和 Official
-          # 使用 rsync 可以更优雅地排除文件夹
-          rsync -av --exclude='Beta' --exclude='Official' . ../../main-repo/Egern/Sgmodule/
-          cd ../..
+          # 复制 Surge 目录下的内容，排除 Beta 和 Official 文件夹
+          rsync -av --exclude='Beta' --exclude='Official' upstream-qing/Surge/ main-repo/Egern/Sgmodule/
 
-      - name: Sync From Repcz/Tool (With Emby.list Protection)
+      - name: Sync From Repcz/Tool (Rules, With Emby.list Protection)
         run: |
           git clone --depth 1 -b X https://github.com/Repcz/Tool.git upstream-repcz
           
-          # 备份本地 Emby.list
+          # 1. 备份本地 Egern/Rules/Emby.list
           if [ -f "main-repo/Egern/Rules/Emby.list" ]; then
+            echo "Backing up local Emby.list..."
             cp main-repo/Egern/Rules/Emby.list /tmp/Emby.list.bak
             HAS_BACKUP=true
           else
             HAS_BACKUP=false
           fi
 
+          # 2. 清空并同步 Rules 文件夹
           mkdir -p main-repo/Egern/Rules/
+          rm -rf main-repo/Egern/Rules/*
           cp -rf upstream-repcz/Surge/Rules/* main-repo/Egern/Rules/
 
-          # 还原本地 Emby.list
+          # 3. 还原本地 Emby.list
           if [ "$HAS_BACKUP" = true ]; then
+            echo "Restoring local Emby.list..."
             cp /tmp/Emby.list.bak main-repo/Egern/Rules/Emby.list
           fi
 
@@ -56,10 +62,12 @@ jobs:
           cd main-repo
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
           git add .
+          
           if git diff --quiet && git diff --staged --quiet; then
-            echo "No changes to commit"
+            echo "No changes detected."
           else
-            git commit -m "Auto-sync: $(date +'%Y-%m-%d %H:%M:%S') (Excluded Beta/Official)"
+            git commit -m "Auto-sync to /Egern: $(date +'%Y-%m-%d %H:%M:%S')"
             git push
           fi
