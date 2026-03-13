@@ -2,7 +2,7 @@ name: Sync Upstream Folders to Surge
 
 on:
   schedule:
-    - cron: '0 14 * * *' # 每天北京时间 22:00 自动运行
+    - cron: '0 15 * * *' # 每天北京时间 23:00 自动运行
   workflow_dispatch: # 支持手动触发
 
 jobs:
@@ -14,60 +14,72 @@ jobs:
         with:
           path: main-repo
 
+      # --- 1. 同步 sooyaaabo 的 Module (覆盖模式) ---
       - name: Sync From sooyaaabo/Egern (Module)
         run: |
           git clone --depth 1 https://github.com/sooyaaabo/Egern.git upstream-egern
-          # 创建并清空目标 Module 目录
           mkdir -p main-repo/Surge/Module
-          rm -rf main-repo/Surge/Module/*
-          # 同步 Module 文件夹内容
           cp -rf upstream-egern/Module/* main-repo/Surge/Module/
 
-      - name: Sync From QingRex (Sgmodule, Excluding Beta/Official)
+      # --- 2. 同步 QingRex 的 Sgmodule (覆盖模式) ---
+      - name: Sync From QingRex (Sgmodule)
         run: |
           git clone --depth 1 https://github.com/QingRex/LoonKissSurge.git upstream-qing
-          # 创建并清空目标 Sgmodule 目录
           mkdir -p main-repo/Surge/Sgmodule
-          rm -rf main-repo/Surge/Sgmodule/*
-          
-          # 复制 Surge 目录下的内容，排除 Beta 和 Official 文件夹
           rsync -av --exclude='Beta' --exclude='Official' upstream-qing/Surge/ main-repo/Surge/Sgmodule/
 
-      - name: Sync From Repcz/Tool (Rules, With Emby.list Protection)
+      # --- 3. 下载 DNS Mapping (含 ByteDance 特殊命名) ---
+      - name: Download DNS Mapping
+        run: |
+          TARGET_DIR="main-repo/Surge/Rules"
+          mkdir -p "$TARGET_DIR"
+          for site in alibaba tencent bilibili bytedance baidu; do
+            FILENAME="${site^}.conf"
+            if [ "$site" = "bytedance" ]; then FILENAME="ByteDance.conf"; fi
+            curl -sL "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/${site}.conf" -o "$TARGET_DIR/$FILENAME"
+          done
+
+      # --- 4. 新增：下载 SukkaLab Reject 规则 (覆盖模式) ---
+      - name: Download SukkaLab Reject Rules
+        run: |
+          TARGET_DIR="main-repo/Surge/Rules"
+          mkdir -p "$TARGET_DIR"
+          # 下载并分别命名以防冲突
+          curl -sL "https://raw.githubusercontent.com/SukkaLab/ruleset.skk.moe/refs/heads/master/List/domainset/reject.conf" -o "$TARGET_DIR/skk_domain_reject.conf"
+          curl -sL "https://raw.githubusercontent.com/SukkaLab/ruleset.skk.moe/refs/heads/master/List/non_ip/reject.conf" -o "$TARGET_DIR/skk_non_ip_reject.conf"
+
+      # --- 5. 同步 Repcz 的 Rules (覆盖模式，保护 Emby.list) ---
+      - name: Sync From Repcz/Tool (Rules)
         run: |
           git clone --depth 1 -b X https://github.com/Repcz/Tool.git upstream-repcz
           
-          # 1. 备份本地 Surge/Rules/Emby.list
+          # 备份本地 Emby.list
           if [ -f "main-repo/Surge/Rules/Emby.list" ]; then
-            echo "Backing up local Emby.list..."
             cp main-repo/Surge/Rules/Emby.list /tmp/Emby.list.bak
             HAS_BACKUP=true
           else
             HAS_BACKUP=false
           fi
 
-          # 2. 清空并同步 Rules 文件夹
           mkdir -p main-repo/Surge/Rules/
-          rm -rf main-repo/Surge/Rules/*
+          # 覆盖模式同步
           cp -rf upstream-repcz/Surge/Rules/* main-repo/Surge/Rules/
 
-          # 3. 还原本地 Emby.list
+          # 还原本地 Emby.list
           if [ "$HAS_BACKUP" = true ]; then
-            echo "Restoring local Emby.list..."
             cp /tmp/Emby.list.bak main-repo/Surge/Rules/Emby.list
           fi
 
+      # --- 6. 提交并推送 ---
       - name: Commit and Push Changes
         run: |
           cd main-repo
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          
           git add .
-          
           if git diff --quiet && git diff --staged --quiet; then
             echo "No changes detected."
           else
-            git commit -m "Auto-sync to /Surge: $(date +'%Y-%m-%d %H:%M:%S')"
+            git commit -m "Auto-sync to /Surge: $(date +'%Y-%m-%d %H:%M:%S') (Overlay Mode)"
             git push
           fi
