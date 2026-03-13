@@ -1,9 +1,9 @@
-name: Surge-sync
+name: Sync Upstream Folders to Surge
 
 on:
   schedule:
-    - cron: '0 0 * * *' # 每天北京时间上午 8 点运行
-  workflow_dispatch: # 支持手动点击按钮触发
+    - cron: '0 0 * * *' # 每天凌晨自动运行
+  workflow_dispatch: # 支持手动触发
 
 jobs:
   sync:
@@ -14,55 +14,59 @@ jobs:
         with:
           path: main-repo
 
-      # 1. 处理 sooyaaabo 的 Module
-      - name: Sync From sooyaaabo (Module)
+      - name: Sync From sooyaaabo/Egern (Module)
         run: |
           git clone --depth 1 https://github.com/sooyaaabo/Egern.git upstream-egern
+          # 创建并清空目标 Module 目录
           mkdir -p main-repo/Surge/Module
-          # 清理旧文件，确保同步
           rm -rf main-repo/Surge/Module/*
+          # 同步 Module 文件夹内容
           cp -rf upstream-egern/Module/* main-repo/Surge/Module/
 
-      # 2. 处理 QingRex 的 Surge (存入你的 Sgmodule，排除 Beta 和 Official)
-      - name: Sync From QingRex (Sgmodule)
+      - name: Sync From QingRex (Sgmodule, Excluding Beta/Official)
         run: |
           git clone --depth 1 https://github.com/QingRex/LoonKissSurge.git upstream-qing
+          # 创建并清空目标 Sgmodule 目录
           mkdir -p main-repo/Surge/Sgmodule
           rm -rf main-repo/Surge/Sgmodule/*
-          # 使用 rsync 排除特定文件夹
+          
+          # 复制 Surge 目录下的内容，排除 Beta 和 Official 文件夹
           rsync -av --exclude='Beta' --exclude='Official' upstream-qing/Surge/ main-repo/Surge/Sgmodule/
 
-      # 3. 处理 Repcz 的 Rules (存入你的 Rules，保护 Emby.list)
-      - name: Sync From Repcz (Rules)
+      - name: Sync From Repcz/Tool (Rules, With Emby.list Protection)
         run: |
           git clone --depth 1 -b X https://github.com/Repcz/Tool.git upstream-repcz
           
-          # 备份你仓库里现有的 Emby.list
+          # 1. 备份本地 Surge/Rules/Emby.list
           if [ -f "main-repo/Surge/Rules/Emby.list" ]; then
+            echo "Backing up local Emby.list..."
             cp main-repo/Surge/Rules/Emby.list /tmp/Emby.list.bak
             HAS_BACKUP=true
           else
             HAS_BACKUP=false
           fi
 
+          # 2. 清空并同步 Rules 文件夹
           mkdir -p main-repo/Surge/Rules/
           rm -rf main-repo/Surge/Rules/*
           cp -rf upstream-repcz/Surge/Rules/* main-repo/Surge/Rules/
 
-          # 还原你自己的 Emby.list，覆盖上游同名文件
+          # 3. 还原本地 Emby.list
           if [ "$HAS_BACKUP" = true ]; then
+            echo "Restoring local Emby.list..."
             cp /tmp/Emby.list.bak main-repo/Surge/Rules/Emby.list
           fi
 
-      # 4. 提交更改
       - name: Commit and Push Changes
         run: |
           cd main-repo
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
           git add .
+          
           if git diff --quiet && git diff --staged --quiet; then
-            echo "No changes"
+            echo "No changes detected."
           else
             git commit -m "Auto-sync to /Surge: $(date +'%Y-%m-%d %H:%M:%S')"
             git push
