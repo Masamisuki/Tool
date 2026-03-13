@@ -49,13 +49,14 @@ jobs:
             cp /tmp/Emby.list.bak main-repo/Surge/Rules/Emby.list
           fi
 
-      # 新增：同步 Reject 规则及 ASN.China.list
+      # 新增：同步 Reject 规则、ASN、以及 ChinaMedia 规则
       - name: Sync Additional Rules
         run: |
           mkdir -p main-repo/Surge/Rules/
           curl -sL "https://raw.githubusercontent.com/SukkaLab/ruleset.skk.moe/refs/heads/master/List/domainset/reject.conf" -o main-repo/Surge/Rules/skk_domain_reject.conf
           curl -sL "https://raw.githubusercontent.com/SukkaLab/ruleset.skk.moe/refs/heads/master/List/non_ip/reject.conf" -o main-repo/Surge/Rules/skk_non_ip_reject.conf
           curl -sL "https://raw.githubusercontent.com/VirgilClyne/GetSomeFries/main/ruleset/ASN.China.list" -o main-repo/Surge/Rules/ASN.China.list
+          curl -sL "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/ChinaMedia/ChinaMedia_Resolve.list" -o main-repo/Surge/Rules/ChinaMedia_Resolve.list
 
       - name: Commit and Push Changes
         run: |
