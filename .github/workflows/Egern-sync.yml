@@ -2,7 +2,7 @@ name: Sync Upstream Folders to Egern
 
 on:
   schedule:
-    - cron: '0 14 * * *' # 每天凌晨自动运行
+    - cron: '0 14 * * *' # 每天北京时间 22:00 自动运行
   workflow_dispatch: # 支持手动触发
 
 jobs:
