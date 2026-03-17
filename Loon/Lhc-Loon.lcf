@@ -1,0 +1,122 @@
+# Loon全局配置 by Can 2026.02.25
+
+[General]
+ip-mode = v4-only
+ipv6-vif = off
+dns-server = system
+hijack-dns = 8.8.8.8:53,8.8.4.4:53
+sni-sniffing = true
+disable-stun = true
+dns-reject-mode = LoopbackIP
+domain-reject-mode = DNS
+udp-fallback-mode = REJECT
+wifi-access-http-port = 7222
+wifi-access-socks5-port = 7221
+allow-wifi-access = false
+interface-mode = auto
+test-timeout = 5
+disconnect-on-policy-change = false
+internet-test-url = http://connectivitycheck.platform.hicloud.com/generate_204
+proxy-test-url = http://www.gstatic.com/generate_204
+resource-parser = https://raw.githubusercontent.com/sub-store-org/Sub-Store/release/sub-store-parser.loon.min.js
+geoip-url = https://github.com/Hackl0us/GeoIP2-CN/raw/release/Country.mmdb
+ipasn-url = https://raw.githubusercontent.com/Loyalsoldier/geoip/release/GeoLite2-ASN.mmdb
+skip-proxy = 192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,localhost,*.local,e.crashlynatics.com
+bypass-tun = 10.0.0.0/8,100.64.0.0/10,127.0.0.0/8,169.254.0.0/16,172.16.0.0/12,192.0.0.0/24,192.0.2.0/24,192.88.99.0/24,192.168.0.0/16,198.51.100.0/24,203.0.113.0/24,224.0.0.0/4,255.255.255.255/32
+real-ip = *.lan,*.direct,*.cmpassport.com,id6.me,open.e.189.cn,mdn.open.wo.cn,opencloud.wostore.cn,auth.wosms.cn,*.10099.com.cn,*.msftconnecttest.com,*.msftncsi.com,lancache.steamcontent.com
+
+[Proxy]
+
+[Remote Proxy]
+Netsyo = https://sign.netsyo.pro/oss/images/sign?token=dc12a9822b8344f73c5c3963de1e6eaa,udp=true,block-quic=true,fast-open=default,vmess-aead=true,skip-cert-verify=true,enabled=true,flexible-sni=false,img-url=https://raw.githubusercontent.com/lige47/QuanX-icon-rule/main/icon/06jichang/Netsyo.png
+良心云 = https://liangxin.xyz/api/v1/liangxin?OwO=3be93797517cfa48ba5dbd70fa5c1e8e,udp=true,block-quic=true,fast-open=default,vmess-aead=true,skip-cert-verify=true,enabled=true,flexible-sni=false,img-url=https://raw.githubusercontent.com/lige47/QuanX-icon-rule/main/icon/06jichang/liangxinyun.png
+
+[Remote Filter]
+All = NameRegex,Netsyo, FilterKey = "^"
+HK = NameRegex,Netsyo, FilterKey = "(?i)🇭🇰|香港|(\b(HK|Hong)\b)"
+TW = NameRegex,Netsyo, FilterKey = "(?i)🇨🇳|🇹🇼|台湾|(\b(TW|Tai|Taiwan)\b)"
+SG = NameRegex,Netsyo, FilterKey = "(?i)🇸🇬|新加坡|狮|(\b(SG|Singapore)\b)"
+JP = NameRegex,Netsyo, FilterKey = "(?i)🇯🇵|日本|东京|(\b(JP|Japan)\b)"
+US = NameRegex,Netsyo, FilterKey = "(?i)🇺🇸|美国|洛杉矶|圣何塞|(\b(US|United States)\b)"
+
+[Proxy Group]
+Node = select,All,img-url = https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Global.png
+Proxy = select,Node,Hong Kong,Taiwan,Singapore,Japan,United States,img-url = https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Proxy.png
+Apple = select,DIRECT,img-url = https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Apple.png
+Intelligence = select,Node,Hong Kong,Taiwan,Singapore,Japan,United States,img-url = https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/AI.png
+Telegram = select,Node,Hong Kong,Taiwan,Singapore,Japan,United States,img-url = https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Telegram.png
+YouTube = select,Node,Hong Kong,Taiwan,Singapore,Japan,United States,img-url = https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/YouTube.png
+Emby = select,良心云,img-url = https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Emby.png
+Hong Kong = url-test,HK,url = http://www.gstatic.com/generate_204,interval = 600,img-url = https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Hong_Kong.png
+Taiwan = url-test,TW,url = http://www.gstatic.com/generate_204,interval = 600,img-url = https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Taiwan.png
+Singapore = url-test,SG,url = http://www.gstatic.com/generate_204,interval = 600,img-url = https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Singapore.png
+Japan = url-test,JP,url = http://www.gstatic.com/generate_204,interval = 600,img-url = https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Japan.png
+United States = url-test,US,url = http://www.gstatic.com/generate_204,interval = 600,img-url = https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/United_States.png
+
+[Rule]
+DOMAIN,cdn.lilyemby.com,DIRECT
+DOMAIN,stat.y.qq.com,DIRECT
+DOMAIN,stat6.y.qq.com,DIRECT
+# 当配置文件中没有任何有效策略组时，Loon将使用内置的PROXY策略组
+# 当配置文件中存在有效的策略组时，内置的PROXY策略组将不再允许被调用，仅可使用用户配置的策略组
+# 配置文件已自带远程GEOIP, cn, DIRECT规则，请勿在此添加
+# 请勿修改远程CN REGION规则的排序甚至删除
+FINAL,Proxy
+ 
+[Remote Rule]
+https://raw.githubusercontent.com/Repcz/Tool/X/Loon/Rules/Ads_SukkaW.list, policy=REJECT, tag=Ads_SukkaW, enabled=true
+https://raw.githubusercontent.com/Repcz/Tool/X/Loon/Rules/AppleCN.list, policy=Apple, tag=AppleCN, enabled=true
+https://raw.githubusercontent.com/Repcz/Tool/X/Loon/Rules/AI.list, policy=Intelligence, tag=AI, enabled=true
+https://raw.githubusercontent.com/Repcz/Tool/X/Loon/Rules/Telegram.list, policy=Telegram, tag=Telegram, enabled=true
+https://raw.githubusercontent.com/Repcz/Tool/refs/heads/X/Loon/Rules/YouTube.list, policy=YouTube, tag=YouTube, enabled=true
+https://raw.githubusercontent.com/Masamisuki/Tool/main/Loon/Rules/Emby.list, policy=Emby, tag=Emby, enabled=true
+https://raw.githubusercontent.com/Repcz/Tool/X/Loon/Rules/ProxyGFW.list, policy=Proxy, tag=ProxyGFW, enabled=true
+https://raw.githubusercontent.com/Repcz/Tool/X/Loon/Rules/Lan.list, policy=DIRECT, tag=LAN, enabled=true
+https://raw.githubusercontent.com/Repcz/Tool/X/Loon/Rules/FILTER_REGION.list, policy=DIRECT, tag=CN REGION, enabled=true
+
+[Host]
+
+[Rewrite]
+
+[Script]
+
+[Plugin]
+https://kelee.one/Tool/Loon/Lpx/BoxJs.lpx, policy=Proxy, enabled=true
+https://kelee.one/Tool/Loon/Lpx/Script-Hub.lpx, policy=Proxy, enabled=true
+https://raw.githubusercontent.com/xream/scripts/main/surge/modules/network-info/net-lsp-x.plugin, enabled=true
+https://kelee.one/Tool/Loon/Lpx/Block_HTTPDNS.lpx, pin=true, enabled=true
+https://kelee.one/Tool/Loon/Lpx/BlockAdvertisers.lpx, pin=true, enabled=true
+https://kelee.one/Tool/Loon/Lpx/Remove_ads_by_keli.lpx, pin=true, enabled=true
+https://kelee.one/Tool/Loon/Lpx/QuickSearch.lpx, enabled=true
+https://loon.103516.xyz/Plugin/Google.lpx, enabled=true
+https://kelee.one/Tool/Loon/Lpx/Weixin_external_links_unlock.lpx, enabled=true
+https://github.com/NSRingo/LocationService/releases/latest/download/iRingo.LocationService.plugin, enabled=true
+https://github.com/NSRingo/WeatherKit/raw/main/modules/iRingo.WeatherKit.Workers.plugin, enabled=true
+https://github.com/NSRingo/Maps/raw/main/modules/iRingo.Maps.Workers.plugin, enabled=true
+https://raw.githubusercontent.com/dompling/Script/master/10010/index.js, tag=获取联通cookie, img-url=https://raw.githubusercontent.com/luestr/IconResource/main/App_icon/120px/ChinaUnicom.png, enabled=true
+https://loon.103516.xyz/Plugin/Keep.lpx, enabled=true
+https://loon.103516.xyz/Plugin/Amap.lpx, enabled=true
+https://loon.103516.xyz/Plugin/DiDi.lpx, enabled=true
+https://kelee.one/Tool/Loon/Lpx/12306_remove_ads.lpx, enabled=true
+https://kelee.one/Tool/Loon/Lpx/SF-Express_remove_ads.lpx, enabled=true
+https://loon.103516.xyz/Plugin/ChinaUnicom.lpx, enabled=true
+https://kelee.one/Tool/Loon/Lpx/JD_Price.lpx, enabled=true
+https://kelee.one/Tool/Loon/Lpx/Damai_remove_ads.lpx, enabled=true
+https://loon.103516.xyz/Plugin/Taobao.lpx, enabled=true
+https://loon.103516.xyz/Plugin/Goofish.lpx, enabled=true
+https://kelee.one/Tool/Loon/Lpx/QQMusic_remove_ads.lpx, enabled=true
+https://kelee.one/Tool/Loon/Lpx/YouTube_remove_ads.lpx, enabled=true
+https://github.com/DualSubs/YouTube/releases/latest/download/DualSubs.YouTube.plugin, enabled=true
+https://raw.githubusercontent.com/kokoryh/Sparkle/refs/heads/master/release/loon/plugin/bilibili.lpx, policy=Proxy, enabled=true
+https://kelee.one/Tool/Loon/Lpx/LOL_Bible_remove_ads.lpx, enabled=true
+https://kelee.one/Tool/Loon/Lpx/Weibo_remove_ads.lpx, enabled=true
+https://kelee.one/Tool/Loon/Lpx/Zhihu_remove_ads.lpx, enabled=true
+https://loon.103516.xyz/Plugin/HUPU.lpx, enabled=true
+https://kelee.one/Tool/Loon/Lpx/IThome_remove_ads.lpx, enabled=true
+https://loon.103516.xyz/Plugin/CoolApk.lpx, enabled=true
+
+[Mitm]
+hostname =
+ca-p12 = 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
+ca-passphrase = 1665TP3F
+skip-server-cert-verify = false
