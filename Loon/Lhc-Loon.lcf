@@ -28,8 +28,8 @@ real-ip = *.lan,*.direct,*.cmpassport.com,id6.me,open.e.189.cn,mdn.open.wo.cn,op
 [Proxy]
 
 [Remote Proxy]
-Netsyo = https://sign.netsyo.pro/oss/images/sign?token=dc12a9822b8344f73c5c3963de1e6eaa,udp=true,block-quic=true,fast-open=default,vmess-aead=true,skip-cert-verify=true,enabled=true,flexible-sni=false,img-url=https://raw.githubusercontent.com/lige47/QuanX-icon-rule/main/icon/06jichang/Netsyo.png
-良心云 = https://liangxin.xyz/api/v1/liangxin?OwO=3be93797517cfa48ba5dbd70fa5c1e8e,udp=true,block-quic=true,fast-open=default,vmess-aead=true,skip-cert-verify=true,enabled=true,flexible-sni=false,img-url=https://raw.githubusercontent.com/lige47/QuanX-icon-rule/main/icon/06jichang/liangxinyun.png
+Netsyo = xx,udp=true,block-quic=true,fast-open=default,vmess-aead=true,skip-cert-verify=true,enabled=true,flexible-sni=false,img-url=https://raw.githubusercontent.com/lige47/QuanX-icon-rule/main/icon/06jichang/Netsyo.png
+良心云 = xx,udp=true,block-quic=true,fast-open=default,vmess-aead=true,skip-cert-verify=true,enabled=true,flexible-sni=false,img-url=https://raw.githubusercontent.com/lige47/QuanX-icon-rule/main/icon/06jichang/liangxinyun.png
 
 [Remote Filter]
 All = NameRegex,Netsyo, FilterKey = "^"
