@@ -45,7 +45,6 @@ jobs:
 
           if [ -f "$CONF_FILE" ]; then
             echo "Patching $CONF_FILE..."
-            sed -i '/\.dataflow\.biliapi\.com/d' "$CONF_FILE"
             sed -i '/\.stat\.y\.qq\.com/d' "$CONF_FILE"
           fi
 
