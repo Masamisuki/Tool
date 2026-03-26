@@ -1,7 +1,6 @@
 # 规则名称: Emby
-# 规则统计: 4
+# 规则统计: 3
 
 DOMAIN,emby.nebula-media.org
-DOMAIN,kkp.zhezhi.art
-DOMAIN-KEYWORD,199653.lol
+DOMAIN-KEYWORD,zhezhi
 DOMAIN-KEYWORD,mobaiemby
