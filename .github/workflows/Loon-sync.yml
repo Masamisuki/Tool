@@ -1,0 +1,56 @@
+name: Sync Loon Rules
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # 每天北京时间上午 8 点运行
+  workflow_dispatch: # 支持手动触发
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Your Repository
+        uses: actions/checkout@v4
+        with:
+          path: main-repo
+
+      - name: Backup Local Emby List
+        run: |
+          if [ -f "main-repo/Loon/Rules/Emby.list" ]; then
+            cp main-repo/Loon/Rules/Emby.list /tmp/Emby.list.bak
+            echo "Local Emby.list backed up."
+          fi
+
+      - name: Clone Upstream Repository
+        run: |
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/Repcz/Tool.git upstream-repo
+          cd upstream-repo
+          git sparse-checkout set Loon/Rules
+          cd ..
+
+      - name: Sync and Protect Local Rules
+        run: |
+          # 确保目标文件夹存在
+          mkdir -p main-repo/Loon/Rules/
+          
+          # 同步上游所有文件到你的目录
+          cp -rf upstream-repo/Loon/Rules/* main-repo/Loon/Rules/
+          
+          # 还原备份的 Emby.list (覆盖掉刚从上游同步过来的同名文件)
+          if [ -f "/tmp/Emby.list.bak" ]; then
+            cp /tmp/Emby.list.bak main-repo/Loon/Rules/Emby.list
+            echo "Local Emby.list restored."
+          fi
+
+      - name: Commit and Push
+        run: |
+          cd main-repo
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add Loon/Rules/
+          if git diff --quiet && git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Sync Loon rules from upstream (Keep local Emby.list)"
+            git push
+          fi
