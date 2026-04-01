@@ -1,5 +1,5 @@
-name: QQ音乐统计听歌报告域名直连
-description: QQ音乐统计听歌报告域名直连补丁
+name: QQ音乐听歌报告修复
+description: QQ音乐听歌报告修复补丁
 
 rules:
 - domain:
