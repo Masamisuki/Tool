@@ -1,0 +1,10 @@
+name: QQ音乐统计听歌报告域名直连
+description: QQ音乐统计听歌报告域名直连补丁
+
+rules:
+- domain:
+    match: stat6.y.qq.com
+    policy: DIRECT
+- domain:
+    match: stat.y.qq.com
+    policy: DIRECT
