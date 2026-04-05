@@ -129,8 +129,6 @@ DOMAIN, tpns.qq.com, REJECT
 DOMAIN, wup.imtt.qq.com, REJECT
 DOMAIN, tpstelemetry.tencent.com, REJECT
 DOMAIN, otheve.beacon.qq.com, REJECT
-DOMAIN, stat.y.qq.com, REJECT
-DOMAIN, stat6.y.qq.com, REJECT
 DOMAIN, oth.str.mdt.qq.com, REJECT
 DOMAIN, h.trace.qq.com, REJECT
 DOMAIN, sdk.e.qq.com, REJECT
