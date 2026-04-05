@@ -14,21 +14,7 @@ jobs:
         with:
           path: main-repo
 
-      # --- 1. 同步 sooyaaabo 的 Module (覆盖模式) ---
-      - name: Sync From sooyaaabo/Egern (Module)
-        run: |
-          git clone --depth 1 https://github.com/sooyaaabo/Egern.git upstream-egern
-          mkdir -p main-repo/Egern/Module
-          cp -rf upstream-egern/Module/* main-repo/Egern/Module/
-
-      # --- 2. 同步 QingRex 的 Sgmodule (覆盖模式，排除 Beta/Official) ---
-      - name: Sync From QingRex (Sgmodule)
-        run: |
-          git clone --depth 1 https://github.com/QingRex/LoonKissSurge.git upstream-qing
-          mkdir -p main-repo/Egern/Sgmodule
-          rsync -av --exclude='Beta' --exclude='Official' upstream-qing/Surge/ main-repo/Egern/Sgmodule/
-
-      # --- 3. 下载 DNS Mapping 并特殊处理 ByteDance 命名 ---
+      # --- 1. 下载 DNS Mapping 并特殊处理 ByteDance 命名 ---
       - name: Download DNS Mapping
         run: |
           TARGET_DIR="main-repo/Egern/Rules"
@@ -46,11 +32,12 @@ jobs:
           done
           echo "DNS Mapping downloaded. ByteDance.conf named correctly."
 
-      # --- 4. 同步 Repcz 的 Rules (覆盖模式，保护 Emby.list) ---
+      # --- 2. 同步 Repcz 的 Rules (覆盖模式，保护 Emby.list) ---
       - name: Sync From Repcz/Tool (Rules)
         run: |
           git clone --depth 1 -b X https://github.com/Repcz/Tool.git upstream-repcz
           
+          # 备份本地自定义的 Emby.list
           if [ -f "main-repo/Egern/Rules/Emby.list" ]; then
             cp main-repo/Egern/Rules/Emby.list /tmp/Emby.list.bak
             HAS_BACKUP=true
@@ -61,11 +48,12 @@ jobs:
           mkdir -p main-repo/Egern/Rules/
           cp -rf upstream-repcz/Surge/Rules/* main-repo/Egern/Rules/
 
+          # 还原本地备份，防止被覆盖
           if [ "$HAS_BACKUP" = true ]; then
             cp /tmp/Emby.list.bak main-repo/Egern/Rules/Emby.list
           fi
 
-      # --- 5. 提交并推送 ---
+      # --- 3. 提交并推送 ---
       - name: Commit and Push Changes
         run: |
           cd main-repo
@@ -75,6 +63,6 @@ jobs:
           if git diff --quiet && git diff --staged --quiet; then
             echo "No changes detected."
           else
-            git commit -m "Auto-sync to /Egern: $(date +'%Y-%m-%d %H:%M:%S') (ByteDance Fixed)"
+            git commit -m "Auto-sync to /Egern: $(date +'%Y-%m-%d %H:%M:%S') (Repcz Only)"
             git push
           fi
