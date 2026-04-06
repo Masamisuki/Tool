@@ -1,39 +1,72 @@
-name: Sync Upstream Rules
+name: Advanced Rules & Modules Sync
 
 on:
   schedule:
-    # 北京时间 00:00 对应 UTC 16:00
-    - cron: '0 16 * * *'
+    - cron: '0 16 * * *' # 北京时间 00:00
   workflow_dispatch:
 
 jobs:
-  sync:
+  sync_and_clean:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout My Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           path: main_repo
 
-      - name: Sync Repcz/Tool Rules
+      - name: Backup Local Protected Files
         run: |
+          # 备份 Rules 目录下的 Emby.list
+          [ -f main_repo/Rules/Emby.list ] && cp main_repo/Rules/Emby.list /tmp/Emby.list
+          # 备份 Sgmodule 目录下的特定文件
+          mkdir -p /tmp/sg_backup
+          [ -f main_repo/Sgmodule/Block_HTTPDNS.sgmodule ] && cp main_repo/Sgmodule/Block_HTTPDNS.sgmodule /tmp/sg_backup/
+          [ -f main_repo/Sgmodule/BlockAdvertisers.sgmodule ] && cp main_repo/Sgmodule/BlockAdvertisers.sgmodule /tmp/sg_backup/
+
+      - name: Sync Upstream (Repcz & Egern)
+        run: |
+          # 1. 同步 Repcz Rules 到 Rules 目录
           git clone --depth 1 -b X https://github.com/Repcz/Tool.git repcz_repo
-          # 清理旧文件并同步到 Rules 目录
           rm -rf main_repo/Rules
           mkdir -p main_repo/Rules
           cp -rf repcz_repo/Surge/Rules/* main_repo/Rules/
 
-      - name: Sync sooyaaabo/Egern Modules
-        run: |
+          # 2. 同步 Egern 模块
           git clone --depth 1 https://github.com/sooyaaabo/Egern.git egern_repo
-          # 同步 Module
-          rm -rf main_repo/Module
-          mkdir -p main_repo/Module
+          rm -rf main_repo/Module main_repo/Sgmodule
+          mkdir -p main_repo/Module main_repo/Sgmodule
           cp -rf egern_repo/Module/* main_repo/Module/
-          # 同步 Sgmodule
-          rm -rf main_repo/Sgmodule
-          mkdir -p main_repo/Sgmodule
           cp -rf egern_repo/Sgmodule/* main_repo/Sgmodule/
+
+      - name: Sync SukkaLab Rules & DNS Mapping
+        run: |
+          cd main_repo/Rules
+          # 下载并清洗 Reject 规则
+          curl -sSL https://raw.githubusercontent.com/SukkaLab/ruleset.skk.moe/refs/heads/master/List/domainset/reject.conf -o reject.conf
+          sed -i '/.stat.y.qq.com/d' reject.conf
+          curl -sSL https://raw.githubusercontent.com/SukkaLab/ruleset.skk.moe/refs/heads/master/List/non_ip/reject.conf -o non_ip_reject.conf
+
+          # 下载并重命名 DNS Mapping
+          curl -sSL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/alibaba.conf -o Alibaba.conf
+          curl -sSL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/tencent.conf -o Tencent.conf
+          curl -sSL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/bilibili.conf -o Bilibili.conf
+          curl -sSL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/bytedance.conf -o ByteDance.conf
+          curl -sSL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/baidu.conf -o Baidu.conf
+
+      - name: Clean Specific Lines in Local Rules
+        run: |
+          # 清洗特定本地规则文件中的域名行
+          cd main_repo/Rules
+          [ -f Ads_SukkaW.list ] && sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Ads_SukkaW.list
+          [ -f Ads_AWAvenue.list ] && sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Ads_AWAvenue.list
+
+      - name: Restore Protected Files
+        run: |
+          # 还原 Rules/Emby.list
+          [ -f /tmp/Emby.list ] && cp /tmp/Emby.list main_repo/Rules/Emby.list
+          # 还原 Sgmodule 文件
+          [ -f /tmp/sg_backup/Block_HTTPDNS.sgmodule ] && cp /tmp/sg_backup/Block_HTTPDNS.sgmodule main_repo/Sgmodule/
+          [ -f /tmp/sg_backup/BlockAdvertisers.sgmodule ] && cp /tmp/sg_backup/BlockAdvertisers.sgmodule main_repo/Sgmodule/
 
       - name: Commit and Push
         run: |
@@ -44,6 +77,6 @@ jobs:
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Auto sync from upstream at $(date +'%Y-%m-%d %H:%M:%S')"
+            git commit -m "Auto sync & protective restore: $(date +'%Y-%m-%d %H:%M:%S')"
             git push
           fi
