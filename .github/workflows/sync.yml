@@ -4,7 +4,7 @@ on:
   schedule:
     # 北京时间 00:00 对应 UTC 16:00
     - cron: '0 16 * * *'
-  workflow_dispatch: # 支持手动触发
+  workflow_dispatch:
 
 jobs:
   sync:
@@ -18,16 +18,20 @@ jobs:
       - name: Sync Repcz/Tool Rules
         run: |
           git clone --depth 1 -b X https://github.com/Repcz/Tool.git repcz_repo
-          mkdir -p main_repo/Surge/Rules
-          cp -rf repcz_repo/Surge/Rules/* main_repo/Surge/Rules/
+          # 清理旧文件并同步到 Rules 目录
+          rm -rf main_repo/Rules
+          mkdir -p main_repo/Rules
+          cp -rf repcz_repo/Surge/Rules/* main_repo/Rules/
 
       - name: Sync sooyaaabo/Egern Modules
         run: |
           git clone --depth 1 https://github.com/sooyaaabo/Egern.git egern_repo
           # 同步 Module
+          rm -rf main_repo/Module
           mkdir -p main_repo/Module
           cp -rf egern_repo/Module/* main_repo/Module/
           # 同步 Sgmodule
+          rm -rf main_repo/Sgmodule
           mkdir -p main_repo/Sgmodule
           cp -rf egern_repo/Sgmodule/* main_repo/Sgmodule/
 
