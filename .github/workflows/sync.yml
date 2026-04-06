@@ -16,21 +16,23 @@ jobs:
 
       - name: Backup Local Protected Files
         run: |
-          # 备份 Rules 目录下的 Emby.list
+          # 备份 Rules/Emby.list
           [ -f main_repo/Rules/Emby.list ] && cp main_repo/Rules/Emby.list /tmp/Emby.list
-          # 备份 Sgmodule 目录下的特定文件
+          
+          # 备份 Sgmodule 特定文件（已移除 HTTPDNS）
           mkdir -p /tmp/sg_backup
           [ -f main_repo/Sgmodule/BlockAdvertisers.sgmodule ] && cp main_repo/Sgmodule/BlockAdvertisers.sgmodule /tmp/sg_backup/
+          [ -f main_repo/Sgmodule/HuyaLive.sgmodule ] && cp main_repo/Sgmodule/HuyaLive.sgmodule /tmp/sg_backup/
 
       - name: Sync Upstream (Repcz & Egern)
         run: |
-          # 1. 同步 Repcz Rules 到 Rules 目录
+          # 1. 同步 Repcz Rules
           git clone --depth 1 -b X https://github.com/Repcz/Tool.git repcz_repo
           rm -rf main_repo/Rules
           mkdir -p main_repo/Rules
           cp -rf repcz_repo/Surge/Rules/* main_repo/Rules/
 
-          # 2. 同步 Egern 模块
+          # 2. 同步 Egern 模块 (格式化 Sgmodule)
           git clone --depth 1 https://github.com/sooyaaabo/Egern.git egern_repo
           rm -rf main_repo/Module main_repo/Sgmodule
           mkdir -p main_repo/Module main_repo/Sgmodule
@@ -54,17 +56,19 @@ jobs:
 
       - name: Clean Specific Lines in Local Rules
         run: |
-          # 清洗特定本地规则文件中的域名行
           cd main_repo/Rules
           [ -f Ads_SukkaW.list ] && sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Ads_SukkaW.list
           [ -f Ads_AWAvenue.list ] && sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Ads_AWAvenue.list
 
       - name: Restore Protected Files
         run: |
-          # 还原 Rules/Emby.list
+          # 还原 Emby.list
           [ -f /tmp/Emby.list ] && cp /tmp/Emby.list main_repo/Rules/Emby.list
-          # 还原 Sgmodule 文件
-          [ -f /tmp/sg_backup/BlockAdvertisers.sgmodule ] && cp /tmp/sg_backup/BlockAdvertisers.sgmodule main_repo/Sgmodule/
+          
+          # 还原 Sgmodule 文件 (BlockAdvertisers & HuyaLive)
+          if [ -d /tmp/sg_backup ]; then
+            cp -f /tmp/sg_backup/* main_repo/Sgmodule/
+          fi
 
       - name: Commit and Push
         run: |
@@ -75,6 +79,6 @@ jobs:
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Auto sync & protective restore: $(date +'%Y-%m-%d %H:%M:%S')"
+            git commit -m "Auto sync: Restore HuyaLive & Clean Tencent stats ($(date +'%Y-%m-%d %H:%M:%S'))"
             git push
           fi
