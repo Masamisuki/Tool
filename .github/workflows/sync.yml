@@ -1,0 +1,45 @@
+name: Sync Upstream Rules
+
+on:
+  schedule:
+    # 北京时间 00:00 对应 UTC 16:00
+    - cron: '0 16 * * *'
+  workflow_dispatch: # 支持手动触发
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout My Repository
+        uses: actions/checkout@v4
+        with:
+          path: main_repo
+
+      - name: Sync Repcz/Tool Rules
+        run: |
+          git clone --depth 1 -b X https://github.com/Repcz/Tool.git repcz_repo
+          mkdir -p main_repo/Surge/Rules
+          cp -rf repcz_repo/Surge/Rules/* main_repo/Surge/Rules/
+
+      - name: Sync sooyaaabo/Egern Modules
+        run: |
+          git clone --depth 1 https://github.com/sooyaaabo/Egern.git egern_repo
+          # 同步 Module
+          mkdir -p main_repo/Module
+          cp -rf egern_repo/Module/* main_repo/Module/
+          # 同步 Sgmodule
+          mkdir -p main_repo/Sgmodule
+          cp -rf egern_repo/Sgmodule/* main_repo/Sgmodule/
+
+      - name: Commit and Push
+        run: |
+          cd main_repo
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add .
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Auto sync from upstream at $(date +'%Y-%m-%d %H:%M:%S')"
+            git push
+          fi
