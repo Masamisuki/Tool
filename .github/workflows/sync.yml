@@ -20,7 +20,6 @@ jobs:
           [ -f main_repo/Rules/Emby.list ] && cp main_repo/Rules/Emby.list /tmp/Emby.list
           # 备份 Sgmodule 目录下的特定文件
           mkdir -p /tmp/sg_backup
-          [ -f main_repo/Sgmodule/Block_HTTPDNS.sgmodule ] && cp main_repo/Sgmodule/Block_HTTPDNS.sgmodule /tmp/sg_backup/
           [ -f main_repo/Sgmodule/BlockAdvertisers.sgmodule ] && cp main_repo/Sgmodule/BlockAdvertisers.sgmodule /tmp/sg_backup/
 
       - name: Sync Upstream (Repcz & Egern)
@@ -65,7 +64,6 @@ jobs:
           # 还原 Rules/Emby.list
           [ -f /tmp/Emby.list ] && cp /tmp/Emby.list main_repo/Rules/Emby.list
           # 还原 Sgmodule 文件
-          [ -f /tmp/sg_backup/Block_HTTPDNS.sgmodule ] && cp /tmp/sg_backup/Block_HTTPDNS.sgmodule main_repo/Sgmodule/
           [ -f /tmp/sg_backup/BlockAdvertisers.sgmodule ] && cp /tmp/sg_backup/BlockAdvertisers.sgmodule main_repo/Sgmodule/
 
       - name: Commit and Push
