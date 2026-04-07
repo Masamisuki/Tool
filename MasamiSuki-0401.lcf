@@ -31,7 +31,7 @@ real-ip = *.lan,*.direct,*.cmpassport.com,id6.me,open.e.189.cn,mdn.open.wo.cn,op
 [Proxy]
 
 [Remote Proxy]
-LinkCube = https://api.linkcube.dev/sub?target=surge&ver=4&emoji=true&tfo=true&udp=true&scv=true&filename=LinkCube&url=https%3A%2F%2Fapi-linkcube.org%2Fsubscribe%2Fwjdvr-oe5frg0q,udp=true,block-quic=true,fast-open=default,vmess-aead=true,skip-cert-verify=true,enabled=true,flexible-sni=false,img-url=https://raw.githubusercontent.com/lige47/QuanX-icon-rule/main/icon/06jichang/linkcube.png
+LinkCube = XX,udp=true,block-quic=true,fast-open=default,vmess-aead=true,skip-cert-verify=true,enabled=true,flexible-sni=false,img-url=https://raw.githubusercontent.com/lige47/QuanX-icon-rule/main/icon/06jichang/linkcube.png
 
 [Remote Filter]
 All = NameRegex, FilterKey = "^(?!.*(Traffic|Expire)).*$"
