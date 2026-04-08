@@ -1,4 +1,4 @@
-Name: Advanced Rules & Modules Sync
+name: Advanced Rules & Modules Sync
 
 on:
   schedule:
@@ -19,7 +19,7 @@ jobs:
           # 1. 备份本地已有的 Emby.list
           [ -f main_repo/Rules/Emby.list ] && cp main_repo/Rules/Emby.list /tmp/Emby.list
           
-          # 2. 下载指定的外部 Ads_Block.list 到备份目录
+          # 2. 下载指定的外部 Ads_Block.list 到备份目录，防止被后续的 rm -rf 删掉
           curl -sSL "https://raw.githubusercontent.com/thNylHx/Tools/main/Ruleset/Surge/Block/Ads_Block.list" -o /tmp/Ads_Block.list
           
           # 3. 备份 Sgmodule 特定文件
@@ -29,10 +29,11 @@ jobs:
 
       - name: Sync Upstream (Repcz & Egern)
         run: |
-          # 同步 Repcz Rules (此步骤会清空 Rules 文件夹)
+          # 同步 Repcz Rules (会格式化 Rules 文件夹)
           git clone --depth 1 -b X https://github.com/Repcz/Tool.git repcz_repo
           rm -rf main_repo/Rules
           mkdir -p main_repo/Rules
+          # 拷贝 Repcz 的所有规则
           cp -rf repcz_repo/Surge/Rules/* main_repo/Rules/
 
           # 同步 Egern 模块
@@ -45,11 +46,12 @@ jobs:
       - name: Sync SukkaLab Rules & DNS Mapping
         run: |
           cd main_repo/Rules
+          # 下载并清洗 Reject 规则
           curl -sSL https://raw.githubusercontent.com/SukkaLab/ruleset.skk.moe/refs/heads/master/List/domainset/reject.conf -o reject.conf
           sed -i '/.stat.y.qq.com/d' reject.conf
           curl -sSL https://raw.githubusercontent.com/SukkaLab/ruleset.skk.moe/refs/heads/master/List/non_ip/reject.conf -o non_ip_reject.conf
 
-          # 下载 DNS Mapping
+          # 下载 DNS Mapping (alibaba, tencent, bilibili, bytedance, baidu)
           curl -sSL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/alibaba.conf -o Alibaba.conf
           curl -sSL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/tencent.conf -o Tencent.conf
           curl -sSL https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/bilibili.conf -o Bilibili.conf
@@ -59,19 +61,20 @@ jobs:
       - name: Clean Specific Lines in Local Rules
         run: |
           cd main_repo/Rules
+          # 再次确保清洗腾讯统计域名
           [ -f Ads_SukkaW.list ] && sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Ads_SukkaW.list
           [ -f Ads_AWAvenue.list ] && sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Ads_AWAvenue.list
 
       - name: Restore Protected Files
         run: |
-          # 还原 Emby.list
+          # 还原本地 Emby.list
           [ -f /tmp/Emby.list ] && cp /tmp/Emby.list main_repo/Rules/Emby.list
           
           # 还原并更新来自外部仓库的 Ads_Block.list
           [ -f /tmp/Ads_Block.list ] && cp /tmp/Ads_Block.list main_repo/Rules/Ads_Block.list
           
           # 还原 Sgmodule 文件
-          if [ -d /tmp/sg_backup ]; then
+          if [ -d /tmp/sg_backup ] && [ "$(ls -A /tmp/sg_backup)" ]; then
             cp -f /tmp/sg_backup/* main_repo/Sgmodule/
           fi
 
@@ -84,6 +87,6 @@ jobs:
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Auto sync: Added Ads_Block & Cleaned stats ($(date +'%Y-%m-%d %H:%M:%S'))"
+            git commit -m "Auto sync: Added Ads_Block & Restored Local Rules ($(date +'%Y-%m-%d %H:%M:%S'))"
             git push
           fi
