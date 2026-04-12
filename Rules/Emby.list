@@ -1,9 +1,8 @@
 # 规则名称: Emby
-# 规则统计: 6
+# 规则统计: 5
 
 DOMAIN,kkp.zhezhi.art
 DOMAIN,cdn.zhezhi.art
-DOMAIN,zhezhi.huachuanx.com
 DOMAIN,m.mobaiemby.site
 DOMAIN,myg2.mobaiemby.site
 DOMAIN,emby.nebula-media.org
