@@ -2,8 +2,8 @@ name: Sync Rules and Modules
 
 on:
   schedule:
-    - cron: '0 0 * * *'
-  workflow_dispatch:
+    - cron: '0 0 * * *' # 每天北京时间上午8点运行
+  workflow_dispatch: # 支持手动触发
 
 jobs:
   sync:
@@ -16,66 +16,70 @@ jobs:
 
       - name: Set up Environment
         run: |
+          # 创建必要目录并安装同步工具
           mkdir -p Rules Sgmodule Module temp_sync
-          # 安装 rsync（通常预装，但为了保险起见）
           sudo apt-get update && sudo apt-get install -y rsync
 
-      # --- Upstream 1: Repcz/Tool (使用 Git 局部同步) ---
+      # --- 1. 同步 Repcz/Tool 的 Rules ---
       - name: Sync Repcz Rules
         run: |
           git clone --depth 1 --filter=blob:none --sparse https://github.com/Repcz/Tool.git temp_sync/Repcz
-          cd temp_sync/Repcz
-          git sparse-checkout set Surge/Rules
-          cd ../..
-          # 根据你的要求，同步到根目录的 Rules/，排除 Emby.list
+          cd temp_sync/Repcz && git sparse-checkout set Surge/Rules && cd ../..
+          # 同步到 Rules/ 目录，排除你本地的 Emby.list
           rsync -av --exclude='Emby.list' temp_sync/Repcz/Surge/Rules/ Rules/
 
-      # --- Upstream 2: sooyaaabo/Egern ---
+      # --- 2. 同步 sooyaaabo/Egern 的模块 ---
       - name: Sync sooyaaabo Modules
         run: |
           git clone --depth 1 --filter=blob:none --sparse https://github.com/sooyaaabo/Egern.git temp_sync/Egern
-          cd temp_sync/Egern
-          git sparse-checkout set Sgmodule Module
-          cd ../..
-          # 排除你仓库中需要保护的两个模块
+          cd temp_sync/Egern && git sparse-checkout set Sgmodule Module && cd ../..
+          # 同步并保留你本地的两个特定模块
           rsync -av --exclude='Block_HTTPDNS.sgmodule' --exclude='BlockAdvertisers.sgmodule' temp_sync/Egern/Sgmodule/ Sgmodule/
           rsync -av temp_sync/Egern/Module/ Module/
 
-      # --- Upstream 3 & 4 & 5 (保持原来的 curl 逻辑，这些不需要 svn) ---
+      # --- 3 & 4 & 5. 同步独立规则集并重命名/修改内容 ---
       - name: Sync Individual Files
         run: |
-          # Upstream 3
+          # Upstream 3: thNylHx Ads_Block
           curl -fLo Rules/Ads_Block.list https://raw.githubusercontent.com/thNylHx/Tools/main/Ruleset/Surge/Block/Ads_Block.list
           
-          # Upstream 4
+          # Upstream 4: SukkaLab Reject (处理同名文件并删除特定行)
           curl -fLo Rules/reject_domainset.conf https://raw.githubusercontent.com/SukkaLab/ruleset.skk.moe/master/List/domainset/reject.conf
           curl -fLo Rules/reject_nonip.conf https://raw.githubusercontent.com/SukkaLab/ruleset.skk.moe/master/List/non_ip/reject.conf
           sed -i '/.stat.y.qq.com/d' Rules/reject_domainset.conf
 
-          # Upstream 5 (Rename)
+          # Upstream 5: Sukka DNS Mapping (同步并首字母大写重命名)
           declare -A dns_files=( ["alibaba"]="Alibaba" ["tencent"]="Tencent" ["bilibili"]="Bilibili" ["bytedance"]="ByteDance" ["baidu"]="Baidu" )
           for key in "${!dns_files[@]}"; do
             curl -fLo "Rules/${dns_files[$key]}.conf" "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/${key}.conf"
           done
 
-      # --- Final Cleanup: 彻底删除指定的统计域名 ---
+      # --- 6. 全局清理：删除指定的统计域名行 ---
       - name: Clean up tracking domains
         run: |
-          # 删除 Ads_AWAvenue.list 和 Ads_SukkaW.list 中的指定行
+          # 针对本地已有文件进行清理
           [ -f Rules/Ads_AWAvenue.list ] && sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Rules/Ads_AWAvenue.list
           [ -f Rules/Ads_SukkaW.list ] && sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Rules/Ads_SukkaW.list
           
-          # 处理 Ads_Block.list
+          # 针对刚下载的 Ads_Block.list 进行清理
           if [ -f Rules/Ads_Block.list ]; then
             sed -i '/DOMAIN,stat.y.qq.com/d' Rules/Ads_Block.list
             sed -i '/DOMAIN,stat6.y.qq.com/d' Rules/Ads_Block.list
             sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Rules/Ads_Block.list
           fi
 
-      - name: Commit and Push
+      # --- 7. 清理工作区并提交 ---
+      - name: Cleanup and Push
         run: |
+          # 彻底删除临时文件夹，防止被提交
+          rm -rf temp_sync
+          
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add .
-          git commit -m "Fix: Switch from SVN to Git sparse-checkout and sync rules" || exit 0
+          
+          # 精准添加修改的文件夹
+          git add Rules/ Sgmodule/ Module/
+          
+          # 如果有变化则提交推送
+          git commit -m "Auto-sync: Rules and Modules updated ($(date +'%Y-%m-%d %H:%M'))" || exit 0
           git push
