@@ -2,8 +2,8 @@ name: Sync Rules and Modules
 
 on:
   schedule:
-    - cron: '0 0 * * *' # 每天北京时间上午8点运行
-  workflow_dispatch: # 支持手动触发
+    - cron: '0 0 * * *'
+  workflow_dispatch:
 
 jobs:
   sync:
@@ -11,53 +11,57 @@ jobs:
     steps:
       - name: Checkout local repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Environment
         run: |
           mkdir -p Rules Sgmodule Module temp_sync
+          # 安装 rsync（通常预装，但为了保险起见）
+          sudo apt-get update && sudo apt-get install -y rsync
 
-      # --- Upstream 1: Repcz/Tool ---
+      # --- Upstream 1: Repcz/Tool (使用 Git 局部同步) ---
       - name: Sync Repcz Rules
         run: |
-          svn export --force https://github.com/Repcz/Tool/trunk/Rules temp_sync/Repcz_Rules
-          # 同步除了 Emby.list 以外的所有文件
-          rsync -av --exclude='Emby.list' temp_sync/Repcz_Rules/ Rules/
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/Repcz/Tool.git temp_sync/Repcz
+          cd temp_sync/Repcz
+          git sparse-checkout set Surge/Rules
+          cd ../..
+          # 根据你的要求，同步到根目录的 Rules/，排除 Emby.list
+          rsync -av --exclude='Emby.list' temp_sync/Repcz/Surge/Rules/ Rules/
 
       # --- Upstream 2: sooyaaabo/Egern ---
       - name: Sync sooyaaabo Modules
         run: |
-          svn export --force https://github.com/sooyaaabo/Egern/trunk/Sgmodule temp_sync/Sgmodule
-          svn export --force https://github.com/sooyaaabo/Egern/trunk/Module temp_sync/Module
-          # 排除特定模块同步
-          rsync -av --exclude='Block_HTTPDNS.sgmodule' --exclude='BlockAdvertisers.sgmodule' temp_sync/Sgmodule/ Sgmodule/
-          rsync -av temp_sync/Module/ Module/
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/sooyaaabo/Egern.git temp_sync/Egern
+          cd temp_sync/Egern
+          git sparse-checkout set Sgmodule Module
+          cd ../..
+          # 排除你仓库中需要保护的两个模块
+          rsync -av --exclude='Block_HTTPDNS.sgmodule' --exclude='BlockAdvertisers.sgmodule' temp_sync/Egern/Sgmodule/ Sgmodule/
+          rsync -av temp_sync/Egern/Module/ Module/
 
-      # --- Upstream 3: thNylHx/Tools ---
-      - name: Sync thNylHx Ads_Block
+      # --- Upstream 3 & 4 & 5 (保持原来的 curl 逻辑，这些不需要 svn) ---
+      - name: Sync Individual Files
         run: |
+          # Upstream 3
           curl -fLo Rules/Ads_Block.list https://raw.githubusercontent.com/thNylHx/Tools/main/Ruleset/Surge/Block/Ads_Block.list
-
-      # --- Upstream 4: SukkaLab Reject ---
-      - name: Sync SukkaLab Reject
-        run: |
-          # 注意：两个同名文件，建议根据你的仓库结构分别放置或改名，这里默认放在 Rules 下
+          
+          # Upstream 4
           curl -fLo Rules/reject_domainset.conf https://raw.githubusercontent.com/SukkaLab/ruleset.skk.moe/master/List/domainset/reject.conf
           curl -fLo Rules/reject_nonip.conf https://raw.githubusercontent.com/SukkaLab/ruleset.skk.moe/master/List/non_ip/reject.conf
-          # 处理 domainset/reject.conf 中的特定行
           sed -i '/.stat.y.qq.com/d' Rules/reject_domainset.conf
 
-      # --- Upstream 5: Sukka DNS Mapping (Rename) ---
-      - name: Sync and Rename Sukka DNS
-        run: |
+          # Upstream 5 (Rename)
           declare -A dns_files=( ["alibaba"]="Alibaba" ["tencent"]="Tencent" ["bilibili"]="Bilibili" ["bytedance"]="ByteDance" ["baidu"]="Baidu" )
           for key in "${!dns_files[@]}"; do
             curl -fLo "Rules/${dns_files[$key]}.conf" "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/${key}.conf"
           done
 
-      # --- Final Cleanup: Global Tracking Removals ---
+      # --- Final Cleanup: 彻底删除指定的统计域名 ---
       - name: Clean up tracking domains
         run: |
-          # 处理 Ads_AWAvenue.list 和 Ads_SukkaW.list
+          # 删除 Ads_AWAvenue.list 和 Ads_SukkaW.list 中的指定行
           [ -f Rules/Ads_AWAvenue.list ] && sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Rules/Ads_AWAvenue.list
           [ -f Rules/Ads_SukkaW.list ] && sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Rules/Ads_SukkaW.list
           
@@ -73,5 +77,5 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add .
-          git commit -m "Auto-sync rules and modules (with cleanup) - $(date +'%Y-%m-%d %H:%M')" || exit 0
+          git commit -m "Fix: Switch from SVN to Git sparse-checkout and sync rules" || exit 0
           git push
