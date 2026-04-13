@@ -1,84 +1,93 @@
-name: Sync and Patch Rules
+name: Sync Upstream Rules & Modules
 
 on:
   schedule:
-    - cron: '0 0 * * *' # 每天北京时间上午8点运行
-  workflow_dispatch: # 支持手动触发
+    - cron: '0 2 * * *'   # 每天 UTC 2点运行（香港时间早上10点左右）
+  workflow_dispatch:      # 支持手动触发
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Repository
+      - name: Checkout your repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Prepare Local Backups
+      - name: Install dependencies
         run: |
-          # 暂存需要保留的本地文件
-          mkdir -p backup
-          [ -f Rules/Emby.list ] && cp Rules/Emby.list backup/
-          [ -f Sgmodule/Block_HTTPDNS.sgmodule ] && cp Sgmodule/Block_HTTPDNS.sgmodule backup/
-          [ -f Sgmodule/BlockAdvertisers.sgmodule ] && cp Sgmodule/BlockAdvertisers.sgmodule backup/
+          sudo apt-get update
+          sudo apt-get install -y git curl
 
-      - name: Sync Upstream 1 (Repcz Rules)
+      - name: Sync Repcz Rules folder (keep Emby.list)
+        run: |
+          rm -rf /tmp/repcz_rules
+          git clone --depth 1 https://github.com/Repcz/Tool.git -b X /tmp/repcz_rules
+          mkdir -p Rules
+          cp -r /tmp/repcz_rules/Surge/Rules/* Rules/ 2>/dev/null || true
+          # 恢复自己的 Emby.list
+          if [ -f Rules_backup/Emby.list ]; then
+            cp Rules_backup/Emby.list Rules/Emby.list
+          fi
+          rm -rf /tmp/repcz_rules
+
+      - name: Sync sooyaaabo Sgmodule & Module (keep two custom sgmodule)
+        run: |
+          rm -rf /tmp/egern
+          git clone --depth 1 https://github.com/sooyaaabo/Egern.git /tmp/egern
+          # Sgmodule
+          mkdir -p Sgmodule
+          cp -r /tmp/egern/Sgmodule/* Sgmodule/ 2>/dev/null || true
+          # 恢复自己的两个模块
+          cp Sgmodule_backup/Block_HTTPDNS.sgmodule Sgmodule/ 2>/dev/null || true
+          cp Sgmodule_backup/BlockAdvertisers.sgmodule Sgmodule/ 2>/dev/null || true
+          # Module
+          mkdir -p Module
+          cp -r /tmp/egern/Module/* Module/ 2>/dev/null || true
+          rm -rf /tmp/egern
+
+      - name: Download single ruleset (thNylHx Ads_Block.list)
         run: |
           mkdir -p Rules
-          curl -sL https://api.github.com/repos/Repcz/Tool/contents/Surge/Rules?ref=X | jq -r '.[] | .download_url' | xargs -n 1 curl -sL --output-dir Rules -O
-          # 恢复本地 Emby.list
-          [ -f backup/Emby.list ] && cp backup/Emby.list Rules/
+          curl -L -o Rules/Ads_Block.list "https://raw.githubusercontent.com/thNylHx/Tools/refs/heads/main/Ruleset/Surge/Block/Ads_Block.list"
 
-      - name: Sync Upstream 2 (Egern Modules)
+      - name: Download SukkaLab reject rules + remove stat.y.qq.com
         run: |
-          mkdir -p Sgmodule Module
-          # 同步 Sgmodule
-          curl -sL https://api.github.com/repos/sooyaaabo/Egern/contents/Sgmodule?ref=main | jq -r '.[] | .download_url' | xargs -n 1 curl -sL --output-dir Sgmodule -O
-          # 同步 Module
-          curl -sL https://api.github.com/repos/sooyaaabo/Egern/contents/Module?ref=main | jq -r '.[] | .download_url' | xargs -n 1 curl -sL --output-dir Module -O
-          # 恢复本地特定模块
-          [ -f backup/Block_HTTPDNS.sgmodule ] && cp backup/Block_HTTPDNS.sgmodule Sgmodule/
-          [ -f backup/BlockAdvertisers.sgmodule ] && cp backup/BlockAdvertisers.sgmodule Sgmodule/
+          mkdir -p Rules
+          curl -L -o Rules/reject.conf "https://raw.githubusercontent.com/SukkaLab/ruleset.skk.moe/refs/heads/master/List/domainset/reject.conf"
+          curl -L -o Rules/reject_non_ip.conf "https://raw.githubusercontent.com/SukkaLab/ruleset.skk.moe/refs/heads/master/List/non_ip/reject.conf"
+          # 删除 stat.y.qq.com 行
+          sed -i '/stat\.y\.qq\.com/d' Rules/reject.conf
 
-      - name: Sync Upstream 3 (thNylHx Ads Block)
+      - name: Download sukka_local_dns_mapping and rename
         run: |
-          curl -sL "https://raw.githubusercontent.com/thNylHx/Tools/refs/heads/main/Ruleset/Surge/Block/Ads_Block.list" -o Rules/Ads_Block.list
+          mkdir -p Rules
+          curl -L -o Rules/Alibaba.conf "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/alibaba.conf"
+          curl -L -o Rules/Tencent.conf "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/tencent.conf"
+          curl -L -o Rules/Bilibili.conf "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/bilibili.conf"
+          curl -L -o Rules/ByteDance.conf "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/bytedance.conf"
+          curl -L -o Rules/Baidu.conf "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/baidu.conf"
 
-      - name: Sync Upstream 4 (Sukka Reject & Cleanup)
+      - name: Apply custom modifications (remove stat.y.qq.com lines)
         run: |
-          # 下载并过滤 domainset/reject.conf
-          curl -sL "https://raw.githubusercontent.com/SukkaLab/ruleset.skk.moe/refs/heads/master/List/domainset/reject.conf" | sed '/.stat.y.qq.com/d' > Rules/reject_domainset.conf
-          # 下载 non_ip/reject.conf
-          curl -sL "https://raw.githubusercontent.com/SukkaLab/ruleset.skk.moe/refs/heads/master/List/non_ip/reject.conf" -o Rules/reject_non_ip.conf
+          # Ads_AWAvenue.list
+          sed -i '/DOMAIN-SUFFIX,stat\.y\.qq\.com/d' Rules/Ads_AWAvenue.list || true
+          # Ads_SukkaW.list
+          sed -i '/DOMAIN-SUFFIX,stat\.y\.qq\.com/d' Rules/Ads_SukkaW.list || true
+          # Ads_Block.list (your version after download)
+          sed -i '/DOMAIN,stat\.y\.qq\.com/d' Rules/Ads_Block.list || true
+          sed -i '/DOMAIN,stat6\.y\.qq\.com/d' Rules/Ads_Block.list || true
+          sed -i '/DOMAIN-SUFFIX,stat\.y\.qq\.com/d' Rules/Ads_Block.list || true
 
-      - name: Sync Upstream 5 (Sukka DNS Mapping)
+      - name: Commit and push changes
         run: |
-          declare -A dns_files=( 
-            ["alibaba.conf"]="Alibaba.conf" 
-            ["tencent.conf"]="Tencent.conf" 
-            ["bilibili.conf"]="Bilibili.conf" 
-            ["bytedance.conf"]="ByteDance.conf" 
-            ["baidu.conf"]="Baidu.conf" 
-          )
-          for src in "${!dns_files[@]}"; do
-            curl -sL "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/$src" -o "Rules/${dns_files[$src]}"
-          done
-
-      - name: Final Rules Patching (Clean QQ Stats)
-        run: |
-          # 处理 Ads_AWAvenue.list 和 Ads_SukkaW.list
-          [ -f Rules/Ads_AWAvenue.list ] && sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Rules/Ads_AWAvenue.list
-          [ -f Rules/Ads_SukkaW.list ] && sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Rules/Ads_SukkaW.list
-          # 处理 Ads_Block.list
-          if [ -f Rules/Ads_Block.list ]; then
-            sed -i '/DOMAIN,stat.y.qq.com/d' Rules/Ads_Block.list
-            sed -i '/DOMAIN,stat6.y.qq.com/d' Rules/Ads_Block.list
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Rules/ Sgmodule/ Module/
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: sync upstream rules and modules + custom modifications"
+            git push
           fi
-
-      - name: Git Push Assets
-        run: |
-          git config --local user.email "actions@github.com"
-          git config --local user.name "GitHub Action"
-          git add .
-          git diff --quiet && git diff --staged --quiet || git commit -m "Auto Sync: Updated rules and applied patches"
-          git push
