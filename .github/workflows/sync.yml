@@ -1,85 +1,64 @@
-name: Sync Rules and Modules
-
+name: Auto Sync Tool
 on:
   schedule:
-    - cron: '0 0 * * *' # 每天北京时间上午8点运行
-  workflow_dispatch: # 支持手动触发
+    - cron: '0 0 * * *' # 每日北京时间 8:00 (UTC 0:00)
+  workflow_dispatch: # 支持手动点击执行
 
 jobs:
-  sync:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout local repository
+      - name: Checkout Local Repo
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Set up Environment
+      - name: Sync Egern Modules
         run: |
-          # 创建必要目录并安装同步工具
-          mkdir -p Rules Sgmodule Module temp_sync
-          sudo apt-get update && sudo apt-get install -y rsync
+          # 临时克隆上游 Egern 仓库
+          git clone --depth 1 https://github.com/sooyaaabo/Egern.git upstream_egern
+          mkdir -p Module Sgmodule
+          # 同步文件夹内容
+          cp -rf upstream_egern/Module/* ./Module/
+          cp -rf upstream_egern/Sgmodule/* ./Sgmodule/
+          rm -rf upstream_egern
 
-      # --- 1. 同步 Repcz/Tool 的 Rules ---
       - name: Sync Repcz Rules
         run: |
-          git clone --depth 1 --filter=blob:none --sparse https://github.com/Repcz/Tool.git temp_sync/Repcz
-          cd temp_sync/Repcz && git sparse-checkout set Surge/Rules && cd ../..
-          # 同步到 Rules/ 目录，排除你本地的 Emby.list
-          rsync -av --exclude='Emby.list' temp_sync/Repcz/Surge/Rules/ Rules/
-
-      # --- 2. 同步 sooyaaabo/Egern 的模块 ---
-      - name: Sync sooyaaabo Modules
-        run: |
-          git clone --depth 1 --filter=blob:none --sparse https://github.com/sooyaaabo/Egern.git temp_sync/Egern
-          cd temp_sync/Egern && git sparse-checkout set Sgmodule Module && cd ../..
-          # 同步并保留你本地的两个特定模块
-          rsync -av --exclude='Block_HTTPDNS.sgmodule' --exclude='BlockAdvertisers.sgmodule' temp_sync/Egern/Sgmodule/ Sgmodule/
-          rsync -av temp_sync/Egern/Module/ Module/
-
-      # --- 3 & 4 & 5. 同步独立规则集并重命名/修改内容 ---
-      - name: Sync Individual Files
-        run: |
-          # Upstream 3: thNylHx Ads_Block
-          curl -fLo Rules/Ads_Block.list https://raw.githubusercontent.com/thNylHx/Tools/main/Ruleset/Surge/Block/Ads_Block.list
+          # 临时克隆 Repcz 仓库 X 分支
+          git clone --depth 1 -b X https://github.com/Repcz/Tool.git upstream_repcz
+          mkdir -p Rules
           
-          # Upstream 4: SukkaLab Reject (处理同名文件并删除特定行)
-          curl -fLo Rules/reject_domainset.conf https://raw.githubusercontent.com/SukkaLab/ruleset.skk.moe/master/List/domainset/reject.conf
-          curl -fLo Rules/reject_nonip.conf https://raw.githubusercontent.com/SukkaLab/ruleset.skk.moe/master/List/non_ip/reject.conf
-          sed -i '/.stat.y.qq.com/d' Rules/reject_domainset.conf
-
-          # Upstream 5: Sukka DNS Mapping (同步并首字母大写重命名)
-          declare -A dns_files=( ["alibaba"]="Alibaba" ["tencent"]="Tencent" ["bilibili"]="Bilibili" ["bytedance"]="ByteDance" ["baidu"]="Baidu" )
-          for key in "${!dns_files[@]}"; do
-            curl -fLo "Rules/${dns_files[$key]}.conf" "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/${key}.conf"
-          done
-
-      # --- 6. 全局清理：删除指定的统计域名行 ---
-      - name: Clean up tracking domains
-        run: |
-          # 针对本地已有文件进行清理
-          [ -f Rules/Ads_AWAvenue.list ] && sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Rules/Ads_AWAvenue.list
-          [ -f Rules/Ads_SukkaW.list ] && sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Rules/Ads_SukkaW.list
-          
-          # 针对刚下载的 Ads_Block.list 进行清理
-          if [ -f Rules/Ads_Block.list ]; then
-            sed -i '/DOMAIN,stat.y.qq.com/d' Rules/Ads_Block.list
-            sed -i '/DOMAIN,stat6.y.qq.com/d' Rules/Ads_Block.list
-            sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Rules/Ads_Block.list
+          # 逻辑：如果本地已存在 Emby.list，先备份它，同步完再还原，确保不被覆盖
+          if [ -f "Rules/Emby.list" ]; then
+            mv Rules/Emby.list Rules/Emby.list.bak
           fi
-
-      # --- 7. 清理工作区并提交 ---
-      - name: Cleanup and Push
-        run: |
-          # 彻底删除临时文件夹，防止被提交
-          rm -rf temp_sync
           
+          cp -rf upstream_repcz/Surge/Rules/* ./Rules/
+          
+          # 还原本地的 Emby.list
+          if [ -f "Rules/Emby.list.bak" ]; then
+            mv -f Rules/Emby.list.bak Rules/Emby.list
+          fi
+          rm -rf upstream_repcz
+
+      - name: Sync SKK DNS & Reject Rules
+        run: |
+          mkdir -p Rules
+          # 1. 下载并重命名 SKK DNS 映射 (首字母大写处理)
+          curl -sL "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/alibaba.conf" -o Rules/Alibaba.conf
+          curl -sL "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/tencent.conf" -o Rules/Tencent.conf
+          curl -sL "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/bilibili.conf" -o Rules/bilibili.conf
+          cp Rules/bilibili.conf Rules/Bilibili.conf # 满足您要求的两个重命名逻辑
+          curl -sL "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/bytedance.conf" -o Rules/ByteDance.conf
+          curl -sL "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/baidu.conf" -o Rules/Baidu.conf
+
+          # 2. 下载并重命名 Reject 规则
+          curl -sL "https://raw.githubusercontent.com/SukkaLab/ruleset.skk.moe/refs/heads/master/List/domainset/reject.conf" -o Rules/domainset_reject.conf
+          curl -sL "https://raw.githubusercontent.com/SukkaLab/ruleset.skk.moe/refs/heads/master/List/non_ip/reject.conf" -o Rules/non_ip_reject.conf
+
+      - name: Commit and Push
+        run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          
-          # 精准添加修改的文件夹
-          git add Rules/ Sgmodule/ Module/
-          
-          # 如果有变化则提交推送
-          git commit -m "Auto-sync: Rules and Modules updated ($(date +'%Y-%m-%d %H:%M'))" || exit 0
-          git push
+          git add .
+          # 只有在有变动时才提交，防止 Action 报错
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto Sync: $(date +'%Y-%m-%d %H:%M')" && git push)
