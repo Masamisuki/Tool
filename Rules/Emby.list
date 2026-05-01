@@ -1,5 +1,7 @@
 # 规则名称: Emby
-# 规则统计: 2
+# 规则统计: 4
 
 DOMAIN-SUFFIX,zhezhi.art
 DOMAIN-SUFFIX,mobaiemby.site
+DOMAIN,v.chilledmelon.com
+DOMAIN,cf.xgua.de
