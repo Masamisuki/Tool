@@ -1,85 +1,108 @@
-name: Sync Rules and Modules
+name: Sync Rules
 
 on:
   schedule:
-    - cron: '0 0 * * *' # 每天北京时间上午8点运行
-  workflow_dispatch: # 支持手动触发
+    - cron: '0 0 * * *'
+  workflow_dispatch:
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout local repository
+      - name: Checkout 当前仓库
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Set up Environment
+      - name: 初始化环境
         run: |
-          # 创建必要目录并安装同步工具
           mkdir -p Rules Sgmodule Module temp_sync
-          sudo apt-get update && sudo apt-get install -y rsync
+          sudo apt-get update
+          sudo apt-get install -y rsync
 
-      # --- 1. 同步 Repcz/Tool 的 Rules ---
-      - name: Sync Repcz Rules
+      # ========================
+      # ① 同步 Repcz 规则
+      # ========================
+      - name: 同步 Repcz Rules
         run: |
-          git clone --depth 1 --filter=blob:none --sparse https://github.com/Repcz/Tool.git temp_sync/Repcz
-          cd temp_sync/Repcz && git sparse-checkout set Surge/Rules && cd ../..
-          # 同步到 Rules/ 目录，排除你本地的 Emby.list
-          rsync -av --exclude='Emby.list' temp_sync/Repcz/Surge/Rules/ Rules/
+          cd temp_sync
+          git clone --depth=1 https://github.com/Repcz/Tool.git
+          cd Tool
+          git sparse-checkout init --cone
+          git sparse-checkout set Surge/Rules
 
-      # --- 2. 同步 sooyaaabo/Egern 的模块 ---
-      - name: Sync sooyaaabo Modules
+          rsync -av \
+            --exclude='Emby.list' \
+            Surge/Rules/ ../../Rules/
+
+      # ========================
+      # ② 同步 sooyaaabo 模块
+      # ========================
+      - name: 同步模块
         run: |
-          git clone --depth 1 --filter=blob:none --sparse https://github.com/sooyaaabo/Egern.git temp_sync/Egern
-          cd temp_sync/Egern && git sparse-checkout set Sgmodule Module && cd ../..
-          # 同步并保留你本地的两个特定模块
-          rsync -av --exclude='Block_HTTPDNS.sgmodule' --exclude='BlockAdvertisers.sgmodule' temp_sync/Egern/Sgmodule/ Sgmodule/
-          rsync -av temp_sync/Egern/Module/ Module/
+          cd temp_sync
+          git clone --depth=1 https://github.com/sooyaaabo/Egern.git
+          cd Egern
+          git sparse-checkout init --cone
+          git sparse-checkout set Sgmodule Module
 
-      # --- 3 & 4 & 5. 同步独立规则集并重命名/修改内容 ---
-      - name: Sync Individual Files
+          rsync -av \
+            --exclude='Block_HTTPDNS.sgmodule' \
+            --exclude='BlockAdvertisers.sgmodule' \
+            Sgmodule/ ../../Sgmodule/
+
+          rsync -av Module/ ../../Module/
+
+      # ========================
+      # ③ 强制同步 Ads_SukkaW.list（关键修复）
+      # ========================
+      - name: 同步 Ads_SukkaW
         run: |
-          # Upstream 3: thNylHx Ads_Block
-          curl -fLo Rules/Ads_Block.list https://raw.githubusercontent.com/thNylHx/Tools/main/Ruleset/Surge/Block/Ads_Block.list
-          
-          # Upstream 4: SukkaLab Reject (处理同名文件并删除特定行)
-          curl -fLo Rules/reject_domainset.conf https://raw.githubusercontent.com/SukkaLab/ruleset.skk.moe/master/List/domainset/reject.conf
-          curl -fLo Rules/reject_nonip.conf https://raw.githubusercontent.com/SukkaLab/ruleset.skk.moe/master/List/non_ip/reject.conf
-          sed -i '/.stat.y.qq.com/d' Rules/reject_domainset.conf
+          curl -L -o "Rules/Ads_SukkaW.list" \
+          https://raw.githubusercontent.com/SukkaW/Surge/master/Ads/Ads_SukkaW.list
 
-          # Upstream 5: Sukka DNS Mapping (同步并首字母大写重命名)
-          declare -A dns_files=( ["alibaba"]="Alibaba" ["tencent"]="Tencent" ["bilibili"]="Bilibili" ["bytedance"]="ByteDance" ["baidu"]="Baidu" )
-          for key in "${!dns_files[@]}"; do
-            curl -fLo "Rules/${dns_files[$key]}.conf" "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/${key}.conf"
-          done
-
-      # --- 6. 全局清理：删除指定的统计域名行 ---
-      - name: Clean up tracking domains
+      # ========================
+      # ④ 同步 Sukka reject 规则
+      # ========================
+      - name: 同步 Sukka Reject
         run: |
-          # 针对本地已有文件进行清理
-          [ -f Rules/Ads_AWAvenue.list ] && sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Rules/Ads_AWAvenue.list
-          [ -f Rules/Ads_SukkaW.list ] && sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Rules/Ads_SukkaW.list
-          
-          # 针对刚下载的 Ads_Block.list 进行清理
-          if [ -f Rules/Ads_Block.list ]; then
-            sed -i '/DOMAIN,stat.y.qq.com/d' Rules/Ads_Block.list
-            sed -i '/DOMAIN,stat6.y.qq.com/d' Rules/Ads_Block.list
-            sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Rules/Ads_Block.list
-          fi
+          curl -L -o "Rules/reject_domainset.conf" \
+          https://raw.githubusercontent.com/SukkaW/Surge/master/Reject/reject_domainset.conf
 
-      # --- 7. 清理工作区并提交 ---
-      - name: Cleanup and Push
+          curl -L -o "Rules/reject_nonip.conf" \
+          https://raw.githubusercontent.com/SukkaW/Surge/master/Reject/reject_nonip.conf
+
+      # ========================
+      # ⑤ DNS 映射规则
+      # ========================
+      - name: 同步 DNS 映射
         run: |
-          # 彻底删除临时文件夹，防止被提交
-          rm -rf temp_sync
-          
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          
-          # 精准添加修改的文件夹
+          curl -L -o "Rules/Alibaba.conf" \
+          https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Alibaba/Alibaba_Domain.conf
+
+          curl -L -o "Rules/Tencent.conf" \
+          https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Tencent/Tencent_Domain.conf
+
+      # ========================
+      # ⑥ 只清洗 Sukka 规则（避免污染 Ads）
+      # ========================
+      - name: 清洗规则（精准）
+        run: |
+          sed -i '/\.stat\.y\.qq\.com/d' Rules/reject_*.conf || true
+
+      # ========================
+      # ⑦ 清理临时文件
+      # ========================
+      - name: 清理缓存
+        run: rm -rf temp_sync
+
+      # ========================
+      # ⑧ 提交更新
+      # ========================
+      - name: 提交更改
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "actions@github.com"
+
           git add Rules/ Sgmodule/ Module/
-          
-          # 如果有变化则提交推送
-          git commit -m "Auto-sync: Rules and Modules updated ($(date +'%Y-%m-%d %H:%M'))" || exit 0
+          git commit -m "自动同步规则 $(date +'%Y-%m-%d %H:%M:%S')" || exit 0
           git push
