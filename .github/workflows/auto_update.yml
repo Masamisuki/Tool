@@ -1,4 +1,4 @@
-name: Daily Rule Cleanup
+name: 每日规则清理
 
 on:
   schedule:
