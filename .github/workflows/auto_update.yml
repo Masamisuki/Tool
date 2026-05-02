@@ -4,7 +4,7 @@ on:
   schedule:
     # 每日北京时间 09:00 (UTC 01:00) 运行
     - cron: '0 1 * * *'
-  workflow_dispatch: # 允许手动触发调试
+  workflow_dispatch: # 允许手动触发
 
 jobs:
   update_rules:
@@ -15,25 +15,29 @@ jobs:
 
       - name: Modify Rule Sets
         run: |
-          # 修改 Ads_AWAvenue.list 和 Ads_SukkaW.list
+          # 处理 Ads_AWAvenue.list 和 Ads_SukkaW.list
           # 删除包含 DOMAIN-SUFFIX,stat.y.qq.com 的行
           sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Rules/Ads_AWAvenue.list
           sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Rules/Ads_SukkaW.list
 
-          # 修改 domainset_reject.conf
+          # 处理 domainset_reject.conf
           # 删除包含 .stat.y.qq.com 的行
           sed -i '/\.stat\.y\.qq\.com/d' Rules/domainset_reject.conf
+
+          # 新增：处理 Ads_Block.list
+          # 删除包含 DOMAIN-SUFFIX,stat.y.qq.com 和 DOMAIN,stat.y.qq.com 的行
+          sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Rules/Ads_Block.list
+          sed -i '/DOMAIN,stat.y.qq.com/d' Rules/Ads_Block.list
 
       - name: Commit and Push
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           
-          # 检查是否有文件变动
           if [ -n "$(git status --porcelain)" ]; then
             git add .
-            git commit -m "Auto Update: Remove tracking domains at $(date +'%Y-%m-%d %H:%M')"
+            git commit -m "Auto Update: Cleanup tracking domains $(date +'%Y-%m-%d %H:%M')"
             git push
           else
-            echo "No changes detected, skipping commit."
+            echo "No changes detected."
           fi
