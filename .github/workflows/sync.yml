@@ -1,4 +1,4 @@
-name: Auto Sync Tool (Smart Protection)
+name: Auto Sync Tool (Final Version)
 on:
   schedule:
     - cron: '0 0 * * *' # 每日北京时间 8:00
@@ -11,56 +11,55 @@ jobs:
       - name: Checkout Local Repo
         uses: actions/checkout@v4
 
-      - name: Sync Egern Modules (Standard & Smart Sgmodule)
+      - name: Sync Egern Modules (Smart Protection)
         run: |
           git clone --depth 1 https://github.com/sooyaaabo/Egern.git upstream_egern
           mkdir -p Module Sgmodule
           
-          # 1. Module 文件夹保持原有逻辑：全量覆盖同步
+          # Module: 全量覆盖同步
           cp -rf upstream_egern/Module/* ./Module/
           
-          # 2. Sgmodule 文件夹逻辑：变动检测
+          # Sgmodule: 变动检测逻辑
           echo "Checking Sgmodule files for changes..."
           for remote_file in upstream_egern/Sgmodule/*; do
             filename=$(basename "$remote_file")
             local_file="./Sgmodule/$filename"
             
             if [ -f "$local_file" ]; then
-              # 对比本地和上游文件的 MD5 值
               local_md5=$(md5sum "$local_file" | awk '{print $1}')
               remote_md5=$(md5sum "$remote_file" | awk '{print $1}')
               
               if [ "$local_md5" != "$remote_md5" ]; then
-                echo "Skipping $filename: Local version differs from upstream."
+                echo "Skipping $filename: Local version has custom changes."
                 continue
               fi
             fi
-            # 如果本地不存在该文件，或者内容完全一致，则同步（或覆盖）
             cp -f "$remote_file" "$local_file"
           done
           rm -rf upstream_egern
 
-      - name: Sync Repcz Rules
+      - name: Sync Repcz Rules (Preserve Emby.list)
         run: |
           git clone --depth 1 -b X https://github.com/Repcz/Tool.git upstream_repcz
           mkdir -p Rules
           
-          # 优先保留本地 Emby.list
+          # 备份本地 Emby.list
           if [ -f "Rules/Emby.list" ]; then
             mv Rules/Emby.list Rules/Emby.list.bak
           fi
           
           cp -rf upstream_repcz/Surge/Rules/* ./Rules/
           
+          # 还原本地 Emby.list
           if [ -f "Rules/Emby.list.bak" ]; then
             mv -f Rules/Emby.list.bak Rules/Emby.list
           fi
           rm -rf upstream_repcz
 
-      - name: Sync SKK DNS & Reject Rules
+      - name: Sync External List & DNS Rules
         run: |
           mkdir -p Rules
-          # 下载并重命名
+          # 1. SKK DNS 映射下载与重命名
           curl -sL "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/alibaba.conf" -o Rules/Alibaba.conf
           curl -sL "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/tencent.conf" -o Rules/Tencent.conf
           curl -sL "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/bilibili.conf" -o Rules/bilibili.conf
@@ -68,8 +67,12 @@ jobs:
           curl -sL "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/bytedance.conf" -o Rules/ByteDance.conf
           curl -sL "https://ruleset.skk.moe/Modules/Rules/sukka_local_dns_mapping/baidu.conf" -o Rules/Baidu.conf
 
+          # 2. SukkaLab Reject 规则
           curl -sL "https://raw.githubusercontent.com/SukkaLab/ruleset.skk.moe/refs/heads/master/List/domainset/reject.conf" -o Rules/domainset_reject.conf
           curl -sL "https://raw.githubusercontent.com/SukkaLab/ruleset.skk.moe/refs/heads/master/List/non_ip/reject.conf" -o Rules/non_ip_reject.conf
+
+          # 3. 新增：Ads_Block.list 同步
+          curl -sL "https://raw.githubusercontent.com/thNylHx/Tools/refs/heads/main/Ruleset/Surge/Block/Ads_Block.list" -o Rules/Ads_Block.list
 
       - name: Commit and Push
         run: |
