@@ -16,16 +16,13 @@ jobs:
       - name: Modify Rule Sets
         run: |
           # 1. 处理 Ads_AWAvenue.list 和 Ads_SukkaW.list
-          # 删除 DOMAIN-SUFFIX,stat.y.qq.com
           sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Rules/Ads_AWAvenue.list
           sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Rules/Ads_SukkaW.list
 
           # 2. 处理 domainset_reject.conf
-          # 删除 .stat.y.qq.com
           sed -i '/\.stat\.y\.qq\.com/d' Rules/domainset_reject.conf
 
           # 3. 处理 Ads_Block.list
-          # 删除指定的三个域名行
           sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Rules/Ads_Block.list
           sed -i '/DOMAIN,stat.y.qq.com/d' Rules/Ads_Block.list
           sed -i '/DOMAIN,stat6.y.qq.com/d' Rules/Ads_Block.list
@@ -34,11 +31,12 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          
-          if [ -n "$(git status --porcelain)" ]; then
-            git add .
+          git add Rules/*.list Rules/*.conf
+          
+          # 检查是否有变动并提交
+          if ! git diff --cached --exit-code --quiet; then
             git commit -m "Auto Update: Remove tracking domains $(date +'%Y-%m-%d %H:%M')"
             git push
           else
-            echo "No changes detected, skipping commit."
+            echo "No changes detected, skipping push."
           fi
