@@ -1,0 +1,14 @@
+#!name=联通 & 电信 获取 Cookie
+#!desc=支持自动抓取联通 App 和电信 e.dlife.cn 的登录凭据
+#!system=ios
+
+[Script]
+# 获取联通 Cookie
+获取联通cookie = type=http-request,pattern=^https:\/\/m\.client\.10010\.com\/serviceimportantbusiness\/smart\/smartwisdomCommonNew,requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/dompling/Script/master/10010/index.js,script-update-interval=0
+
+# 获取电信 Cookie
+电信登录地址 = type=http-request,pattern=^https:\/\/e\.dlife\.cn\/user\/loginMiddle,requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/dompling/Script/master/10000/index.js,script-update-interval=0
+
+[MITM]
+hostname = %APPEND% act.10010.com, m.client.10010.com, e.dlife.cn
+
