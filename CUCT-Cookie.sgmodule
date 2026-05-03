@@ -1,5 +1,5 @@
-#!name=联通 & 电信 获取 Cookie
-#!desc=支持自动抓取联通 App 和电信 e.dlife.cn 的登录凭据
+#!name=联通&电信获取Cookie
+#!desc=支持自动抓取联通和电信的登录凭据
 #!system=ios
 
 [Script]
