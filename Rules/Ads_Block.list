@@ -1,5 +1,5 @@
 # 规则名称: Ads_Block
-# 规则统计: 4611
+# 规则统计: 4612
 
 DOMAIN,118.89.204.198
 DOMAIN,1500020991.vodplayer.wxamedia.com
@@ -549,6 +549,8 @@ DOMAIN,config.chsmarttv.com
 DOMAIN,config.inmobi.com
 DOMAIN,config.unityads.unity3d.com
 DOMAIN,content-understand-strategy.sm.cn
+DOMAIN,copilot-telemetry-service.githubusercontent.com
+DOMAIN,copilot-telemetry.githubusercontent.com
 DOMAIN,counter.kingsoft.com
 DOMAIN,counter.ksosoft.com
 DOMAIN,cpc-service-square.aiclk.com
@@ -1248,6 +1250,8 @@ DOMAIN,stacks.vk-portal.net
 DOMAIN,staging-notify.sec.miui.com
 DOMAIN,stat.10jqka.com.cn
 DOMAIN,stat.dongqiudi.com
+DOMAIN,stat.y.qq.com
+DOMAIN,stat6.y.qq.com
 DOMAIN,static-s.iqiyi.com
 DOMAIN,static.ads-twitter.com
 DOMAIN,statichf.shihuocdn.cn
@@ -2393,7 +2397,6 @@ DOMAIN-SUFFIX,conv.youdao.com
 DOMAIN-SUFFIX,coocaatv.com
 DOMAIN-SUFFIX,cooguo.com
 DOMAIN-SUFFIX,coolguang.com
-DOMAIN-SUFFIX,copilot-telemetry.githubusercontent.com
 DOMAIN-SUFFIX,coreldrawchina.com
 DOMAIN-SUFFIX,coremetrics.com
 DOMAIN-SUFFIX,corp.meitu.com
@@ -3824,6 +3827,7 @@ DOMAIN-SUFFIX,stat.pptv.com
 DOMAIN-SUFFIX,stat.tudou.com
 DOMAIN-SUFFIX,stat.v.baidu.com
 DOMAIN-SUFFIX,stat.xgo.com.cn
+DOMAIN-SUFFIX,stat.y.qq.com
 DOMAIN-SUFFIX,stat.youku.com
 DOMAIN-SUFFIX,statchannel.store
 DOMAIN-SUFFIX,statchannel.top
