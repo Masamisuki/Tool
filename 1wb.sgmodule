@@ -52,13 +52,6 @@ DOMAIN-SUFFIX,biz.weibo.com,REJECT,extended-matching,pre-matching
 ^https:\/\/weibo\.com\/ttarticle\/x\/m\/aj\/(?:reward|uvead) data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 [Script]
-
-# 评论区修复（稳定版）
-^https?:\/\/api\.weibo\.cn\/2\/comments\/build_comments url script-response-body https://rucu6.pages.dev/Scripts/weibo.js
-
-# 楼中楼/详情评论修复
-^https?:\/\/api\.weibo\.cn\/2\/statuses\/(?:comments_expand_child|container_detail_comment) url script-response-body https://rucu6.pages.dev/Scripts/weibo.js
-
 移除首页推广 = type=http-response, pattern=^https:\/\/api\.weibo\.cn\/2\/(?:checkin\/show|client\/publisher_list|push\/active), script-path=https://kelee.one/Resource/JavaScript/Weibo/Weibo_remove_ads.js, requires-body=true
 
 移除首页顶部标签 = type=http-response, pattern=^https:\/\/api\.weibo\.cn\/2\/groups\/allgroups\/v2\?, script-path=https://kelee.one/Resource/JavaScript/Weibo/Weibo_remove_ads.js, requires-body=true
