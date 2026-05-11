@@ -1,5 +1,5 @@
 # 规则名称: Ads_Block
-# 规则统计: 4612
+# 规则统计: 4616
 
 DOMAIN,118.89.204.198
 DOMAIN,1500020991.vodplayer.wxamedia.com
@@ -1250,6 +1250,8 @@ DOMAIN,stacks.vk-portal.net
 DOMAIN,staging-notify.sec.miui.com
 DOMAIN,stat.10jqka.com.cn
 DOMAIN,stat.dongqiudi.com
+DOMAIN,stat.y.qq.com
+DOMAIN,stat6.y.qq.com
 DOMAIN,static-s.iqiyi.com
 DOMAIN,static.ads-twitter.com
 DOMAIN,statichf.shihuocdn.cn
@@ -3068,6 +3070,7 @@ DOMAIN-SUFFIX,log1.17173.com
 DOMAIN-SUFFIX,log2.sina.cn
 DOMAIN-SUFFIX,logger.baofeng.com
 DOMAIN-SUFFIX,logger.qingting.fm
+DOMAIN-SUFFIX,logger.qmai.cn
 DOMAIN-SUFFIX,logic.cpm.cm.kankan.com
 DOMAIN-SUFFIX,logoshejishi.com
 DOMAIN-SUFFIX,logs.amap.com
@@ -3825,6 +3828,7 @@ DOMAIN-SUFFIX,stat.pptv.com
 DOMAIN-SUFFIX,stat.tudou.com
 DOMAIN-SUFFIX,stat.v.baidu.com
 DOMAIN-SUFFIX,stat.xgo.com.cn
+DOMAIN-SUFFIX,stat.y.qq.com
 DOMAIN-SUFFIX,stat.youku.com
 DOMAIN-SUFFIX,statchannel.store
 DOMAIN-SUFFIX,statchannel.top
@@ -3981,9 +3985,12 @@ DOMAIN-SUFFIX,tracker.baidu.com
 DOMAIN-SUFFIX,tracker.my.com
 DOMAIN-SUFFIX,tracker.xiaomixiaoai.com
 DOMAIN-SUFFIX,tracker.yhd.com
+DOMAIN-SUFFIX,tracking.mcdonalds.com.cn
 DOMAIN-SUFFIX,tracking.miui.com
 DOMAIN-SUFFIX,trackingio.com
+DOMAIN-SUFFIX,trackingprd.hwwt8.com
 DOMAIN-SUFFIX,tracklog.58.com
+DOMAIN-SUFFIX,trackserver.shuxinyc.com
 DOMAIN-SUFFIX,tradplusad.com
 DOMAIN-SUFFIX,trafficfactory.biz
 DOMAIN-SUFFIX,traffichunt.com
