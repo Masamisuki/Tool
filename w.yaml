@@ -1,0 +1,21 @@
+name: 插件模块跳转
+description: 可莉/恩秀/KelvinLab/LoonKissSurge 模块插件一键跳转Egern
+icon: https://iili.io/BDPVJ1I.png
+body_rewrites:
+  - response_regex:
+      # 匹配支持 Loon 协议跳转的站点
+      match: https://(hub\.kelee\.one|loonlab\.103516\.xyz|kelvinlab\.wuyra\.com)/
+      find: loon://import\?plugin=
+      replace: egern:///modules/new?url=
+  - response_regex:
+      # 匹配支持 Surge 协议跳转的站点
+      match: https://(surge\.qingr\.moe|kelvinlab\.wuyra\.com)/
+      find: surge:///install-module\?url=
+      replace: egern:///modules/new?url=
+mitm:
+  hostnames:
+    includes:
+      - hub.kelee.one
+      - surge.qingr.moe
+      - loonlab.103516.xyz
+      - kelvinlab.wuyra.com
