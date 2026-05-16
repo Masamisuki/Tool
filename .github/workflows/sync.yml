@@ -11,32 +11,48 @@ jobs:
       - name: Checkout Local Repo
         uses: actions/checkout@v4
 
-      - name: Sync Egern Modules (Smart Protection)
+      - name: Sync Egern Modules (Module Only)
         run: |
           git clone --depth 1 https://github.com/sooyaaabo/Egern.git upstream_egern
-          mkdir -p Module Sgmodule
+          mkdir -p Module
           
           # Module: 全量覆盖同步
           cp -rf upstream_egern/Module/* ./Module/
+          rm -rf upstream_egern
+
+      - name: Sync QingRex Surge Modules (Exclude Beta & Official)
+        run: |
+          git clone --depth 1 https://github.com/QingRex/LoonKissSurge.git upstream_qingrex
+          mkdir -p Sgmodule
           
-          # Sgmodule: 变动检测逻辑
-          echo "Checking Sgmodule files for changes..."
-          for remote_file in upstream_egern/Sgmodule/*; do
+          # Sgmodule: 变动检测与排除特定文件夹逻辑
+          echo "Checking Sgmodule files from QingRex for changes..."
+          for remote_file in upstream_qingrex/Surge/*; do
             filename=$(basename "$remote_file")
+            
+            # 明确排除 Beta 和 Official 文件夹
+            if [ "$filename" = "Beta" ] || [ "$filename" = "Official" ]; then
+              echo "Skipping directory: $filename"
+              continue
+            fi
+            
             local_file="./Sgmodule/$filename"
             
-            if [ -f "$local_file" ]; then
-              local_md5=$(md5sum "$local_file" | awk '{print $1}')
-              remote_md5=$(md5sum "$remote_file" | awk '{print $1}')
-              
-              if [ "$local_md5" != "$remote_md5" ]; then
-                echo "Skipping $filename: Local version has custom changes."
-                continue
+            # 确保只处理文件，防止误复制其他潜在的子目录
+            if [ -f "$remote_file" ]; then
+              if [ -f "$local_file" ]; then
+                local_md5=$(md5sum "$local_file" | awk '{print $1}')
+                remote_md5=$(md5sum "$remote_file" | awk '{print $1}')
+                
+                if [ "$local_md5" != "$remote_md5" ]; then
+                  echo "Skipping $filename: Local version has custom changes."
+                  continue
+                fi
               fi
+              cp -f "$remote_file" "$local_file"
             fi
-            cp -f "$remote_file" "$local_file"
           done
-          rm -rf upstream_egern
+          rm -rf upstream_qingrex
 
       - name: Sync Repcz Rules (Preserve Emby.list)
         run: |
