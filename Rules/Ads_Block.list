@@ -1,5 +1,5 @@
 # 规则名称: Ads_Block
-# 规则统计: 4616
+# 规则统计: 4617
 
 DOMAIN,118.89.204.198
 DOMAIN,1500020991.vodplayer.wxamedia.com
@@ -1250,6 +1250,8 @@ DOMAIN,stacks.vk-portal.net
 DOMAIN,staging-notify.sec.miui.com
 DOMAIN,stat.10jqka.com.cn
 DOMAIN,stat.dongqiudi.com
+DOMAIN,stat.y.qq.com
+DOMAIN,stat6.y.qq.com
 DOMAIN,static-s.iqiyi.com
 DOMAIN,static.ads-twitter.com
 DOMAIN,statichf.shihuocdn.cn
@@ -1942,6 +1944,7 @@ DOMAIN-SUFFIX,adserviceretry.kglink.cn
 DOMAIN-SUFFIX,adserviceretry.kugou.com
 DOMAIN-SUFFIX,adsfile.bssdlbig.kugou.com
 DOMAIN-SUFFIX,adsfile.qq.com
+DOMAIN-SUFFIX,adsgram.ai
 DOMAIN-SUFFIX,adsh.m.taobao.com
 DOMAIN-SUFFIX,adshenshi.com
 DOMAIN-SUFFIX,adshmmsg.qq.com
@@ -3826,6 +3829,7 @@ DOMAIN-SUFFIX,stat.pptv.com
 DOMAIN-SUFFIX,stat.tudou.com
 DOMAIN-SUFFIX,stat.v.baidu.com
 DOMAIN-SUFFIX,stat.xgo.com.cn
+DOMAIN-SUFFIX,stat.y.qq.com
 DOMAIN-SUFFIX,stat.youku.com
 DOMAIN-SUFFIX,statchannel.store
 DOMAIN-SUFFIX,statchannel.top
