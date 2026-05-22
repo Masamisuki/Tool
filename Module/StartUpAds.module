@@ -3,7 +3,7 @@
 #!author=ddgksf2013[https://github.com/ddgksf2013]
 #!icon=https://raw.githubusercontent.com/sooyaaabo/IconLibrary/main/Other/AdReject.png
 #!homepage=https://github.com/sooyaaabo/Egern
-#!date=2026-05-11 23:00
+#!date=2026-05-22 00:00
 
 [Rule]
 # DiDaChuXing
@@ -65,7 +65,7 @@ http-response-jq ^https?:\/\/api\.qeeniao\.com\/nap\/ad '.data={}'
 
 [Map Local]
 # Version
-^https?:\/\/2026.05.11/c414/v2.0.643 data-type=text data=" " status-code=200
+^https?:\/\/2026.05.21/c414/v2.0.645 data-type=text data=" " status-code=200
 
 # 58 TongCheng
 ^https?:\/\/app\.58\.com\/api\/home\/(advertising|appadv) data-type=text data=" " status-code=200
@@ -309,6 +309,7 @@ http-response-jq ^https?:\/\/api\.qeeniao\.com\/nap\/ad '.data={}'
 
 # FeiZhu
 ^https:\/\/acs\.m\.taobao\.com\/gw\/mtop\.fliggy\.crm\.screen\.allresource data-type=text data=" " status-code=200
+^https:\/\/acs\.m\.taobao\.com\/gw\/mtop\.fliggy\.crm\.screen\.availablesplashstrategies data-type=text data=" " status-code=200
 
 # FeiKeChaGuan
 ^https?:\/\/.*flyert.*\/source\/plugin\/mobile\/mobile\.php\?module=advis data-type=text data=" " status-code=200
