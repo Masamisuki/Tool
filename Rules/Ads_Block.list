@@ -1250,8 +1250,6 @@ DOMAIN,stacks.vk-portal.net
 DOMAIN,staging-notify.sec.miui.com
 DOMAIN,stat.10jqka.com.cn
 DOMAIN,stat.dongqiudi.com
-DOMAIN,stat.y.qq.com
-DOMAIN,stat6.y.qq.com
 DOMAIN,static-s.iqiyi.com
 DOMAIN,static.ads-twitter.com
 DOMAIN,statichf.shihuocdn.cn
@@ -7284,7 +7282,6 @@ DOMAIN-SUFFIX,stat.v.17173.com
 DOMAIN-SUFFIX,stat.v.baidu.com
 DOMAIN-SUFFIX,stat.ws.126.net
 DOMAIN-SUFFIX,stat.xgo.com.cn
-DOMAIN-SUFFIX,stat.y.qq.com
 DOMAIN-SUFFIX,stat.youku.com
 DOMAIN-SUFFIX,stat.youpin.mi.com
 DOMAIN-SUFFIX,stat.zol.com.cn
