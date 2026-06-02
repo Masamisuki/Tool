@@ -1,32 +1,27 @@
 # Loon全局配置 by MasamiSuki 2026.04.01
 
 [General]
-ip-mode = v4-only
-ipv6-vif = off
-dns-server = 223.5.5.5,119.29.29.29
-doh-server = https://dns.alidns.com/dns-query,https://doh.pub/dns-query
-doq-server = quic://dns.alidns.com:853
-doh3-server = h3://dns.alidns.com/dns-query
-hijack-dns = 8.8.8.8:53,8.8.4.4:53
-sni-sniffing = true
-disable-stun = true
-dns-reject-mode = LoopbackIP
-domain-reject-mode = DNS
-udp-fallback-mode = REJECT
-wifi-access-http-port = 7222
-wifi-access-socks5-port = 7221
-allow-wifi-access = false
-interface-mode = auto
-test-timeout = 5
-disconnect-on-policy-change = false
-internet-test-url = http://connectivitycheck.platform.hicloud.com/generate_204
-proxy-test-url = http://latency-test.skk.moe/endpoint
-resource-parser = https://raw.githubusercontent.com/sub-store-org/Sub-Store/release/sub-store-parser.loon.min.js
-geoip-url = https://github.com/Hackl0us/GeoIP2-CN/raw/release/Country.mmdb
-ipasn-url = https://raw.githubusercontent.com/Loyalsoldier/geoip/release/GeoLite2-ASN.mmdb
-skip-proxy = 192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,localhost,*.local,e.crashlynatics.com
-bypass-tun = 10.0.0.0/8,100.64.0.0/10,127.0.0.0/8,169.254.0.0/16,172.16.0.0/12,192.0.0.0/24,192.0.2.0/24,192.88.99.0/24,192.168.0.0/16,198.51.100.0/24,203.0.113.0/24,224.0.0.0/4,255.255.255.255/32
-real-ip = *.lan,*.direct,*.cmpassport.com,id6.me,open.e.189.cn,mdn.open.wo.cn,opencloud.wostore.cn,auth.wosms.cn,*.10099.com.cn,*.msftconnecttest.com,*.msftncsi.com,lancache.steamcontent.com
+ip-mode=v4-only
+ipv6-vif=off
+dns-server=system
+sni-sniffing=true
+disable-stun=true
+dns-reject-mode=LoopbackIP
+domain-reject-mode=DNS
+udp-fallback-mode=REJECT
+wifi-access-http-port=7222
+wifi-access-socks5-port=7221
+allow-wifi-access=false
+interface-mode=auto
+test-timeout=5
+disconnect-on-policy-change=false
+internet-test-url=http://connectivitycheck.platform.hicloud.com/generate_204
+proxy-test-url=http://latency-test.skk.moe/endpoint
+resource-parser=https://raw.githubusercontent.com/sub-store-org/Sub-Store/release/sub-store-parser.loon.min.js
+geoip-url=https://github.com/Hackl0us/GeoIP2-CN/raw/release/Country.mmdb
+ipasn-url=https://geodata.kelee.one/GeoLite2-ASN-P3TERX.mmdb
+skip-proxy=192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12, localhost, *.local, e.crashlynatics.com
+bypass-tun=10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.0.0.0/24, 192.0.2.0/24, 192.88.99.0/24, 192.168.0.0/16, 198.51.100.0/24, 203.0.113.0/24, 224.0.0.0/4, 255.255.255.255/32
 
 [Proxy]
 
