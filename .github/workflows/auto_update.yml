@@ -26,6 +26,7 @@ jobs:
           sed -i '/DOMAIN-SUFFIX,stat.y.qq.com/d' Rules/Ads_Block.list
           sed -i '/DOMAIN,stat.y.qq.com/d' Rules/Ads_Block.list
           sed -i '/DOMAIN,stat6.y.qq.com/d' Rules/Ads_Block.list
+          sed -i '/DOMAIN-SUFFIX,stat6.y.qq.com/d' Rules/Ads_Block.list
 
       - name: Commit and Push
         run: |
