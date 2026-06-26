@@ -29,20 +29,22 @@ jobs:
           REPCZ_RULES_URL: "https://api.github.com/repos/Repcz/Tool/contents/Surge/Rules?ref=X"
         run: |
           echo "::group::Downloading Repcz rules"
-          files=$(curl -sS "$REPCZ_RULES_URL" | jq -r '.[] | select(.type=="file") | .name + " " + .download_url')
+          files=$(curl -sS "${REPCZ_RULES_URL}" | jq -r '.[] | select(.type=="file") | .name + " " + .download_url')
           
-          while IFS=' ' read -r name url || [ -n "$name" ]; do
-            [ -z "$name" ] && continue
+          while read -r name url; do
+            if [ -z "${name}" ]; then
+              continue
+            fi
             
             # 【核心保留点】如果是 Emby.list，直接跳过，绝不下载和覆盖
-            if [ "$name" = "Emby.list" ]; then
+            if [ "${name}" = "Emby.list" ]; then
               echo "➔ Skipping Emby.list (Keep local version untouched)"
               continue
             fi
             
-            echo "Downloading $name"
-            curl -sS -o "Rules/$name" "$url"
-          done <<< "$files"
+            echo "Downloading ${name}"
+            curl -sS -o "Rules/${name}" "${url}"
+          done <<< "${files}"
           echo "::endgroup::"
 
       - name: Download DNS mapping rules and rename
@@ -57,12 +59,70 @@ jobs:
           )
           for newname in "${!dns_map[@]}"; do
             url="${dns_map[$newname]}"
-            echo "Downloading $newname from $url"
-            curl -sS -o "Rules/$newname" "$url"
+            echo "Downloading ${newname} from ${url}"
+            curl -sS -o "Rules/${newname}" "${url}"
           done
           echo "::endgroup::"
 
       - name: Download reject rules and rename
         run: |
           echo "::group::Downloading reject rules"
-          curl -sS -o "Rules/domainset_reject.conf" "https://ruleset.
+          curl -sS -o "Rules/domainset_reject.conf" "https://ruleset.skk.moe/List/domainset/reject.conf"
+          curl -sS -o "Rules/non_ip_reject.conf" "https://ruleset.skk.moe/List/non_ip/reject.conf"
+          echo "::endgroup::"
+
+      - name: Download Ads_Block.list
+        run: |
+          echo "::group::Downloading Ads_Block.list"
+          curl -sS -o "Rules/Ads_Block.list" "https://raw.githubusercontent.com/thNylHx/Tools/refs/heads/main/Ruleset/Surge/Block/Ads_Block.list"
+          echo "::endgroup::"
+
+      - name: Remove specific lines from target files (Clean QQ Stat)
+        run: |
+          echo "::group::Processing domainset_reject.conf"
+          if [ -f "Rules/domainset_reject.conf" ]; then
+            sed -i '/^\.stat\.y\.qq\.com$/d' "Rules/domainset_reject.conf"
+            echo "Removed .stat.y.qq.com"
+          fi
+          echo "::endgroup::"
+
+          echo "::group::Processing Ads_Block.list"
+          if [ -f "Rules/Ads_Block.list" ]; then
+            sed -i '/^DOMAIN-SUFFIX,stat\.y\.qq\.com$/d' "Rules/Ads_Block.list"
+            sed -i '/^DOMAIN,stat\.y\.qq\.com$/d' "Rules/Ads_Block.list"
+            sed -i '/^DOMAIN-SUFFIX,stat6\.y\.qq\.com$/d' "Rules/Ads_Block.list"
+            sed -i '/^DOMAIN,stat6\.y\.qq\.com$/d' "Rules/Ads_Block.list"
+            echo "Removed stat.y.qq.com & stat6.y.qq.com"
+          fi
+          echo "::endgroup::"
+
+          echo "::group::Processing Ads_SukkaW.list"
+          if [ -f "Rules/Ads_SukkaW.list" ]; then
+            sed -i '/^DOMAIN-SUFFIX,stat\.y\.qq\.com$/d' "Rules/Ads_SukkaW.list"
+          fi
+          echo "::endgroup::"
+
+          echo "::group::Processing 广告平台拦截器.sgmodule"
+          if [ -f "iKeLee/广告平台拦截器.sgmodule" ]; then
+            sed -i '/^DOMAIN,stat\.y\.qq\.com,REJECT$/d' "iKeLee/广告平台拦截器.sgmodule"
+            sed -i '/^DOMAIN,stat6\.y\.qq\.com,REJECT$/d' "iKeLee/广告平台拦截器.sgmodule"
+          fi
+          echo "::endgroup::"
+
+      - name: Commit and push if changes exist
+        run: |
+          # 1. 先把所有变动加到暂存区
+          git add .
+          
+          # 2. 检查是否有文件改动，有改动才进行提交与拉取
+          if [ -n "$(git status -s)" ]; then
+            git commit -m "🔄 自动同步并清理规则 ($(date -u +'%Y-%m-%d'))"
+            
+            # 3. 先拉取远程最新更改（防止冲掉你手动添加的文件）
+            git pull origin main --rebase -X theirs
+            
+            # 4. 推送到远程
+            git push origin main
+          else
+            echo "No changes detected, skipping commit."
+          fi
