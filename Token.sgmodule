@@ -1,5 +1,5 @@
-#!name=整合脚本 (xcbwc + wmbwc + xxyx)
-#!desc=将 xcbwc、wmbwc 和 xxyx 三个脚本整合为一个模块，方便管理。
+#!name=小蚕歪麦晓晓Token获取
+#!desc=获取小蚕/歪麦/晓晓账号Token
 
 [Script]
 xcbwc = type=http-response, pattern=^https:\/\/gw\.xiaocantech\.com\/rpc, script-path=https://gist.githubusercontent.com/Sliverkiss/27c601d97a3f8960b212e5cac5b6c470/raw/xcbwc.js, requires-body=true, max-size=-1, timeout=60
