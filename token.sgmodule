@@ -1,0 +1,11 @@
+#!name=整合脚本 (xcbwc + wmbwc + xxyx)
+#!desc=将 xcbwc、wmbwc 和 xxyx 三个脚本整合为一个模块，方便管理。
+
+[Script]
+xcbwc = type=http-response, pattern=^https:\/\/gw\.xiaocantech\.com\/rpc, script-path=https://gist.githubusercontent.com/Sliverkiss/27c601d97a3f8960b212e5cac5b6c470/raw/xcbwc.js, requires-body=true, max-size=-1, timeout=60
+wmbwc = type=http-request, pattern=^https:\/\/wmapp-api\.waimaimingtang\.com\/api\/api\/v2\/user\/api_user_info_one, script-path=https://gist.githubusercontent.com/Sliverkiss/49a9ffb2169a2becc33bf4fdbf6eb99a/raw/wmbwc.js, requires-body=true, max-size=-1, timeout=60
+xxyx = type=http-response, pattern=^https:\/\/xxyx-client-api\.xiaoxiaoyouxuan\.com\/my, script-path=https://gist.githubusercontent.com/Sliverkiss/991a81be1fc8cf2a1937432be68f5521/raw/xxyx.js, requires-body=true, max-size=-1, timeout=60
+
+[MITM]
+hostname = %APPEND% gw.xiaocantech.com, wmapp-api.waimaimingtang.com, xxyx-client-api.xiaoxiaoyouxuan.com
+
