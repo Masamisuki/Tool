@@ -2,8 +2,8 @@ name: 自动更新与规则清理
 
 on:
   schedule:
-    # 北京时间每天 0:00 (UTC 16:00) 统一触发
-    - cron: '0 16 * * *'
+    # 北京时间每天 23:30 (UTC 15:30) 统一触发
+    - cron: '30 15 * * *'
   workflow_dispatch:  # 允许手动触发
 
 jobs:
@@ -65,57 +65,4 @@ jobs:
       - name: Download reject rules and rename
         run: |
           echo "::group::Downloading reject rules"
-          curl -sS -o "Rules/domainset_reject.conf" "https://ruleset.skk.moe/List/domainset/reject.conf"
-          curl -sS -o "Rules/non_ip_reject.conf" "https://ruleset.skk.moe/List/non_ip/reject.conf"
-          echo "::endgroup::"
-
-      - name: Download Ads_Block.list
-        run: |
-          echo "::group::Downloading Ads_Block.list"
-          curl -sS -o "Rules/Ads_Block.list" "https://raw.githubusercontent.com/thNylHx/Tools/refs/heads/main/Ruleset/Surge/Block/Ads_Block.list"
-          echo "::endgroup::"
-
-      - name: Remove specific lines from target files (Clean QQ Stat)
-        run: |
-          echo "::group::Processing domainset_reject.conf"
-          if [ -f Rules/domainset_reject.conf ]; then
-            sed -i '/^\.stat\.y\.qq\.com$/d' Rules/domainset_reject.conf
-            echo "Removed .stat.y.qq.com"
-          fi
-          echo "::endgroup::"
-
-          echo "::group::Processing Ads_Block.list"
-          if [ -f Rules/Ads_Block.list ]; then
-            sed -i '/^DOMAIN-SUFFIX,stat\.y\.qq\.com$/d' Rules/Ads_Block.list
-            sed -i '/^DOMAIN,stat\.y\.qq\.com$/d' Rules/Ads_Block.list
-            sed -i '/^DOMAIN-SUFFIX,stat6\.y\.qq\.com$/d' Rules/Ads_Block.list
-            sed -i '/^DOMAIN,stat6\.y\.qq\.com$/d' Rules/Ads_Block.list
-            echo "Removed stat.y.qq.com & stat6.y.qq.com"
-          fi
-          echo "::endgroup::"
-
-          echo "::group::Processing Ads_SukkaW.list"
-          if [ -f Rules/Ads_SukkaW.list ]; then
-            sed -i '/^DOMAIN-SUFFIX,stat\.y\.qq\.com$/d' Rules/Ads_SukkaW.list
-          fi
-          echo "::endgroup::"
-
-          echo "::group::Processing 广告平台拦截器.sgmodule"
-          if [ -f "iKeLee/广告平台拦截器.sgmodule" ]; then
-            sed -i '/^DOMAIN,stat\.y\.qq\.com,REJECT$/d' "iKeLee/广告平台拦截器.sgmodule"
-            sed -i '/^DOMAIN,stat6\.y\.qq\.com,REJECT$/d' "iKeLee/广告平台拦截器.sgmodule"
-          fi
-          echo "::endgroup::"
-
-      - name: Commit and push if changes exist
-        run: |
-          git pull origin main --rebase
-          if [[ -n $(git status -s) ]]; then
-            git add .
-            git commit -m "🔄 自动同步并清理规则 ($(date -u +'%Y-%m-%d'))"
-            git push origin main
-          else
-            echo "No changes detected, skipping commit."
-          fi
-
-
+          curl -sS -o "Rules/domainset_reject.conf" "https://ruleset.
