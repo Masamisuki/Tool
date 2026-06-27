@@ -1,7 +1,8 @@
 # 规则名称: Emby
-# 规则统计: 8
+# 规则统计: 9
 
 DOMAIN,cm.v2go.cc.cd
+DOMAIN,emby.199653.lol
 DOMAIN-SUFFIX,zhezhi.art
 DOMAIN-SUFFIX,mobaiemby.site
 DOMAIN-SUFFIX,chilledmelon.com
