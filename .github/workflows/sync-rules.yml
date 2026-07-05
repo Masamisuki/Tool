@@ -17,6 +17,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: main
+          fetch-depth: 0     # 获取完整历史，确保 rebase 操作顺畅
 
       - name: Setup git and workspace
         run: |
@@ -111,18 +112,27 @@ jobs:
 
       - name: Commit and push if changes exist
         run: |
-          # 1. 先把所有变动加到暂存区
+          echo "::group::Committing and pushing changes"
+          
+          # 1. 确保 Git 配置正确
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 2. 先把自动化脚本下载和修改的所有变动加到暂存区
           git add .
           
-          # 2. 检查是否有文件改动，有改动才进行提交与拉取
+          # 3. 检查是否有文件改动，有改动才进行提交
           if [ -n "$(git status -s)" ]; then
             git commit -m "🔄 自动同步并清理规则 ($(date -u +'%Y-%m-%d'))"
             
-            # 3. 先拉取远程最新更改（防止冲掉你手动添加的文件）
-            git pull origin main --rebase -X theirs
+            # 4. 【核心安全修复】
+            # 先安全地拉取远程的最新更改（包括你手动改的 Emby.list 和新加的非空文件夹/图片）
+            # 使用标准的 rebase，不带任何暴力覆盖参数，让两边的修改安全融合
+            git pull origin main --rebase
             
-            # 4. 推送到远程
+            # 5. 推送到远程仓库
             git push origin main
           else
             echo "No changes detected, skipping commit."
           fi
+          echo "::endgroup::"
