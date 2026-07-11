@@ -1,11 +1,14 @@
 # 规则名称: Emby
-# 规则统计: 8
+# 规则统计: 11
 
 DOMAIN-SUFFIX,syemby.com
 DOMAIN-SUFFIX,zhezhi.art
 DOMAIN-SUFFIX,mobaiemby.site
 DOMAIN-SUFFIX,chilledmelon.com
+DOMAIN,emby101.origamiart.uk
 DOMAIN,cf.goglobe.pro
 DOMAIN,gyb.emby.yun
 DOMAIN,emby.taotu.ink
 DOMAIN,eb.atrct.cn
+DOMAIN,yx.emby-cm.ccwu.cc
+DOMAIN,yxv6.emby-cm.ccwu.cc
