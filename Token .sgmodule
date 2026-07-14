@@ -1,5 +1,5 @@
-#!name=外卖平台cookie获取
-#!desc=获取小蚕/歪麦/晓晓账号cookie
+#!name=外卖返利平台Token获取
+#!desc=获取小蚕/歪麦/晓晓账号Tookie
 
 [Script]
 xcbwc = type=http-response, pattern=^https:\/\/gw\.xiaocantech\.com\/rpc, script-path=https://gist.githubusercontent.com/Sliverkiss/27c601d97a3f8960b212e5cac5b6c470/raw/xcbwc.js, requires-body=true, max-size=-1, timeout=60
