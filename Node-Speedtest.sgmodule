@@ -7,7 +7,7 @@
 download-url-proxy = {{{节点下载链接}}}
 upload-url-proxy = {{{节点上传链接}}}
 download-concurrency = {{{下载并发线程}}}
-upload-concurrency = {{{上传并发线程}}
+upload-concurrency = {{{上传并发线程}}}
 download-duration-limit = {{{下载时长限制}}}
 upload-size-limit = {{{上传大小限制}}}
 upload-duration-limit =  {{{上传时长限制}}}
