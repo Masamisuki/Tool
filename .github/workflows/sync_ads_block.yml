@@ -1,0 +1,46 @@
+name: Sync & Clean Ads_Block Module
+
+on:
+  schedule:
+    # 每天 UTC 20:00 (北京时间凌晨 04:00) 自动运行
+    - cron: '0 20 * * *'
+  # 支持在 GitHub 页面手动点击运行 (Actions -> Run workflow)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync-and-clean:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fetch and modify module
+        run: |
+          # 确保 Module 文件夹存在
+          mkdir -p Module
+
+          # 下载上游模块文件
+          curl -sSL "https://raw.githubusercontent.com/thNylHx/Tools/refs/heads/main/Surge/Module/Ads_Block.sgmodule" -o Module/Ads_Block.sgmodule
+
+          # 使用 grep -v 精准过滤掉指定的 4 条规则，覆盖原文件
+          grep -v -E "^DOMAIN(-SUFFIX)?,stat6?\.y\.qq\.com,REJECT,extended-matching,pre-matching" Module/Ads_Block.sgmodule > Module/Ads_Block.tmp
+          mv Module/Ads_Block.tmp Module/Ads_Block.sgmodule
+
+      - name: Commit and Push
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          # 仅 stage 修改后的这一个文件，保证绝对不会影响其他模块
+          git add Module/Ads_Block.sgmodule
+          
+          # 检查是否有文件内容变更，只有变动时才 Commit
+          if git diff --staged --quiet; then
+            echo "No changes detected in Ads_Block.sgmodule. Skipping commit."
+          else
+            git commit -m "chore: auto-update Ads_Block.sgmodule (removed QQ Music stat rules)"
+            git push
+          fi
