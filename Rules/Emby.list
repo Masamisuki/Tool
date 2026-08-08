@@ -1,5 +1,5 @@
 # 规则名称: Emby
-# 规则统计: 11
+# 规则统计: 12
 
 DOMAIN,emby101.origamiart.uk
 DOMAIN,cdn.zhezhi.art
@@ -8,6 +8,7 @@ DOMAIN,v.chilledmelon.com
 DOMAIN,rn.chilledmelon.com
 DOMAIN,cf.697758.xyz
 DOMAIN,emby.sadchicktv.com
+DOMAIN,stream-1.sadchicktv.com
 DOMAIN,aaa.yusen6.ccwu.cc
 DOMAIN,emby.yusen.us.ci
 DOMAIN,embya.yusen.cyou
