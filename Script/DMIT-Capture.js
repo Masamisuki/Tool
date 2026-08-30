@@ -1,22 +1,20 @@
 /*
- * Surge http-response 脚本：自动捕获 dmit.io 的登录 Cookie
+ * Surge http-response 脚本：自动捕获 dmit.io 的登录 Cookie（支持多账号）
  *
- * 配合 MITM 使用。用户用浏览器正常登录 dmit.io 时，本脚本把响应里的
- * Set-Cookie 合并进 $persistentStore，并记录浏览器 UA，供面板脚本
- * DMIT-Traffic.js 直接调用 DMIT 接口。
+ * 配合 MITM 使用。用户登录 dmit.io 时，把 Set-Cookie 按「会话」分别存入
+ * 多个 cookie jar，供面板脚本查询所有账号的 VPS 流量。
  *
- * 抓取到认证 Cookie（WHMCS / cf_clearance / PHPSESSID 等）时会弹一条
- * 系统通知「DMIT Cookie 已捕获」，作为成功提示。
+ * 会话识别：WHMCS 会话 cookie（名字含 whmcs，如 WHMCSP8D3Nbb7msEy）的值。
+ * 值不同 = 不同账号，各自存一个 jar；cf_clearance 等通用 cookie 同步到所有 jar。
  *
  * 存储键：
- *   dmit_cookie_jar    完整 Cookie（"a=b; c=d"）
- *   dmit_ua            浏览器 User-Agent（用于 Cloudflare 校验）
- *   dmit_last_notified 上次已通知的认证 Cookie 指纹（防重复弹通知）
+ *   dmit_cookie_jars   JSON 数组 [{s: 会话值, c: cookie串}]，最多 5 个
+ *   dmit_ua            浏览器 User-Agent
  */
 
-const COOKIE_KEY = "dmit_cookie_jar";
+const JARS_KEY = "dmit_cookie_jars";
 const UA_KEY = "dmit_ua";
-const LAST_NOTIFY_KEY = "dmit_last_notified";
+const MAX_JARS = 5;
 
 function headerValue(headers, name) {
   if (!headers) return "";
@@ -41,91 +39,127 @@ function parseCookie(setCookie) {
   return { name: first.slice(0, eq).trim(), value: first.slice(eq + 1).trim() };
 }
 
-function authSignature(jar) {
-  const keys = Object.keys(jar).filter((k) => {
-    const lower = k.toLowerCase();
-    return (
-      lower.indexOf("whmcs") >= 0 ||
-      lower === "cf_clearance" ||
-      lower === "phpsessid" ||
-      lower.indexOf("cf_bm") >= 0
-    );
-  });
-  return keys
+function parseCookieString(str) {
+  const jar = {};
+  String(str || "")
+    .split(";")
+    .forEach((p) => {
+      const eq = p.indexOf("=");
+      if (eq > 0) jar[p.slice(0, eq).trim()] = p.slice(eq + 1).trim();
+    });
+  return jar;
+}
+
+function cookieStringFrom(jar) {
+  return Object.keys(jar)
     .map((k) => `${k}=${jar[k]}`)
-    .sort()
     .join("; ");
 }
 
-// 1) 记录浏览器 UA（用于面板请求时保持一致的指纹）
+function sessionValueFrom(jar) {
+  for (const k in jar) {
+    if (k.toLowerCase().indexOf("whmcs") >= 0) return jar[k];
+  }
+  return "";
+}
+
+function mergeInto(existing, newCookies) {
+  const jar = parseCookieString(existing);
+  for (const k in newCookies) {
+    const v = newCookies[k];
+    if (v === "deleted" || v === "" || v === "expired") delete jar[k];
+    else jar[k] = v;
+  }
+  return cookieStringFrom(jar);
+}
+
+function loadJars() {
+  const raw = $persistentStore.read(JARS_KEY) || "";
+  try {
+    const a = JSON.parse(raw);
+    if (Array.isArray(a)) return a;
+  } catch (_) {}
+  // 兼容旧版：单 cookie jar
+  const old = ($persistentStore.read("dmit_cookie_jar") || "").trim();
+  if (old) return [{ s: sessionValueFrom(parseCookieString(old)), c: old }];
+  return [];
+}
+
+function saveJars(jars) {
+  $persistentStore.write(JSON.stringify(jars), JARS_KEY);
+}
+
+// 1) 记录浏览器 UA
 const ua = headerValue(typeof $request !== "undefined" ? $request.headers : null, "user-agent");
 if (ua) {
   $persistentStore.write(String(ua), UA_KEY);
 }
 
-// 2) 捕获 Set-Cookie 并合并进 cookie jar
+// 2) 解析本次响应的 Set-Cookie
 const responseHeaders =
   typeof $response !== "undefined" ? ($response.headers || []) : [];
+const hdrs = Array.isArray(responseHeaders)
+  ? responseHeaders
+  : Object.keys(responseHeaders).map((k) => ({ field: k, value: responseHeaders[k] }));
 
+const newCookies = {};
 let hasSetCookie = false;
-if (Array.isArray(responseHeaders)) {
-  for (let i = 0; i < responseHeaders.length; i++) {
-    if (String(responseHeaders[i].field || "").toLowerCase() === "set-cookie") {
-      hasSetCookie = true;
-      break;
-    }
-  }
-} else {
-  for (const k in responseHeaders) {
-    if (k.toLowerCase() === "set-cookie") {
-      hasSetCookie = true;
-      break;
-    }
-  }
-}
+hdrs.forEach((h) => {
+  if (String(h.field || "").toLowerCase() !== "set-cookie") return;
+  const c = parseCookie(h.value);
+  if (!c) return;
+  newCookies[c.name] = c.value;
+  hasSetCookie = true;
+});
 
 if (hasSetCookie) {
-  const jar = {};
-  const raw = $persistentStore.read(COOKIE_KEY) || "";
-  raw.split(";").forEach((p) => {
-    const eq = p.indexOf("=");
-    if (eq > 0) jar[p.slice(0, eq).trim()] = p.slice(eq + 1).trim();
-  });
+  const sv = sessionValueFrom(newCookies);
 
-  const hdrs = Array.isArray(responseHeaders)
-    ? responseHeaders
-    : Object.keys(responseHeaders).map((k) => ({ field: k, value: responseHeaders[k] }));
+  // 拆分：会话 cookie（账号相关） vs 通用 cookie（cf_clearance 等，全账号共享）
+  const common = {};
+  for (const k in newCookies) {
+    if (k.toLowerCase().indexOf("whmcs") < 0) common[k] = newCookies[k];
+  }
 
-  let changed = false;
-  hdrs.forEach((h) => {
-    if (String(h.field || "").toLowerCase() !== "set-cookie") return;
-    const c = parseCookie(h.value);
-    if (!c) return;
-    if (c.value === "deleted" || c.value === "" || c.value === "expired") {
-      delete jar[c.name];
+  let jars = loadJars();
+  let addedNew = false;
+
+  if (sv) {
+    let target = null;
+    for (const j of jars) {
+      if (j && j.s === sv) {
+        target = j;
+        break;
+      }
+    }
+    if (target) {
+      target.c = mergeInto(target.c, newCookies);
     } else {
-      jar[c.name] = c.value;
+      jars.push({ s: sv, c: cookieStringFrom(newCookies) });
+      addedNew = true;
     }
-    changed = true;
-  });
-
-  if (changed) {
-    const s = Object.keys(jar)
-      .map((k) => `${k}=${jar[k]}`)
-      .join("; ");
-    $persistentStore.write(s, COOKIE_KEY);
-
-    // 抓到认证 Cookie 且与上次不同 → 弹通知提示成功
-    const sig = authSignature(jar);
-    const lastSig = $persistentStore.read(LAST_NOTIFY_KEY) || "";
-    if (sig && sig !== lastSig) {
-      $persistentStore.write(sig, LAST_NOTIFY_KEY);
-      $notification.post(
-        "DMIT Cookie 已捕获",
-        `已抓到 ${Object.keys(jar).length} 个 Cookie`,
-        "回到 Surge 面板点「DMIT VPS 流量」刷新即可查看流量"
-      );
+    // 通用 cookie 同步到其它 jar，保持 cf_clearance 新鲜
+    if (Object.keys(common).length) {
+      jars.forEach((j) => {
+        if (j !== target) j.c = mergeInto(j.c, common);
+      });
     }
+  } else if (Object.keys(common).length) {
+    // 只有通用 cookie：同步到所有 jar
+    jars.forEach((j) => {
+      j.c = mergeInto(j.c, common);
+    });
+  }
+
+  if (jars.length > MAX_JARS) jars = jars.slice(-MAX_JARS);
+  saveJars(jars);
+
+  if (addedNew) {
+    $notification.post(
+      "DMIT Cookie 已捕获",
+      `已记录第 ${jars.length} 个账号`,
+      "回到 Surge 面板刷新即可查看所有账号的流量"
+    );
   }
 }
 
