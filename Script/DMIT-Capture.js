@@ -4,7 +4,7 @@
  * 配合 MITM 使用。用户登录 dmit.io 时，把 Set-Cookie 按「会话」分别存入
  * 多个 cookie jar，供面板脚本查询所有账号的 VPS 流量。
  *
- * 会话识别：WHMCS 会话 cookie（名字含 whmcs，如 WHMCSP8D3Nbb7msEy）的值。
+ * 会话识别：WHMCS 会话 cookie（名字含 whmcs 且不是 WHMCSUser）的值。
  * 值不同 = 不同账号，各自存一个 jar；cf_clearance 等通用 cookie 同步到所有 jar。
  *
  * 存储键：
@@ -56,9 +56,16 @@ function cookieStringFrom(jar) {
     .join("; ");
 }
 
+// 返回 WHMCS 会话 cookie 的值（排除 WHMCSUser 这种"记住我"cookie）；
+// deleted/expired/空 视为登出态，返回空。
 function sessionValueFrom(jar) {
   for (const k in jar) {
-    if (k.toLowerCase().indexOf("whmcs") >= 0) return jar[k];
+    const lower = k.toLowerCase();
+    if (lower.indexOf("whmcs") >= 0 && lower !== "whmcsuser") {
+      const v = jar[k];
+      if (v && v !== "deleted" && v !== "expired") return v;
+      return "";
+    }
   }
   return "";
 }
@@ -79,7 +86,6 @@ function loadJars() {
     const a = JSON.parse(raw);
     if (Array.isArray(a)) return a;
   } catch (_) {}
-  // 兼容旧版：单 cookie jar
   const old = ($persistentStore.read("dmit_cookie_jar") || "").trim();
   if (old) return [{ s: sessionValueFrom(parseCookieString(old)), c: old }];
   return [];
@@ -115,7 +121,7 @@ hdrs.forEach((h) => {
 if (hasSetCookie) {
   const sv = sessionValueFrom(newCookies);
 
-  // 拆分：会话 cookie（账号相关） vs 通用 cookie（cf_clearance 等，全账号共享）
+  // 通用 cookie（cf_clearance 等），全账号共享
   const common = {};
   for (const k in newCookies) {
     if (k.toLowerCase().indexOf("whmcs") < 0) common[k] = newCookies[k];
@@ -132,20 +138,32 @@ if (hasSetCookie) {
         break;
       }
     }
+
     if (target) {
       target.c = mergeInto(target.c, newCookies);
     } else {
-      jars.push({ s: sv, c: cookieStringFrom(newCookies) });
+      // 新账号：继承已有 jar 里的通用 cookie（cf_clearance 等），避免被 Cloudflare 拦
+      const base = {};
+      if (jars.length) {
+        const last = parseCookieString(jars[jars.length - 1].c);
+        for (const k in last) {
+          if (k.toLowerCase().indexOf("whmcs") < 0) base[k] = last[k];
+        }
+      }
+      for (const k in newCookies) base[k] = newCookies[k];
+      const nj = { s: sv, c: cookieStringFrom(base) };
+      jars.push(nj);
+      target = nj;
       addedNew = true;
     }
-    // 通用 cookie 同步到其它 jar，保持 cf_clearance 新鲜
+
+    // 本次响应的通用 cookie 同步到其它 jar，保持 cf_clearance 新鲜
     if (Object.keys(common).length) {
       jars.forEach((j) => {
         if (j !== target) j.c = mergeInto(j.c, common);
       });
     }
   } else if (Object.keys(common).length) {
-    // 只有通用 cookie：同步到所有 jar
     jars.forEach((j) => {
       j.c = mergeInto(j.c, common);
     });
@@ -157,8 +175,8 @@ if (hasSetCookie) {
   if (addedNew) {
     $notification.post(
       "DMIT Cookie 已捕获",
-      `已记录第 ${jars.length} 个账号`,
-      "回到 Surge 面板刷新即可查看所有账号的流量"
+      "检测到新的登录会话",
+      "回 Surge 面板刷新即可合并显示所有账号"
     );
   }
 }
