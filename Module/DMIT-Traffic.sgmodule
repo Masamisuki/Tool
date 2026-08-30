@@ -1,0 +1,15 @@
+#!name=DMIT VPS 流量监控
+#!desc=登录 dmit.io 自动抓取 Cookie，面板直读 DMIT 真实账单流量（需开启 MITM）
+#!arguments=SERVICE_ID,COOKIE
+#!arguments-desc=SERVICE_ID：有多个 VPS 时填服务 ID 指定显示哪个，留空自动选第一个 active。COOKIE：仅当无法开启 MITM 时手动粘贴完整 Cookie，否则留空走自动抓取。
+#!requirement=CORE_VERSION>=20
+
+[MITM]
+hostname = %APPEND% dmit.io
+
+[Script]
+dmit-capture = type=http-response,pattern=^https?://(www\.)?dmit\.io/,script-path=https://raw.githubusercontent.com/Masamisuki/Tool/refs/heads/main/Script/DMIT-Capture.js,full-header-mode=true
+dmit-traffic = type=generic,script-path=https://raw.githubusercontent.com/Masamisuki/Tool/refs/heads/main/Script/DMIT-Traffic.js,argument="SERVICE_ID={{{SERVICE_ID}}}&COOKIE={{{COOKIE}}}",timeout=18
+
+[Panel]
+DMITTraffic = title="DMIT VPS 流量",content="点击刷新查询流量",style=info,script-name=dmit-traffic,update-interval=600
