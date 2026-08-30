@@ -9,4 +9,4 @@ dmit-capture = type=http-response,pattern=^https?://(.*\.)?dmit\.io/,script-path
 dmit-traffic = type=generic,script-path=https://raw.githubusercontent.com/Masamisuki/Tool/refs/heads/main/Script/DMIT-Traffic.js?v=7,timeout=18
 
 [Panel]
-DMITTraffic = title="DMIT VPS 流量",content="点击刷新查询流量",script-name=dmit-traffic,update-interval=600
+DMITTraffic = title="DMIT VPS 流量",content="点击刷新查询流量",script-name=dmit-traffic,update-interval=600,icon-url=https://raw.githubusercontent.com/Masamisuki/Tool/refs/heads/main/img/dmit.png
