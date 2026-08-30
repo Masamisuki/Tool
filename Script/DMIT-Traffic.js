@@ -13,6 +13,12 @@ const UA_KEY = "dmit_ua";
 const DEFAULT_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
+// 图标与配色：正常=DMIT 紫，告警=橙，异常=红
+const ICON = "server.rack";
+const COLOR_GOOD = "#7C4DFF";
+const COLOR_ALERT = "#FF9500";
+const COLOR_ERROR = "#FF3B30";
+
 function formatBytes(value) {
   const bytes = Number(value);
   if (!Number.isFinite(bytes) || bytes < 0) return "未知";
@@ -89,8 +95,23 @@ function stateBadge(item) {
   return "";
 }
 
+// 根据套餐名的地区前缀返回国旗 emoji
+function flagFor(name) {
+  const prefix = String(name || "").split(".")[0].toUpperCase();
+  const map = {
+    LAX: "🇺🇸",
+    SJC: "🇺🇸",
+    HKG: "🇭🇰",
+    TYO: "🇯🇵",
+    TOKYO: "🇯🇵",
+  };
+  return map[prefix] || "";
+}
+
 function finish(title, content, style) {
-  $done({ title: title, content: content, style: style });
+  const color =
+    style === "error" ? COLOR_ERROR : style === "alert" ? COLOR_ALERT : COLOR_GOOD;
+  $done({ title: title, content: content, icon: ICON, "icon-color": color });
 }
 
 function loadJars() {
@@ -127,7 +148,7 @@ function render(items) {
     return;
   }
 
-  // 汇总配色：暂停/限速/超量 = 红；任一 >=90% 红；任一 >=75% 黄；否则绿
+  // 汇总配色：暂停/限速/超量 = 红；任一 >=90% 红；任一 >=75% 橙；否则紫
   let style = "good";
   items.forEach((it) => {
     const st = it.traffic_state || "normal";
@@ -151,7 +172,9 @@ function render(items) {
     const rx = Math.round((Number(it.bw_usage_in) || 0) * 1048576);
     const tx = Math.round((Number(it.bw_usage_out) || 0) * 1048576);
     const resetText = resetTextOf(it);
-    const name = it.productname || it.domain || "DMIT VPS";
+    const rawName = it.productname || it.domain || "DMIT VPS";
+    const flag = flagFor(it.productname || "");
+    const name = flag ? `${flag} ${rawName}` : rawName;
 
     if (limit > 0) {
       const remaining = Math.max(limit - used, 0);
@@ -179,25 +202,28 @@ function render(items) {
       );
     }
   } else {
-    // 多台：每台两行（用量+重置日 / 入站+出站）
+    // 多台：每台两行（用量+剩余 / 入站出站+重置日）
     const lines = [];
     items.forEach((it) => {
       const used = Math.round((Number(it.bw_usage) || 0) * 1048576);
       const limit = Math.round((Number(it.bw_limit) || 0) * 1048576);
       const rx = Math.round((Number(it.bw_usage_in) || 0) * 1048576);
       const tx = Math.round((Number(it.bw_usage_out) || 0) * 1048576);
-      const name = it.productname || it.domain || "VPS";
+      const rawName = it.productname || it.domain || "VPS";
+      const flag = flagFor(it.productname || "");
+      const name = flag ? `${flag} ${rawName}` : rawName;
       const resetText = resetTextOf(it);
       const badge = stateBadge(it);
 
       let head;
       if (limit > 0) {
         const pct = Math.min(Math.max((used / limit) * 100, 0), 100);
-        head = `${name} ${pct.toFixed(1)}% · ${formatBytes(used)}/${formatQuota(limit)}${resetText ? ` · ${resetText}` : ""}${badge}`;
+        const remaining = Math.max(limit - used, 0);
+        head = `${name} ${pct.toFixed(1)}% · ${formatBytes(used)}/${formatQuota(limit)} · 剩${formatBytes(remaining)}${badge}`;
       } else {
-        head = `${name} ${formatBytes(used)}/不限量${resetText ? ` · ${resetText}` : ""}${badge}`;
+        head = `${name} ${formatBytes(used)}/不限量${badge}`;
       }
-      lines.push(head, `↓ ${formatBytes(rx)}  ↑ ${formatBytes(tx)}`);
+      lines.push(head, `↓ ${formatBytes(rx)}  ↑ ${formatBytes(tx)}${resetText ? ` · ${resetText}` : ""}`);
     });
     finish(`DMIT VPS × ${items.length}`, lines.join("\n"), style);
   }
