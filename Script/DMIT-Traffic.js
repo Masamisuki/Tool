@@ -78,6 +78,13 @@ function formatDate(d) {
   return String(d || "");
 }
 
+// 当前时间 HH:MM:SS
+function nowTime() {
+  const d = new Date();
+  const p = (n) => (n < 10 ? "0" + n : "" + n);
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
 // 重置文案：优先完整日期，其次倒计时
 function resetTextOf(item) {
   const nd = String(item.nextduedate || "");
@@ -193,7 +200,7 @@ function render(items) {
     }
   });
 
-  finish("DMIT VPS 流量", blocks.join("\n\n"), style);
+  finish("DMIT VPS 流量", `${blocks.join("\n\n")}\n\n执行时间:${nowTime()}`, style);
 }
 
 const jars = loadJars();
