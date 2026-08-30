@@ -5,13 +5,18 @@
  * Set-Cookie 合并进 $persistentStore，并记录浏览器 UA，供面板脚本
  * DMIT-Traffic.js 直接调用 DMIT 接口。
  *
+ * 抓取到认证 Cookie（WHMCS / cf_clearance / PHPSESSID 等）时会弹一条
+ * 系统通知「DMIT Cookie 已捕获」，作为成功提示。
+ *
  * 存储键：
- *   dmit_cookie_jar  完整 Cookie（"a=b; c=d"）
- *   dmit_ua          浏览器 User-Agent（用于 Cloudflare 校验）
+ *   dmit_cookie_jar    完整 Cookie（"a=b; c=d"）
+ *   dmit_ua            浏览器 User-Agent（用于 Cloudflare 校验）
+ *   dmit_last_notified 上次已通知的认证 Cookie 指纹（防重复弹通知）
  */
 
 const COOKIE_KEY = "dmit_cookie_jar";
 const UA_KEY = "dmit_ua";
+const LAST_NOTIFY_KEY = "dmit_last_notified";
 
 function headerValue(headers, name) {
   if (!headers) return "";
@@ -34,6 +39,22 @@ function parseCookie(setCookie) {
   const eq = first.indexOf("=");
   if (eq <= 0) return null;
   return { name: first.slice(0, eq).trim(), value: first.slice(eq + 1).trim() };
+}
+
+function authSignature(jar) {
+  const keys = Object.keys(jar).filter((k) => {
+    const lower = k.toLowerCase();
+    return (
+      lower.indexOf("whmcs") >= 0 ||
+      lower === "cf_clearance" ||
+      lower === "phpsessid" ||
+      lower.indexOf("cf_bm") >= 0
+    );
+  });
+  return keys
+    .map((k) => `${k}=${jar[k]}`)
+    .sort()
+    .join("; ");
 }
 
 // 1) 记录浏览器 UA（用于面板请求时保持一致的指纹）
@@ -93,6 +114,18 @@ if (hasSetCookie) {
       .map((k) => `${k}=${jar[k]}`)
       .join("; ");
     $persistentStore.write(s, COOKIE_KEY);
+
+    // 抓到认证 Cookie 且与上次不同 → 弹通知提示成功
+    const sig = authSignature(jar);
+    const lastSig = $persistentStore.read(LAST_NOTIFY_KEY) || "";
+    if (sig && sig !== lastSig) {
+      $persistentStore.write(sig, LAST_NOTIFY_KEY);
+      $notification.post(
+        "DMIT Cookie 已捕获",
+        `已抓到 ${Object.keys(jar).length} 个 Cookie`,
+        "回到 Surge 面板点「DMIT VPS 流量」刷新即可查看流量"
+      );
+    }
   }
 }
 
