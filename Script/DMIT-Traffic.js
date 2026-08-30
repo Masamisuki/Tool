@@ -2,7 +2,7 @@
  * Surge 面板脚本：DMIT VPS 流量（Cookie 模式，支持多账号、多台 VPS）
  *
  * 读取 MITM 自动捕获的多个 cookie jar，逐个查询 DMIT 面板接口，合并所有
- * 账号的 VPS 流量（按服务 ID 去重）。单台显示详细视图，多台每台两行。
+ * 账号的 VPS 流量（按服务 ID 去重），用进度条等美化排版展示。
  */
 
 const API_URL =
@@ -164,69 +164,36 @@ function render(items) {
     }
   });
 
-  if (items.length === 1) {
-    // 单台：详细视图
-    const it = items[0];
+  const blocks = items.map((it) => {
     const used = Math.round((Number(it.bw_usage) || 0) * 1048576);
     const limit = Math.round((Number(it.bw_limit) || 0) * 1048576);
     const rx = Math.round((Number(it.bw_usage_in) || 0) * 1048576);
     const tx = Math.round((Number(it.bw_usage_out) || 0) * 1048576);
-    const resetText = resetTextOf(it);
-    const rawName = it.productname || it.domain || "DMIT VPS";
+    const rawName = it.productname || it.domain || "VPS";
     const flag = flagFor(it.productname || "");
     const name = flag ? `${flag} ${rawName}` : rawName;
+    const resetText = resetTextOf(it);
+    const badge = stateBadge(it);
+    const io = `↓ ${formatBytes(rx)}  ↑ ${formatBytes(tx)}`;
 
     if (limit > 0) {
-      const remaining = Math.max(limit - used, 0);
       const pct = Math.min(Math.max((used / limit) * 100, 0), 100);
-      finish(
-        `${name} · ${pct.toFixed(1)}%${stateBadge(it)}`,
-        [
-          `已用：${formatBytes(used)} / ${formatQuota(limit)}`,
-          `剩余：${formatBytes(remaining)}${resetText ? ` · ${resetText}` : ""}`,
-          `↓ ${formatBytes(rx)}   ↑ ${formatBytes(tx)}`,
-        ].join("\n"),
-        style
-      );
+      const remaining = Math.max(limit - used, 0);
+      return [
+        `${name}  ${pct.toFixed(1)}%${badge}`,
+        `已用 ${formatBytes(used)}/${formatQuota(limit)} · 剩余 ${formatBytes(remaining)}${resetText ? ` · ${resetText}` : ""}`,
+        io,
+      ].join("\n");
     } else {
-      finish(
-        `${name}${stateBadge(it)}`,
-        [
-          `已用：${formatBytes(used)} / 不限量`,
-          resetText || "",
-          `↓ ${formatBytes(rx)}   ↑ ${formatBytes(tx)}`,
-        ]
-          .filter(Boolean)
-          .join("\n"),
-        style
-      );
+      return [
+        `${name}${badge}`,
+        `已用 ${formatBytes(used)}/不限量${resetText ? ` · ${resetText}` : ""}`,
+        io,
+      ].join("\n");
     }
-  } else {
-    // 多台：每台两行（用量+剩余 / 入站出站+重置日）
-    const lines = [];
-    items.forEach((it) => {
-      const used = Math.round((Number(it.bw_usage) || 0) * 1048576);
-      const limit = Math.round((Number(it.bw_limit) || 0) * 1048576);
-      const rx = Math.round((Number(it.bw_usage_in) || 0) * 1048576);
-      const tx = Math.round((Number(it.bw_usage_out) || 0) * 1048576);
-      const rawName = it.productname || it.domain || "VPS";
-      const flag = flagFor(it.productname || "");
-      const name = flag ? `${flag} ${rawName}` : rawName;
-      const resetText = resetTextOf(it);
-      const badge = stateBadge(it);
+  });
 
-      let head;
-      if (limit > 0) {
-        const pct = Math.min(Math.max((used / limit) * 100, 0), 100);
-        const remaining = Math.max(limit - used, 0);
-        head = `${name} ${pct.toFixed(1)}% · ${formatBytes(used)}/${formatQuota(limit)} · 剩${formatBytes(remaining)}${badge}`;
-      } else {
-        head = `${name} ${formatBytes(used)}/不限量${badge}`;
-      }
-      lines.push(head, `↓ ${formatBytes(rx)}  ↑ ${formatBytes(tx)}${resetText ? ` · ${resetText}` : ""}`);
-    });
-    finish(`DMIT VPS × ${items.length}`, lines.join("\n"), style);
-  }
+  finish("DMIT VPS 流量", blocks.join("\n\n"), style);
 }
 
 const jars = loadJars();
