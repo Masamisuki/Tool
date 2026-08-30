@@ -174,21 +174,21 @@ function render(items) {
     const name = flag ? `${flag} ${rawName}` : rawName;
     const resetText = resetTextOf(it);
     const badge = stateBadge(it);
-    const io = `↓ ${formatBytes(rx)}  ↑ ${formatBytes(tx)}`;
+    const io = `↓${formatBytes(rx).replace(" ", "")} ↑${formatBytes(tx).replace(" ", "")}`;
 
     if (limit > 0) {
       const pct = Math.min(Math.max((used / limit) * 100, 0), 100);
       const remaining = Math.max(limit - used, 0);
       return [
         `${name}  ${pct.toFixed(1)}%${badge}`,
-        `已用 ${formatBytes(used)}/${formatQuota(limit)} · 剩余 ${formatBytes(remaining)}${resetText ? ` · ${resetText}` : ""}`,
-        io,
+        `已用 ${formatBytes(used)}/${formatQuota(limit)} · 剩余 ${formatBytes(remaining)}`,
+        resetText ? `${io} · ${resetText}` : io,
       ].join("\n");
     } else {
       return [
         `${name}${badge}`,
-        `已用 ${formatBytes(used)}/不限量${resetText ? ` · ${resetText}` : ""}`,
-        io,
+        `已用 ${formatBytes(used)}/不限量`,
+        resetText ? `${io} · ${resetText}` : io,
       ].join("\n");
     }
   });
