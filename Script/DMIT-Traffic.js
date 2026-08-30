@@ -2,7 +2,7 @@
  * Surge 面板脚本：DMIT VPS 流量（Cookie 模式，支持多账号、多台 VPS）
  *
  * 读取 MITM 自动捕获的多个 cookie jar，逐个查询 DMIT 面板接口，合并所有
- * 账号的 VPS 流量（按服务 ID 去重）。单台显示详细视图，多台每台一行。
+ * 账号的 VPS 流量（按服务 ID 去重）。单台显示详细视图，多台每台两行。
  */
 
 const API_URL =
@@ -61,6 +61,26 @@ function resetDayOf(item) {
   return null;
 }
 
+// "YYYY-MM-DD" → "M月D日"
+function formatDate(d) {
+  const parts = String(d || "").split("-");
+  if (parts.length >= 3) {
+    const m = parseInt(parts[1], 10);
+    const day = parseInt(parts[2], 10);
+    if (m >= 1 && m <= 12 && day >= 1 && day <= 31) return `${m}月${day}日`;
+  }
+  return String(d || "");
+}
+
+// 重置文案：优先完整日期，其次倒计时
+function resetTextOf(item) {
+  const nd = String(item.nextduedate || "");
+  if (nd && /^\d{4}-\d{2}-\d{2}/.test(nd)) return `${formatDate(nd)}重置`;
+  const rd = resetDayOf(item);
+  if (rd != null) return `${daysUntilReset(rd)} 天后重置`;
+  return "";
+}
+
 function stateBadge(item) {
   const st = item.traffic_state || "normal";
   if (st === "suspended") return " · 已暂停";
@@ -79,7 +99,6 @@ function loadJars() {
     const a = JSON.parse(raw);
     if (Array.isArray(a) && a.length) return a;
   } catch (_) {}
-  // 兼容旧版单 cookie
   const old = ($persistentStore.read(COOKIE_KEY) || "").trim();
   if (old) return [{ s: "", c: old }];
   return [];
@@ -131,7 +150,7 @@ function render(items) {
     const limit = Math.round((Number(it.bw_limit) || 0) * 1048576);
     const rx = Math.round((Number(it.bw_usage_in) || 0) * 1048576);
     const tx = Math.round((Number(it.bw_usage_out) || 0) * 1048576);
-    const rd = resetDayOf(it);
+    const resetText = resetTextOf(it);
     const name = it.productname || it.domain || "DMIT VPS";
 
     if (limit > 0) {
@@ -141,7 +160,7 @@ function render(items) {
         `${name} · ${pct.toFixed(1)}%${stateBadge(it)}`,
         [
           `已用：${formatBytes(used)} / ${formatQuota(limit)}`,
-          `剩余：${formatBytes(remaining)}${rd ? ` · ${daysUntilReset(rd)} 天后重置` : ""}`,
+          `剩余：${formatBytes(remaining)}${resetText ? ` · ${resetText}` : ""}`,
           `↓ ${formatBytes(rx)}   ↑ ${formatBytes(tx)}`,
         ].join("\n"),
         style
@@ -151,7 +170,7 @@ function render(items) {
         `${name}${stateBadge(it)}`,
         [
           `已用：${formatBytes(used)} / 不限量`,
-          rd ? `${daysUntilReset(rd)} 天后重置` : "",
+          resetText || "",
           `↓ ${formatBytes(rx)}   ↑ ${formatBytes(tx)}`,
         ]
           .filter(Boolean)
@@ -160,18 +179,25 @@ function render(items) {
       );
     }
   } else {
-    // 多台：每台一行（含重置倒计时）
-    const lines = items.map((it) => {
+    // 多台：每台两行（用量+重置日 / 入站+出站）
+    const lines = [];
+    items.forEach((it) => {
       const used = Math.round((Number(it.bw_usage) || 0) * 1048576);
       const limit = Math.round((Number(it.bw_limit) || 0) * 1048576);
+      const rx = Math.round((Number(it.bw_usage_in) || 0) * 1048576);
+      const tx = Math.round((Number(it.bw_usage_out) || 0) * 1048576);
       const name = it.productname || it.domain || "VPS";
-      const rd = resetDayOf(it);
-      const countdown = rd != null ? ` · ${daysUntilReset(rd)} 天后重置` : "";
+      const resetText = resetTextOf(it);
+      const badge = stateBadge(it);
+
+      let head;
       if (limit > 0) {
         const pct = Math.min(Math.max((used / limit) * 100, 0), 100);
-        return `${name} ${pct.toFixed(1)}% · ${formatBytes(used)}/${formatQuota(limit)}${countdown}${stateBadge(it)}`;
+        head = `${name} ${pct.toFixed(1)}% · ${formatBytes(used)}/${formatQuota(limit)}${resetText ? ` · ${resetText}` : ""}${badge}`;
+      } else {
+        head = `${name} ${formatBytes(used)}/不限量${resetText ? ` · ${resetText}` : ""}${badge}`;
       }
-      return `${name} ${formatBytes(used)}/不限量${countdown}${stateBadge(it)}`;
+      lines.push(head, `↓ ${formatBytes(rx)}  ↑ ${formatBytes(tx)}`);
     });
     finish(`DMIT VPS × ${items.length}`, lines.join("\n"), style);
   }
