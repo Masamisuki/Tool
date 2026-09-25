@@ -1,0 +1,13 @@
+#!name=BoxJs
+#!desc=Data manager，使用前请在本插件的详情页面为[PROXY]项分配代理策略。
+#!author=chavyleung[https://github.com/chavyleung]
+#!icon=https://raw.githubusercontent.com/sooyaaabo/IconLibrary/main/App/BoxJs.png
+#!openUrl=http://boxjs.com/
+#!category=功能增强
+#!loon_version=3.5.1(998)
+#!homepage=https://loonlab.103516.xyz/Plugin/
+#!date=2026-09-23 00:00
+
+[MITM]
+hostname = %APPEND% boxjs.com, boxjs.net, *.boxjs.com, *.boxjs.net
+

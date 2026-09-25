@@ -1,0 +1,15 @@
+#!name=波点音乐
+#!desc=过滤波点音乐广告，解锁会员功能。\n使用前请在BoxJS中添加订阅https://raw.githubusercontent.com/Yuheng0101/X/main/Tasks/boxjs.json并同意相关免责声明，或添加持久化数据「KUWO_AGREE 我同意」。
+#!author=可莉🅥[https://github.com/luestr/ProxyResource/blob/main/README.md], ZenmoFeiShi[https://github.com/ZenmoFeiShi], mist-whisper[https://github.com/mist-whisper], GieGie777[https://t.me/GieGie777]
+#!icon=https://raw.githubusercontent.com/sooyaaabo/IconLibrary/main/App/BodianMusic.png
+#!openUrl=https://apps.apple.com/app/id1541981555
+#!category=去广告, 解锁会员
+#!loon_version=3.5.1(998)
+#!homepage=https://loonlab.103516.xyz/Plugin/
+#!date=2026-09-23 00:00
+#!arguments=BodianMusic-Crack:false
+#!arguments-desc=BodianMusic-Crack: BodianMusic-Crack\n是否解锁波点音乐会员功能
+
+[MITM]
+hostname = %APPEND% 39.156.12*.*:443, 39.156.121.20:443, 39.156.121.21:443, 39.156.121.60:80, 39.156.121.65:443, 39.156.121.*:443, 39.156.123.46, 39.156.123.46:443, 101.42.133.54:443, 111.30.171.170:443, *.kuwo.*, *.l.qq.com, ab-bodian.kuwo.cn, ab-bodian.kuwo.cn:443, ad.tencentmusic.com, bd-api.kuwo.cn, bd-api.kuwo.cn:443, bd-api.kuwo.com, bodianimgcdn.kuwo.cn, h5app.kuwo.cn, h5s.kuwo.cn, xs.gdt.qq.com
+

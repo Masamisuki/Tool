@@ -1,0 +1,16 @@
+#!name=菜鸟
+#!desc=过滤菜鸟广告
+#!author=githubdulong[https://github.com/githubdulong]
+#!icon=https://raw.githubusercontent.com/sooyaaabo/IconLibrary/main/App/CaiNiao.png
+#!openUrl=https://apps.apple.com/app/id951610982
+#!category=去广告
+#!loon_version=3.5.1(998)
+#!homepage=https://loonlab.103516.xyz/Plugin/
+#!date=2026-09-23 00:00
+
+[Rule]
+AND,((URL-REGEX,"^http:\/\/.+\/amdc\/mobileDispatch"),(USER-AGENT,"Cainiao4iPhone*")),REJECT
+
+[MITM]
+hostname = %APPEND% netflow-mtop.cainiao.com, nbcps-mtop.cainiao.com, cn-acs.m.cainiao.com, e2e-mtop.cainiao.com, longquan-mtop.cainiao.com
+

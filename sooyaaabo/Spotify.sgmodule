@@ -1,0 +1,15 @@
+#!name=Spotify
+#!desc=过滤Spotify广告，修改插件自定义配置项需要重新登陆方可生效。适用于9.1.14及以下版本。
+#!author=001ProMax[https://github.com/001ProMax], 可莉🅥[https://github.com/luestr/ProxyResource/blob/main/README.md]
+#!icon=https://raw.githubusercontent.com/sooyaaabo/IconLibrary/main/App/Spotify.png
+#!openUrl=https://apps.apple.com/app/id324684580
+#!category=去广告
+#!loon_version=3.5.1(998)
+#!homepage=https://loonlab.103516.xyz/Plugin/
+#!date=2026-09-23 00:00
+#!arguments=tab:false,useractivity:true
+#!arguments-desc=tab: 移除底栏创建按钮\n此开关控制是否移除底栏创建按钮\n\nuseractivity: 启用Apple设备接力\n此开关控制是否使用Apple设备接力
+
+[MITM]
+hostname = %APPEND% *-spclient.spotify.com, spclient.wg.spotify.com
+

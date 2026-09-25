@@ -1,0 +1,20 @@
+#!name=百度贴吧
+#!desc=过滤百度贴吧广告
+#!author=app2smile[https://github.com/app2smile], 可莉🅥[https://github.com/luestr/ProxyResource/blob/main/README.md]
+#!icon=https://raw.githubusercontent.com/sooyaaabo/IconLibrary/main/App/BaiduTieba.png
+#!openUrl=https://apps.apple.com/app/id477927812
+#!category=去广告
+#!system_version=15
+#!loon_version=3.5.1(998)
+#!homepage=https://loonlab.103516.xyz/Plugin/
+#!date=2026-09-23 00:00
+#!arguments=per_filter_video_thread:"true"
+#!arguments-desc=per_filter_video_thread: 拦截推荐页面视频帖\n此项决定是否拦截首页推荐标签下的视频帖
+
+[Rule]
+DOMAIN,180.76.76.200,REJECT
+IP-CIDR,180.76.76.200/32,REJECT,no-resolve
+
+[MITM]
+hostname = %APPEND% tiebac.baidu.com, tieba.baidu.com
+

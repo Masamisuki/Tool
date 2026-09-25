@@ -1,0 +1,13 @@
+#!name=XPTV
+#!desc=伪CMS源，安装此插件后在XPTV内添加订阅地址：https://ykusu.ykusu/getJSON/cmsbeta.json
+#!author=Yswag[https://github.com/Yswag]
+#!icon=https://raw.githubusercontent.com/sooyaaabo/IconLibrary/main/App/XPTV.png
+#!openUrl=https://apps.apple.com/app/id6459409368
+#!category=功能增强
+#!loon_version=3.5.1(998)
+#!homepage=https://loonlab.103516.xyz/Plugin/
+#!date=2026-09-23 00:00
+
+[MITM]
+hostname = %APPEND% ykusu.ykusu, tencent-1257389134.cos.ap-nanjing.myqcloud.com.qqhd.net, api.emasmr.com, ppvod01.blbtgg.com, vipcj.timizy.top, 42.157.129.29:2222
+

@@ -1,0 +1,19 @@
+#!name=Keep
+#!desc=过滤Keep广告
+#!author=可莉🅥[https://github.com/luestr/ProxyResource/blob/main/README.md], ZenmoFeiShi[https://github.com/ZenmoFeiShi], ishowshu[https://github.com/ishowshu]
+#!icon=https://raw.githubusercontent.com/sooyaaabo/IconLibrary/main/App/Keep.png
+#!openUrl=https://apps.apple.com/app/id952694580
+#!category=去广告
+#!loon_version=3.5.1(998)
+#!homepage=https://loonlab.103516.xyz/Plugin/
+#!date=2026-09-23 00:00
+
+[Rule]
+# 信息流广告
+DOMAIN,kad.gotokeep.com,REJECT
+DOMAIN,hc-ssp.sm.cn,REJECT
+DOMAIN,httpdns.calorietech.com,REJECT
+
+[MITM]
+hostname = %APPEND% 42.187.199.248, api.gotokeep.com, kad.gotokeep.com
+
