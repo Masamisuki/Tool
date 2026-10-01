@@ -1,0 +1,39 @@
+name: |-
+  航旅纵横去广告
+desc: |-
+  过滤航旅纵横广告
+author: |-
+  佚名
+icon: |-
+  https://raw.githubusercontent.com/luestr/IconResource/main/App_icon/120px/Umetrip.png
+openUrl: |-
+  https://apps.apple.com/app/id480161784
+category: |-
+  去广告
+loon_version: |-
+  3.4.0(962)
+homepage: |-
+  https://hub.kelee.one
+date: |-
+  2026-06-01 17:11:35
+
+http:
+
+  mitm:
+    - "114.115.217.129"
+    - "home.umetrip.com"
+
+  url-rewrite:
+    - >-
+      ^http?:\/\/(discardrp|startup)\.umetrip\.com\/gateway\/api\/umetrip\/native - reject
+
+  script:
+    - match: ^http?:\/\/(114\.115\.217\.129)|(home\.umetrip\.com)\/gateway\/api\/umetrip\/native$
+      name: "移除首页广告_14"
+      type: response
+
+script-providers:
+  "移除首页广告_14":
+    url: https://kelee.one/Resource/JavaScript/Umetrip/Umetrip_remove_ads.js
+    interval: 86400
+

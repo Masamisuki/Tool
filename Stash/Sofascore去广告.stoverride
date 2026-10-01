@@ -1,0 +1,41 @@
+name: |-
+  Sofascore去广告
+desc: |-
+  移除横幅及信息流广告
+author: |-
+  可莉🅥[https://github.com/luestr/ProxyResource/blob/main/README.md]
+icon: |-
+  https://raw.githubusercontent.com/luestr/IconResource/main/App_icon/120px/Sofascore.png
+openUrl: |-
+  https://apps.apple.com/app/id1176147574
+category: |-
+  去广告
+loon_version: |-
+  3.4.0(962)
+homepage: |-
+  https://hub.kelee.one
+date: |-
+  2026-08-22 03:55:33
+
+http:
+
+  mitm:
+    - "api.sofascore.com"
+
+  url-rewrite:
+    - >-
+      ^https:\/\/api\.sofascore\.com\/api\/v\d\/dsp\/country\/[A-Z]{2}$ - reject-dict
+
+  script:
+    - match: ^https:\/\/api\.sofascore\.com\/api\/v\d\/trending\/grid\/tiles\/[A-Z]{2}$
+      name: "echoResponse_13"
+      type: request
+      timeout: 60
+      argument: |-
+        text=%7B%22tiles%22%3A%5B%5D%7D&status-code=200
+
+script-providers:
+  "echoResponse_13":
+    url: https://raw.githubusercontent.com/Script-Hub-Org/Script-Hub/main/scripts/echo-response.js
+    interval: 86400
+
