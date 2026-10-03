@@ -18,10 +18,6 @@ DOMAIN,iadmusicmatvideo.music.126.net,REJECT
 DOMAIN,ipv4.music.163.com,REJECT
 DOMAIN,ipv6.music.163.com,REJECT
 
-[Body Rewrite]
-http-response (?i)^https?:\/\/interface\d?\.music\.163\.com\/e?api\/(ocpc\/)?ad\/ "text" ""
-http-response (?i)^https?:\/\/interface\d?\.music\.163.com\/w?e?api\/search\/default "text" ""
-
 [Map Local]
 (?i)^https?:\/\/interface\d?\.music\.163\.com\/eapi\/(?:delivery\/(batch-)?deliver|moment\/tab\/info\/|side-bar\/mini-program\/music-service\/account|yunbei\/account\/entrance\/) data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
@@ -36,9 +32,9 @@ http-response (?i)^https?:\/\/interface\d?\.music\.163.com\/w?e?api\/search\/def
 [Script]
 评论区、热推、有话想说、分享一下、歌曲下的祝福等小提示 = type=http-response, pattern=(?i)^https?:\/\/interface\d?\.music\.163\.com\/eapi\/(?:batch|v2\/resource\/comment\/floor\/get), script-path=https://kelee.one/Resource/JavaScript/NeteaseCloudMusic/NeteaseCloudMusic_remove_ads.js, requires-body=true, binary-body-mode=true, timeout=20
 
-推荐、home、主页 = type=http-response, pattern=(?i)^https?:\/\/interface\d?\.music\.163\.com\/eapi\/(?:homepage\/block\/page|link\/page\/rcmd\/(?:block\/resource\/multi\/refresh|resource\/show)), script-path=https://kelee.one/Resource/JavaScript/NeteaseCloudMusic/NeteaseCloudMusic_remove_ads.js, requires-body=true, binary-body-mode=true, timeout=20, argument=PRGG="{{{{{PRGG}}}}}"&PRRK="{{{{{PRRK}}}}}"&PRDRD="{{{{{PRDRD}}}}}"&PRSCVPT="{{{{{PRSCVPT}}}}}"&PRST="{{{{{PRST}}}}}"&PRRR="{{{{{PRRR}}}}}"&HMPR="{{{{{HMPR}}}}}"&PRMST="{{{{{PRMST}}}}}"&PRCN="{{{{{PRCN}}}}}"
+推荐、home、主页 = type=http-response, pattern=(?i)^https?:\/\/interface\d?\.music\.163\.com\/eapi\/(?:homepage\/block\/page|link\/page\/rcmd\/(?:block\/resource\/multi\/refresh|resource\/show)), script-path=https://kelee.one/Resource/JavaScript/NeteaseCloudMusic/NeteaseCloudMusic_remove_ads.js, requires-body=true, binary-body-mode=true, timeout=20, argument=PRGG="{{{PRGG}}}"&PRRK="{{{PRRK}}}"&PRDRD="{{{PRDRD}}}"&PRSCVPT="{{{PRSCVPT}}}"&PRST="{{{PRST}}}"&PRRR="{{{PRRR}}}"&HMPR="{{{HMPR}}}"&PRMST="{{{PRMST}}}"&PRCN="{{{PRCN}}}"
 
-底部选项卡 = type=http-response, pattern=(?i)^https?:\/\/interface\d?\.music\.163\.com\/eapi\/link\/home\/framework\/tab, script-path=https://kelee.one/Resource/JavaScript/NeteaseCloudMusic/NeteaseCloudMusic_remove_ads.js, requires-body=true, binary-body-mode=true, timeout=20, argument=MY="{{{{{MY}}}}}"&DT="{{{{{DT}}}}}"&FX="{{{{{FX}}}}}"
+底部选项卡 = type=http-response, pattern=(?i)^https?:\/\/interface\d?\.music\.163\.com\/eapi\/link\/home\/framework\/tab, script-path=https://kelee.one/Resource/JavaScript/NeteaseCloudMusic/NeteaseCloudMusic_remove_ads.js, requires-body=true, binary-body-mode=true, timeout=20, argument=MY="{{{MY}}}"&DT="{{{DT}}}"&FX="{{{FX}}}"
 
 发现页 = type=http-response, pattern=(?i)^https?:\/\/interface\d?\.music\.163\.com\/eapi\/link\/page\/discovery\/resource\/show, script-path=https://kelee.one/Resource/JavaScript/NeteaseCloudMusic/NeteaseCloudMusic_remove_ads.js, requires-body=true, binary-body-mode=true, timeout=20
 
