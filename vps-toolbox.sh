@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="1.3"
+VERSION="1.4"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -665,7 +665,7 @@ VPS 常用工具箱
   nodequality   NodeQuality 测评
   tcpquality    TcpQuality 测试
   qc            安装/卸载 qc 快捷命令
-  install       直接安装 qc 快捷命令
+  install       安装 qc 快捷命令，装完自动进入菜单
   uninstall     卸载 qc 快捷命令
   reinstall     重装系统 (会清空机器)
   help          显示本帮助
@@ -688,7 +688,19 @@ case "${1:-}" in
   nodequality|nq)         act_nodequality ;;
   tcpquality|tq)          act_tcpquality ;;
   qc|cmd)                 act_qc_menu ;;
-  install)                act_install_self ;;
+  install)
+    # 装完直接进入菜单，省得再敲一次 qc
+    if act_install_self; then
+      if [ "$HAVE_TTY" = 1 ]; then
+        printf '\n'
+        info "正在打开菜单 ..."
+        sleep 1
+        exec "$INSTALL_PATH"
+      else
+        printf '\n  %s已安装。之后输入 %s 即可打开菜单%s\n\n' "$CYAN" "$CMD_NAME" "$NC"
+      fi
+    fi
+    ;;
   uninstall)              act_uninstall_self ;;
   reinstall|dd)           act_reinstall ;;
   -h|--help|help)         usage ;;
