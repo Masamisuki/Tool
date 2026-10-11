@@ -16,13 +16,22 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="1.2"
+VERSION="1.3"
 
-# 自身在线地址（用于把脚本安装成系统命令）
-SELF_URL="${SELF_URL:-https://cdn.jsdelivr.net/gh/Masamisuki/Tool@main/vps-toolbox.sh}"
 # 安装后的命令名
 CMD_NAME="qc"
 INSTALL_PATH="/usr/local/bin/${CMD_NAME}"
+
+# 自身在线地址（自安装/自更新时按顺序尝试，第一个成功即止）
+# 可用环境变量覆盖，例如：
+#   SELF_URL="https://raw.githubusercontent.com/Masamisuki/Tool/main/vps-toolbox.sh" \
+#     bash vps-toolbox.sh install
+SELF_URLS=(
+  "${SELF_URL:-https://raw.githubusercontent.com/Masamisuki/Tool/main/vps-toolbox.sh}"
+  "https://cdn.jsdelivr.net/gh/Masamisuki/Tool@main/vps-toolbox.sh"
+  "https://raw.gitmirror.com/Masamisuki/Tool/main/vps-toolbox.sh"
+  "https://ghfast.top/https://raw.githubusercontent.com/Masamisuki/Tool/main/vps-toolbox.sh"
+)
 
 # ---------------------------------------------------------------- tty 检测
 # 注意：不能只用 `[ -r /dev/tty ]`，ssh 无 pty 时该判断会误判，
@@ -443,7 +452,7 @@ act_reinstall() {
 act_install_self() {
   step "安装 ${CMD_NAME} 快捷命令"
   info "安装位置: $INSTALL_PATH"
-  info "装好后在任意 shell（bash / zsh / fish 之外的任何环境）直接输入 ${BOLD}${CMD_NAME}${NC} 即可打开本菜单"
+  info "装好后在任意 shell（bash / zsh / fish 均可）直接输入 ${BOLD}${CMD_NAME}${NC} 即可打开本菜单"
   echo
 
   local src=""
@@ -452,8 +461,7 @@ act_install_self() {
     src="$0"
     info "来源: 当前文件  $src"
   else
-    info "当前是管道方式运行，改为从网络重新下载"
-    dim "$SELF_URL"
+    info "当前是管道方式运行，从网络下载最新版"
   fi
 
   mkdir -p /usr/local/bin || { err "无法创建 /usr/local/bin"; return 1; }
@@ -461,7 +469,23 @@ act_install_self() {
   if [ -n "$src" ]; then
     cp -f "$src" "$INSTALL_PATH" || { err "复制失败"; return 1; }
   else
-    if ! fetch "$SELF_URL" "$INSTALL_PATH"; then err "下载失败"; rm -f "$INSTALL_PATH"; return 1; fi
+    local u got=0
+    for u in "${SELF_URLS[@]}"; do
+      dim "  尝试 $u"
+      if fetch "$u" "$INSTALL_PATH" 2>/dev/null \
+         && [ -s "$INSTALL_PATH" ] \
+         && head -n1 "$INSTALL_PATH" 2>/dev/null | grep -q '^#!'; then
+        ok "  这个源可用"
+        got=1
+        break
+      fi
+      dim "  不可用，换下一个"
+    done
+    if [ "$got" != 1 ]; then
+      err "所有下载源都失败"
+      rm -f "$INSTALL_PATH"
+      return 1
+    fi
   fi
   chmod +x "$INSTALL_PATH"
 
