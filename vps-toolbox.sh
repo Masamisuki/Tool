@@ -16,7 +16,13 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="1.1"
+VERSION="1.2"
+
+# 自身在线地址（用于把脚本安装成系统命令）
+SELF_URL="${SELF_URL:-https://cdn.jsdelivr.net/gh/Masamisuki/Tool@main/vps-toolbox.sh}"
+# 安装后的命令名
+CMD_NAME="qc"
+INSTALL_PATH="/usr/local/bin/${CMD_NAME}"
 
 # ---------------------------------------------------------------- tty 检测
 # 注意：不能只用 `[ -r /dev/tty ]`，ssh 无 pty 时该判断会误判，
@@ -434,6 +440,99 @@ act_reinstall() {
   rm -f "$tmp"
 }
 
+act_install_self() {
+  step "安装 ${CMD_NAME} 快捷命令"
+  info "安装位置: $INSTALL_PATH"
+  info "装好后在任意 shell（bash / zsh / fish 之外的任何环境）直接输入 ${BOLD}${CMD_NAME}${NC} 即可打开本菜单"
+  echo
+
+  local src=""
+  # 判断当前是不是从真实文件运行（管道运行的话 $0 不是文件）
+  if [ -f "$0" ] && [ -r "$0" ] && head -n1 "$0" 2>/dev/null | grep -q '^#!'; then
+    src="$0"
+    info "来源: 当前文件  $src"
+  else
+    info "当前是管道方式运行，改为从网络重新下载"
+    dim "$SELF_URL"
+  fi
+
+  mkdir -p /usr/local/bin || { err "无法创建 /usr/local/bin"; return 1; }
+
+  if [ -n "$src" ]; then
+    cp -f "$src" "$INSTALL_PATH" || { err "复制失败"; return 1; }
+  else
+    if ! fetch "$SELF_URL" "$INSTALL_PATH"; then err "下载失败"; rm -f "$INSTALL_PATH"; return 1; fi
+  fi
+  chmod +x "$INSTALL_PATH"
+
+  if [ -s "$INSTALL_PATH" ] && head -n1 "$INSTALL_PATH" | grep -q '^#!'; then
+    ok "已安装：$INSTALL_PATH  ($(wc -c < "$INSTALL_PATH") 字节)"
+  else
+    err "安装异常：文件内容不是有效脚本"
+    rm -f "$INSTALL_PATH"
+    return 1
+  fi
+
+  # 清掉历史上可能存在的同名 alias，避免和命令冲突
+  local rc
+  for rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.profile"; do
+    [ -f "$rc" ] || continue
+    if grep -qE "^[[:space:]]*alias[[:space:]]+${CMD_NAME}=" "$rc" 2>/dev/null; then
+      cp -a "$rc" "$rc.bak-$(date +%Y%m%d-%H%M)" 2>/dev/null
+      sed -i -E "/^[[:space:]]*alias[[:space:]]+${CMD_NAME}=/d" "$rc"
+      warn "已从 $rc 中移除旧的 ${CMD_NAME} 别名（备份 .bak-*）"
+    fi
+  done
+
+  echo
+  if command -v "$CMD_NAME" >/dev/null 2>&1; then
+    ok "验证通过：$(command -v "$CMD_NAME")"
+    info "现在直接输入 ${BOLD}${CMD_NAME}${NC} 就能打开菜单"
+  else
+    warn "已安装，但当前 PATH 里找不到 /usr/local/bin，请检查 PATH"
+  fi
+}
+
+act_uninstall_self() {
+  step "卸载 ${CMD_NAME} 快捷命令"
+  if [ -f "$INSTALL_PATH" ]; then
+    rm -f "$INSTALL_PATH" && ok "已删除 $INSTALL_PATH"
+  else
+    info "$INSTALL_PATH 不存在"
+  fi
+  local rc
+  for rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.profile"; do
+    [ -f "$rc" ] || continue
+    if grep -qE "^[[:space:]]*alias[[:space:]]+${CMD_NAME}=" "$rc" 2>/dev/null; then
+      sed -i -E "/^[[:space:]]*alias[[:space:]]+${CMD_NAME}=/d" "$rc"
+      info "已清理 $rc 中的别名"
+    fi
+  done
+}
+
+act_qc_menu() {
+  local a
+  step "${CMD_NAME} 快捷命令"
+  if [ -f "$INSTALL_PATH" ]; then
+    ok "当前状态：已安装  ($INSTALL_PATH)"
+    info "在任何地方输入 ${BOLD}${CMD_NAME}${NC} 即可打开菜单"
+  else
+    warn "当前状态：未安装"
+    info "安装后可在任意 shell 直接输入 ${CMD_NAME} 打开菜单"
+  fi
+  echo
+  info "  1) 安装 / 更新为最新版"
+  info "  2) 卸载"
+  info "  0) 返回"
+  echo
+  ask "  请选择 [0-2]: " a
+  case "${a:-0}" in
+    1) act_install_self ;;
+    2) act_uninstall_self ;;
+    *) return 0 ;;
+  esac
+}
+
 # ================================================================ 菜单
 
 banner() {
@@ -447,6 +546,13 @@ banner() {
   printf '  %s主机%s %s   %s内核%s %s\n' "$DIM" "$NC" "$(hostname)" "$DIM" "$NC" "$(uname -r)"
   printf '  %s系统%s %s\n' "$DIM" "$NC" "$( (. /etc/os-release 2>/dev/null; echo "${PRETTY_NAME:-未知}") )"
   printf '  %s时间%s %s\n' "$DIM" "$NC" "$(date '+%Y-%m-%d %H:%M:%S %Z')"
+  if [ -f "$INSTALL_PATH" ]; then
+    printf '  %s✔%s %s 命令已安装，任何地方输入 %s%s%s 即可打开本菜单\n' \
+      "$GREEN" "$NC" "$CMD_NAME" "$BOLD" "$CMD_NAME" "$NC"
+  else
+    printf '  %s提示：选 14 安装 %s%s%s 命令，以后直接敲 %s%s%s 进菜单%s\n' \
+      "$DIM" "$BOLD" "$CMD_NAME" "$NC" "$BOLD" "$CMD_NAME" "$NC" "$NC"
+  fi
   echo
 }
 
@@ -458,14 +564,14 @@ menu() {
   printf '   %s4)%s 一键基础初始化 %s(1+2+3)%s\n' "$MAGENTA" "$NC" "$DIM" "$NC"
   echo
   printf '%s\n' "${BOLD}  ── 网络调优 ─────────────────────────────────────────────${NC}"
-  printf '   %s5)%s net-tcp-tune  %sBBR / TCP 综合调优（菜单）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '   %s6)%s tcpfit          %sTCP 精细调优（实测推导）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s5)%s BBR v3 优化      %snet-tcp-tune 综合调优（菜单）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s6)%s tcpfit           %sTCP 精细调优（实测推导）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   printf '   %s7)%s 安装/卸载 bbr、dog 快捷别名\n' "$GREEN" "$NC"
   echo
   printf '%s\n' "${BOLD}  ── 安全 / 代理 / 监控 ───────────────────────────────────${NC}"
-  printf '   %s8)%s key.sh          %sSSH 密钥登录加固%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '   %s9)%s vless-server.sh %sVLESS Reality 一键部署%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '  %s10)%s Komari Lite Agent 安装\n' "$GREEN" "$NC"
+  printf '   %s8)%s key.sh           %sSSH 密钥登录加固%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s9)%s 节点搭建          %svless-server.sh (VLESS Reality)%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s10)%s Komari 探针安装    %sLite Agent%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
   printf '%s\n' "${BOLD}  ── 测评 ─────────────────────────────────────────────────${NC}"
   printf '  %s11)%s NodeQuality  %sIP质量 / 硬件 / 网络 / 回程%s\n' "$GREEN" "$NC" "$DIM" "$NC"
@@ -473,7 +579,8 @@ menu() {
   echo
   printf '%s\n' "${BOLD}  ── 其他 ─────────────────────────────────────────────────${NC}"
   printf '  %s13)%s 查看系统状态汇总\n' "$CYAN" "$NC"
-  printf '  %s14)%s %s重装系统 (DD)%s  %s会清空整台机器%s\n' "$GREEN" "$NC" "$RED" "$NC" "$DIM" "$NC"
+  printf '  %s14)%s 安装/卸载 %s 快捷命令  %s之后直接敲 %s 进菜单%s\n' "$GREEN" "$NC" "$BOLD" "$CMD_NAME" "$DIM" "$CMD_NAME" "$NC"
+  printf '  %s15)%s %s重装系统 (DD)%s  %s会清空整台机器%s\n' "$GREEN" "$NC" "$RED" "$NC" "$DIM" "$NC"
   printf '   %s0)%s 退出\n' "$RED" "$NC"
   echo
   hr
@@ -484,7 +591,7 @@ main() {
   while true; do
     banner
     menu
-    if ! ask "  ${BOLD}请输入选项${NC} [0-14]: " choice; then
+    if ! ask "  ${BOLD}请输入选项${NC} [0-15]: " choice; then
       printf '\n  %s输入结束，退出%s\n\n' "$CYAN" "$NC"; exit 0
     fi
     case "${choice:-}" in
@@ -501,7 +608,8 @@ main() {
       11) act_nodequality ;;
       12) act_tcpquality ;;
       13) act_status ;;
-      14) act_reinstall ;;
+      14) act_qc_menu ;;
+      15) act_reinstall ;;
       0|q|Q|quit|exit) printf '\n  %s再见%s\n\n' "$CYAN" "$NC"; exit 0 ;;
       "") continue ;;
       *)  err "无效选项：$choice" ;;
@@ -532,6 +640,9 @@ VPS 常用工具箱
   lite          Komari Lite Agent
   nodequality   NodeQuality 测评
   tcpquality    TcpQuality 测试
+  qc            安装/卸载 qc 快捷命令
+  install       直接安装 qc 快捷命令
+  uninstall     卸载 qc 快捷命令
   reinstall     重装系统 (会清空机器)
   help          显示本帮助
 USAGE
@@ -552,6 +663,9 @@ case "${1:-}" in
   lite|komari)            act_lite ;;
   nodequality|nq)         act_nodequality ;;
   tcpquality|tq)          act_tcpquality ;;
+  qc|cmd)                 act_qc_menu ;;
+  install)                act_install_self ;;
+  uninstall)              act_uninstall_self ;;
   reinstall|dd)           act_reinstall ;;
   -h|--help|help)         usage ;;
   *) printf '%s\n' "未知参数: $1"; echo; usage; exit 1 ;;
