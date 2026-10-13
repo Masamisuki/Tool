@@ -16,11 +16,18 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="1.4"
+VERSION="1.6"
 
 # 安装后的命令名
 CMD_NAME="qc"
 INSTALL_PATH="/usr/local/bin/${CMD_NAME}"
+
+# Emby 反代面板（wuuduf/emby-proxy）—— 一条命令安装，之后用 ep 打开菜单
+EMBY_PROXY_URL="https://raw.githubusercontent.com/wuuduf/emby-proxy/main/setup-emby-proxy.sh"
+
+# BBR / TCP 调优（Eric86777/vps-tcp-tune）
+NET_TUNE_URL="https://raw.githubusercontent.com/Eric86777/vps-tcp-tune/refs/heads/main/net-tcp-tune.sh"
+NET_ALIAS_URL="https://raw.githubusercontent.com/Eric86777/vps-tcp-tune/refs/heads/main/install-alias.sh"
 
 # 自身在线地址（自安装/自更新时按顺序尝试，第一个成功即止）
 # 可用环境变量覆盖，例如：
@@ -217,31 +224,101 @@ act_bootstrap() {
   ok "基础初始化完成"
 }
 
+# 把 bbr 装成 /usr/local/bin/bbr 真实命令。
+# 官方做法是往 ~/.bashrc 写 alias，但 alias 必须 source 或重连 SSH 才生效，
+# 所以这里额外落一个可执行文件：任何 shell、任何时刻敲 bbr 都能用。
+install_bbr_cmd() {
+  local dst="/usr/local/bin/bbr"
+  mkdir -p /usr/local/bin 2>/dev/null || { err "无法创建 /usr/local/bin"; return 1; }
+  cat > "$dst" <<'BBR_CMD_EOF'
+#!/usr/bin/env bash
+# bbr —— net-tcp-tune 快捷入口（由 vps-toolbox 安装）
+# 等价于官方别名：
+#   alias bbr="bash <(curl -q -fsSL ".../net-tcp-tune.sh?$(date +%s)")"
+set -uo pipefail
+URL="https://raw.githubusercontent.com/Eric86777/vps-tcp-tune/refs/heads/main/net-tcp-tune.sh?$(date +%s)"
+TMP="$(mktemp "${TMPDIR:-/tmp}/net-tcp-tune.XXXXXX.sh")"
+if command -v curl >/dev/null 2>&1; then
+  curl -q -fsSL --connect-timeout 20 --retry 2 "$URL" -o "$TMP" || { echo "下载 net-tcp-tune.sh 失败" >&2; rm -f "$TMP"; exit 1; }
+elif command -v wget >/dev/null 2>&1; then
+  wget -q -T 20 -t 2 -O "$TMP" "$URL" || { echo "下载 net-tcp-tune.sh 失败" >&2; rm -f "$TMP"; exit 1; }
+else
+  echo "需要 curl 或 wget，请先在工具箱里执行「1. 安装基础依赖」" >&2
+  exit 1
+fi
+[ -s "$TMP" ] || { echo "下载内容为空" >&2; rm -f "$TMP"; exit 1; }
+bash "$TMP"
+rc=$?
+rm -f "$TMP"
+exit $rc
+BBR_CMD_EOF
+  chmod +x "$dst" 2>/dev/null || { err "chmod 失败"; return 1; }
+  [ -s "$dst" ] || { err "写入失败"; return 1; }
+  return 0
+}
+
 act_net_tune() {
-  step "net-tcp-tune —— BBR / TCP 综合调优（交互菜单）"
-  info "这是 Eric86777/vps-tcp-tune 的主脚本，带完整菜单"
-  run_remote "net-tcp-tune" \
-    "https://raw.githubusercontent.com/Eric86777/vps-tcp-tune/refs/heads/main/net-tcp-tune.sh?$(date +%s)" \
-    bash
+  step "BBR v3 优化 —— net-tcp-tune"
+  info "Eric86777/vps-tcp-tune 主脚本，带完整交互菜单"
+  echo
+
+  # 先确保 bbr 命令存在，否则用户装完敲 bbr 会 command not found
+  if command -v bbr >/dev/null 2>&1; then
+    ok "bbr 命令已就绪：$(command -v bbr)"
+  else
+    info "先安装 bbr 快捷命令 ..."
+    if install_bbr_cmd; then
+      ok "已安装 /usr/local/bin/bbr"
+      dim "任何 shell 直接敲 bbr 即可，不需要 source"
+    else
+      warn "bbr 命令安装失败，但下面仍会直接运行调优脚本"
+    fi
+  fi
+  echo
+
+  run_remote "net-tcp-tune" "${NET_TUNE_URL}?$(date +%s)" bash
+
+  echo
+  info "以后随时输入 ${BOLD}bbr${NC} 即可再次打开调优菜单"
 }
 
 act_alias() {
   local a
-  step "安装 / 卸载 bbr、dog 快捷别名"
-  info "别名写入 ~/.bashrc 或 ~/.zshrc，之后直接敲 bbr 即可调优"
-  info "  1) 安装"
-  info "  2) 卸载"
-  ask "  请选择 [1/2]（回车默认 1）: " a
-  case "${a:-1}" in
-    2) run_remote "别名卸载" \
-         "https://raw.githubusercontent.com/Eric86777/vps-tcp-tune/refs/heads/main/install-alias.sh?$(date +%s)" \
-         bash uninstall ;;
-    *) run_remote "别名安装" \
-         "https://raw.githubusercontent.com/Eric86777/vps-tcp-tune/refs/heads/main/install-alias.sh?$(date +%s)" \
-         bash install
-       echo
-       dim "提示：执行 source ~/.bashrc 后即可使用 bbr 命令"
-       local rc="$HOME/.bashrc"; [ -f "$rc" ] && info "已写入：$rc" ;;
+  step "bbr 快捷命令 / 官方别名管理"
+  if command -v bbr >/dev/null 2>&1; then
+    ok "bbr 当前可用：$(command -v bbr)"
+  else
+    warn "bbr 当前不可用"
+  fi
+  echo
+  info "  1) 安装 / 修复 bbr 命令  ${DIM}(推荐：装完立刻可用，无需 source)${NC}"
+  info "  2) 安装官方别名           ${DIM}(写入 ~/.bashrc，需 source 或重连 SSH)${NC}"
+  info "  3) 卸载官方别名"
+  info "  4) 卸载 bbr 命令"
+  info "  0) 返回"
+  echo
+  ask "  请选择 [0-4]: " a
+  case "${a:-0}" in
+    1)
+      if install_bbr_cmd; then
+        ok "已安装 /usr/local/bin/bbr"
+        info "现在直接敲 ${BOLD}bbr${NC} 试试"
+      fi
+      ;;
+    2)
+      run_remote "官方别名安装" "${NET_ALIAS_URL}?$(date +%s)" bash install
+      echo
+      dim "提示：执行 source ~/.bashrc（或重连 SSH）后生效"
+      ;;
+    3) run_remote "官方别名卸载" "${NET_ALIAS_URL}?$(date +%s)" bash uninstall ;;
+    4)
+      if [ -f /usr/local/bin/bbr ]; then
+        rm -f /usr/local/bin/bbr && ok "已删除 /usr/local/bin/bbr"
+      else
+        info "/usr/local/bin/bbr 不存在"
+      fi
+      ;;
+    *) return 0 ;;
   esac
 }
 
@@ -557,6 +634,62 @@ act_qc_menu() {
   esac
 }
 
+act_emby_proxy() {
+  local a
+  step "Emby 反代面板 —— wuuduf/emby-proxy"
+  echo
+  if [ -x /usr/local/sbin/emby-proxy ] || command -v ep >/dev/null 2>&1; then
+    ok "检测到已安装"
+    info "  列出入口   ep list"
+    info "  完整诊断   ep doctor"
+    info "  服务概况   ep status"
+    info "  检查更新   ep update --check"
+    echo
+    info "  1) 打开菜单 (ep)"
+    info "  2) 运行完整诊断 (ep doctor)"
+    info "  3) 检查更新"
+    info "  4) 重新运行安装器 / 升级"
+    info "  0) 返回"
+    echo
+    ask "  请选择 [0-4]: " a
+    case "${a:-0}" in
+      1)
+        local epbin=""
+        command -v ep >/dev/null 2>&1 && epbin="ep"
+        [ -z "$epbin" ] && [ -x /usr/local/sbin/emby-proxy ] && epbin="/usr/local/sbin/emby-proxy"
+        if [ -z "$epbin" ]; then
+          err "找不到 ep 命令"
+        elif [ "$HAVE_TTY" = 1 ]; then
+          "$epbin" < /dev/tty
+        else
+          warn "当前没有终端，ep 是交互式菜单，请在 SSH 里直接运行 ep"
+        fi
+        ;;
+      2) ep doctor 2>/dev/null || /usr/local/sbin/emby-proxy doctor ;;
+      3) ep update --check 2>/dev/null || /usr/local/sbin/emby-proxy update --check ;;
+      4) run_remote "emby-proxy 安装器" "${EMBY_PROXY_URL}?$(date +%s)" bash ;;
+      *) return 0 ;;
+    esac
+    return 0
+  fi
+
+  info "基于 Caddy / Nginx 的 Emby HTTPS 反代管理面板"
+  info "自带 ACME 证书申请，支持子域名 / 端口 / 路径三种入口模式"
+  echo
+  warn "前提：需要准备一个域名并把 A 记录指向本机，安全组放行 TCP 80 / 443"
+  dim "  安装器第一次运行只会部署管理器，不会改动你现有的 Caddy / Nginx 站点"
+  echo
+  if ! confirm "确认安装？"; then warn "已取消"; return 0; fi
+
+  run_remote "emby-proxy 安装器" "${EMBY_PROXY_URL}?$(date +%s)" bash
+  echo
+  if [ -x /usr/local/sbin/emby-proxy ] || command -v ep >/dev/null 2>&1; then
+    ok "安装完成"
+    info "之后输入 ${BOLD}ep${NC} 打开菜单（或从本菜单选 15 再选 1）"
+    info "卸载：sudo ep uninstall"
+  fi
+}
+
 # ================================================================ 菜单
 
 banner() {
@@ -590,7 +723,7 @@ menu() {
   printf '%s\n' "${BOLD}  ── 网络调优 ─────────────────────────────────────────────${NC}"
   printf '   %s5)%s BBR v3 优化      %snet-tcp-tune 综合调优（菜单）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   printf '   %s6)%s tcpfit           %sTCP 精细调优（实测推导）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '   %s7)%s 安装/卸载 bbr、dog 快捷别名\n' "$GREEN" "$NC"
+  printf '   %s7)%s 管理 bbr 快捷命令 / 官方别名\n' "$GREEN" "$NC"
   echo
   printf '%s\n' "${BOLD}  ── 安全 / 代理 / 监控 ───────────────────────────────────${NC}"
   printf '   %s8)%s key.sh           %sSSH 密钥登录加固%s\n' "$GREEN" "$NC" "$DIM" "$NC"
@@ -603,8 +736,9 @@ menu() {
   echo
   printf '%s\n' "${BOLD}  ── 其他 ─────────────────────────────────────────────────${NC}"
   printf '  %s13)%s 查看系统状态汇总\n' "$CYAN" "$NC"
-  printf '  %s14)%s 安装/卸载 %s 快捷命令  %s之后直接敲 %s 进菜单%s\n' "$GREEN" "$NC" "$BOLD" "$CMD_NAME" "$DIM" "$CMD_NAME" "$NC"
-  printf '  %s15)%s %s重装系统 (DD)%s  %s会清空整台机器%s\n' "$GREEN" "$NC" "$RED" "$NC" "$DIM" "$NC"
+  printf '  %s14)%s 安装/卸载 %s 快捷命令  %s(之后直接敲 %s 进菜单)%s\n' "$GREEN" "$NC" "$CMD_NAME" "$DIM" "$CMD_NAME" "$NC"
+  printf '  %s15)%s %sEmby 反代面板%s  %swuuduf/emby-proxy (Caddy/Nginx + 自动证书)%s\n' "$GREEN" "$NC" "$BOLD" "$NC" "$DIM" "$NC"
+  printf '  %s16)%s %s重装系统 (DD)%s  %s会清空整台机器%s\n' "$GREEN" "$NC" "$RED" "$NC" "$DIM" "$NC"
   printf '   %s0)%s 退出\n' "$RED" "$NC"
   echo
   hr
@@ -615,7 +749,7 @@ main() {
   while true; do
     banner
     menu
-    if ! ask "  ${BOLD}请输入选项${NC} [0-15]: " choice; then
+    if ! ask "  ${BOLD}请输入选项${NC} [0-16]: " choice; then
       printf '\n  %s输入结束，退出%s\n\n' "$CYAN" "$NC"; exit 0
     fi
     case "${choice:-}" in
@@ -633,7 +767,8 @@ main() {
       12) act_tcpquality ;;
       13) act_status ;;
       14) act_qc_menu ;;
-      15) act_reinstall ;;
+      15) act_emby_proxy ;;
+      16) act_reinstall ;;
       0|q|Q|quit|exit) printf '\n  %s再见%s\n\n' "$CYAN" "$NC"; exit 0 ;;
       "") continue ;;
       *)  err "无效选项：$choice" ;;
@@ -667,6 +802,7 @@ VPS 常用工具箱
   qc            安装/卸载 qc 快捷命令
   install       安装 qc 快捷命令，装完自动进入菜单
   uninstall     卸载 qc 快捷命令
+  emby          Emby 反代面板 (wuuduf/emby-proxy)
   reinstall     重装系统 (会清空机器)
   help          显示本帮助
 USAGE
@@ -702,6 +838,7 @@ case "${1:-}" in
     fi
     ;;
   uninstall)              act_uninstall_self ;;
+  emby|embyproxy)         act_emby_proxy ;;
   reinstall|dd)           act_reinstall ;;
   -h|--help|help)         usage ;;
   *) printf '%s\n' "未知参数: $1"; echo; usage; exit 1 ;;
