@@ -16,14 +16,15 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="1.6"
+VERSION="1.7"
 
 # 安装后的命令名
 CMD_NAME="qc"
 INSTALL_PATH="/usr/local/bin/${CMD_NAME}"
 
-# Emby 反代面板（wuuduf/emby-proxy）—— 一条命令安装，之后用 ep 打开菜单
-EMBY_PROXY_URL="https://raw.githubusercontent.com/wuuduf/emby-proxy/main/setup-emby-proxy.sh"
+# 节点搭建：PSM (Proxy Stack Manager) —— JQ 的 proxy-stack
+# 安装器自带依赖引导（缺 curl/git 会自动补装），装完用 psm 打开菜单，重跑即更新
+PSM_URL="https://psm.jinqians.com"
 
 # BBR / TCP 调优（Eric86777/vps-tcp-tune）
 NET_TUNE_URL="https://raw.githubusercontent.com/Eric86777/vps-tcp-tune/refs/heads/main/net-tcp-tune.sh"
@@ -339,13 +340,24 @@ act_keysh() {
     bash
 }
 
-act_vless() {
-  step "vless-server.sh —— VLESS Reality 一键部署"
-  warn "脚本较大（约 1.2MB），且会占用 443 端口、写 systemd 服务"
+act_node() {
+  step "节点搭建 —— PSM (Proxy Stack Manager)"
+  info "JQ 的 proxy-stack，支持 VLESS / Hysteria2 / TUIC / Snell 等多种协议"
+  echo
+  dim "  安装器自带依赖引导：缺 curl / git 会自动补装"
+  dim "  装完输入 psm 打开菜单；重跑同一条命令即可更新"
+  echo
+  warn "会占用 80/443 等端口并写 systemd 服务，确认机器上没有冲突的服务"
   if ! confirm "确认继续？"; then warn "已取消"; return 0; fi
-  run_remote "vless-server.sh" \
-    "https://raw.githubusercontent.com/mozisen/surge/main/vless-server.sh?$(date +%s)" \
-    bash
+
+  run_remote "PSM 安装器" "$PSM_URL" bash
+
+  echo
+  if command -v psm >/dev/null 2>&1; then
+    ok "安装完成，之后输入 ${BOLD}psm${NC} 打开菜单"
+  else
+    dim "  如果没看到 psm 命令，重新登录 SSH 或执行 hash -r 再试"
+  fi
 }
 
 act_lite() {
@@ -634,62 +646,6 @@ act_qc_menu() {
   esac
 }
 
-act_emby_proxy() {
-  local a
-  step "Emby 反代面板 —— wuuduf/emby-proxy"
-  echo
-  if [ -x /usr/local/sbin/emby-proxy ] || command -v ep >/dev/null 2>&1; then
-    ok "检测到已安装"
-    info "  列出入口   ep list"
-    info "  完整诊断   ep doctor"
-    info "  服务概况   ep status"
-    info "  检查更新   ep update --check"
-    echo
-    info "  1) 打开菜单 (ep)"
-    info "  2) 运行完整诊断 (ep doctor)"
-    info "  3) 检查更新"
-    info "  4) 重新运行安装器 / 升级"
-    info "  0) 返回"
-    echo
-    ask "  请选择 [0-4]: " a
-    case "${a:-0}" in
-      1)
-        local epbin=""
-        command -v ep >/dev/null 2>&1 && epbin="ep"
-        [ -z "$epbin" ] && [ -x /usr/local/sbin/emby-proxy ] && epbin="/usr/local/sbin/emby-proxy"
-        if [ -z "$epbin" ]; then
-          err "找不到 ep 命令"
-        elif [ "$HAVE_TTY" = 1 ]; then
-          "$epbin" < /dev/tty
-        else
-          warn "当前没有终端，ep 是交互式菜单，请在 SSH 里直接运行 ep"
-        fi
-        ;;
-      2) ep doctor 2>/dev/null || /usr/local/sbin/emby-proxy doctor ;;
-      3) ep update --check 2>/dev/null || /usr/local/sbin/emby-proxy update --check ;;
-      4) run_remote "emby-proxy 安装器" "${EMBY_PROXY_URL}?$(date +%s)" bash ;;
-      *) return 0 ;;
-    esac
-    return 0
-  fi
-
-  info "基于 Caddy / Nginx 的 Emby HTTPS 反代管理面板"
-  info "自带 ACME 证书申请，支持子域名 / 端口 / 路径三种入口模式"
-  echo
-  warn "前提：需要准备一个域名并把 A 记录指向本机，安全组放行 TCP 80 / 443"
-  dim "  安装器第一次运行只会部署管理器，不会改动你现有的 Caddy / Nginx 站点"
-  echo
-  if ! confirm "确认安装？"; then warn "已取消"; return 0; fi
-
-  run_remote "emby-proxy 安装器" "${EMBY_PROXY_URL}?$(date +%s)" bash
-  echo
-  if [ -x /usr/local/sbin/emby-proxy ] || command -v ep >/dev/null 2>&1; then
-    ok "安装完成"
-    info "之后输入 ${BOLD}ep${NC} 打开菜单（或从本菜单选 15 再选 1）"
-    info "卸载：sudo ep uninstall"
-  fi
-}
-
 # ================================================================ 菜单
 
 banner() {
@@ -727,7 +683,7 @@ menu() {
   echo
   printf '%s\n' "${BOLD}  ── 安全 / 代理 / 监控 ───────────────────────────────────${NC}"
   printf '   %s8)%s key.sh           %sSSH 密钥登录加固%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '   %s9)%s 节点搭建          %svless-server.sh (VLESS Reality)%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s9)%s 节点搭建          %sPSM (Proxy Stack Manager)%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   printf '  %s10)%s Komari 探针安装    %sLite Agent%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
   printf '%s\n' "${BOLD}  ── 测评 ─────────────────────────────────────────────────${NC}"
@@ -737,8 +693,7 @@ menu() {
   printf '%s\n' "${BOLD}  ── 其他 ─────────────────────────────────────────────────${NC}"
   printf '  %s13)%s 查看系统状态汇总\n' "$CYAN" "$NC"
   printf '  %s14)%s 安装/卸载 %s 快捷命令  %s(之后直接敲 %s 进菜单)%s\n' "$GREEN" "$NC" "$CMD_NAME" "$DIM" "$CMD_NAME" "$NC"
-  printf '  %s15)%s %sEmby 反代面板%s  %swuuduf/emby-proxy (Caddy/Nginx + 自动证书)%s\n' "$GREEN" "$NC" "$BOLD" "$NC" "$DIM" "$NC"
-  printf '  %s16)%s %s重装系统 (DD)%s  %s会清空整台机器%s\n' "$GREEN" "$NC" "$RED" "$NC" "$DIM" "$NC"
+  printf '  %s15)%s %s重装系统 (DD)%s  %s会清空整台机器%s\n' "$GREEN" "$NC" "$RED" "$NC" "$DIM" "$NC"
   printf '   %s0)%s 退出\n' "$RED" "$NC"
   echo
   hr
@@ -749,7 +704,7 @@ main() {
   while true; do
     banner
     menu
-    if ! ask "  ${BOLD}请输入选项${NC} [0-16]: " choice; then
+    if ! ask "  ${BOLD}请输入选项${NC} [0-15]: " choice; then
       printf '\n  %s输入结束，退出%s\n\n' "$CYAN" "$NC"; exit 0
     fi
     case "${choice:-}" in
@@ -761,14 +716,13 @@ main() {
       6)  act_tcpfit ;;
       7)  act_alias ;;
       8)  act_keysh ;;
-      9)  act_vless ;;
+      9)  act_node ;;
       10) act_lite ;;
       11) act_nodequality ;;
       12) act_tcpquality ;;
       13) act_status ;;
       14) act_qc_menu ;;
-      15) act_emby_proxy ;;
-      16) act_reinstall ;;
+      15) act_reinstall ;;
       0|q|Q|quit|exit) printf '\n  %s再见%s\n\n' "$CYAN" "$NC"; exit 0 ;;
       "") continue ;;
       *)  err "无效选项：$choice" ;;
@@ -793,16 +747,15 @@ VPS 常用工具箱
   bootstrap     一键基础初始化 (deps + tz + journal)
   tunenet       net-tcp-tune 调优
   tcpfit        tcpfit 调优
-  alias         安装 bbr/dog 别名
+  alias         管理 bbr 快捷命令 / 官方别名
   key           SSH 加固 (key.sh)
-  vless         VLESS Reality 部署
+  node          节点搭建 (PSM / proxy-stack)
   lite          Komari Lite Agent
   nodequality   NodeQuality 测评
   tcpquality    TcpQuality 测试
   qc            安装/卸载 qc 快捷命令
   install       安装 qc 快捷命令，装完自动进入菜单
   uninstall     卸载 qc 快捷命令
-  emby          Emby 反代面板 (wuuduf/emby-proxy)
   reinstall     重装系统 (会清空机器)
   help          显示本帮助
 USAGE
@@ -819,7 +772,7 @@ case "${1:-}" in
   tcpfit)                 act_tcpfit ;;
   alias)                  act_alias ;;
   key|key.sh)             act_keysh ;;
-  vless|reality)          act_vless ;;
+  node|psm)               act_node ;;
   lite|komari)            act_lite ;;
   nodequality|nq)         act_nodequality ;;
   tcpquality|tq)          act_tcpquality ;;
@@ -838,7 +791,6 @@ case "${1:-}" in
     fi
     ;;
   uninstall)              act_uninstall_self ;;
-  emby|embyproxy)         act_emby_proxy ;;
   reinstall|dd)           act_reinstall ;;
   -h|--help|help)         usage ;;
   *) printf '%s\n' "未知参数: $1"; echo; usage; exit 1 ;;
