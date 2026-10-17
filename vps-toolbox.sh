@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="1.8"
+VERSION="1.9"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -28,6 +28,13 @@ VLESS_SERVER_URL="https://raw.githubusercontent.com/mozisen/surge/main/vless-ser
 
 # BBR / TCP 调优（Eric86777/vps-tcp-tune）
 NET_TUNE_URL="https://raw.githubusercontent.com/Eric86777/vps-tcp-tune/refs/heads/main/net-tcp-tune.sh"
+
+# WARP (warp-go) —— fscarmen/warp，纯用户态实现，专治「纯 IPv6 机器没有 IPv4」
+WARPGO_URL="https://gitlab.com/fscarmen/warp/-/raw/main/warp-go.sh"
+
+# NAT64 / DNS64 网关（第三方公共服：Mythic Beasts 英国 / Hetzner 德国）
+# 只换 DNS 就能让纯 IPv6 机器访问 IPv4 域名，但对 IPv4 字面量无效
+NAT64_DNS="2a00:1098:2b::1 2a00:1098:2c::1 2a01:4f8:c2c:123f::1"
 
 # 自身在线地址（自安装/自更新时按顺序尝试，第一个成功即止）
 # 可用环境变量覆盖，例如：
@@ -120,18 +127,22 @@ fetch() {   # fetch <url> <outfile>
 # run_remote <显示名> <url> [解释器] [传给脚本的参数...]
 run_remote() {
   local name="$1" url="$2" interp="${3:-bash}"; shift 3 || true
-  local tmp rc=0
-  tmp="$(mktemp "${TMPDIR:-/tmp}/vpstool.XXXXXX.sh")"
+  local tmp rc=0 base dir
+  # 用 URL 里的文件名落盘：部分脚本会读 $0 判断自身名字（例如 warp-go 的自更新）
+  base="$(printf '%s' "${url%%\?*}" | sed 's|.*/||; s|[^A-Za-z0-9._-]|_|g')"
+  [ -n "$base" ] || base="script.sh"
+  dir="$(mktemp -d "${TMPDIR:-/tmp}/vpstool.XXXXXX")"
+  tmp="$dir/$base"
 
   step "下载 $name"
   dim "$url"
   if ! fetch "$url" "$tmp"; then
     err "下载失败（网络不通 / 地址失效 / 被墙）"
-    rm -f "$tmp"; return 1
+    rm -rf "$dir"; return 1
   fi
   if [ ! -s "$tmp" ]; then
     err "下载内容为空"
-    rm -f "$tmp"; return 1
+    rm -rf "$dir"; return 1
   fi
   ok "已下载 $(wc -c < "$tmp") 字节"
 
@@ -148,7 +159,7 @@ run_remote() {
   if [ "$rc" -eq 0 ]; then ok "$name 执行完成"
   elif [ "$rc" -ge 130 ]; then warn "$name 被中断（退出码 $rc）"
   else warn "$name 退出码 $rc，请留意上方输出"; fi
-  rm -f "$tmp"
+  rm -rf "$dir"
   return 0
 }
 
@@ -310,6 +321,101 @@ act_node() {
   if ! confirm "确认继续？"; then warn "已取消"; return 0; fi
 
   run_remote "vless-server.sh" "${VLESS_SERVER_URL}?$(date +%s)" bash
+}
+
+act_warpgo() {
+  step "WARP (warp-go) —— 给纯 IPv6 机器加 IPv4 出口"
+  info "fscarmen/warp 的 warp-go.sh；纯用户态实现，不碰内核，兼容性最好"
+  echo
+  dim "  适用：机器只有 IPv6，但需要 IPv4 下载东西 / 跑脚本 / 访问 IPv4-only 站点"
+  dim "  装完命令：warp-go（之后直接敲 warp-go 进菜单）"
+  echo
+  info "  ${BOLD}菜单里选 2${NC} = 「IPv4 全局 + IPv6 优先」（推荐）"
+  dim "  只加 IPv4 接口，IPv6 保持原生 —— 只有纯 IPv4 的站点才走 WARP"
+  warn "不要选 3~7：那些会把 IPv6 一起劫持，原生 IPv6 性能会崩"
+  echo
+  warn "「全局」会改写 IPv4 默认路由，确认机器上没有别的 IPv4 配置"
+  if ! confirm "确认继续？"; then warn "已取消"; return 0; fi
+
+  run_remote "warp-go.sh" "$WARPGO_URL" bash
+
+  echo
+  step "验证出口"
+  local v4 v6
+  v4=$(curl -4 -s --max-time 10 https://ifconfig.me 2>/dev/null)
+  v6=$(curl -6 -s --max-time 10 https://ifconfig.me 2>/dev/null)
+  if [ -n "$v4" ]; then ok "IPv4 出口: $v4      ${DIM}(应该是 Cloudflare 的地址)${NC}"
+  else warn "IPv4 出口取不到 —— 检查 WARP 是否已启动"; fi
+  if [ -n "$v6" ]; then ok "IPv6 出口: $v6      ${DIM}(应该还是你原来的)${NC}"
+  else dim "  IPv6 出口取不到（这台可能没有 IPv6）"; fi
+  echo
+
+  if command -v warp-go >/dev/null 2>&1; then
+    ok "warp-go 已就绪：$(command -v warp-go)"
+  else
+    dim "  没看到 warp-go 命令，重新登录 SSH 或执行 hash -r 再试"
+  fi
+}
+
+act_nat64() {
+  local a
+  step "NAT64 / DNS64 —— 纯 IPv6 机器的 IPv4 出口（只换 DNS）"
+  info "由第三方 NAT64 网关把 IPv4 目标合成成 IPv6 地址，不用装任何软件"
+  echo
+  dim "  DNS: $NAT64_DNS"
+  dim "  归属: Mythic Beasts（英国 Cambridge） / Hetzner（德国）"
+  echo
+  warn "只对【域名】生效 —— 直接写 IPv4 字面量（如 1.2.3.4）完全无效"
+  warn "所有 IPv4 流量绕英国/德国（延迟 +200ms），依赖第三方个人项目，随时可能失效"
+  dim "  要稳定可靠的 IPv4 出口，请改用「WARP (warp-go)」"
+  echo
+  info "  1) 应用 NAT64 DNS（自动备份原配置）"
+  info "  2) 恢复 / 移除 NAT64 配置"
+  info "  0) 返回"
+  echo
+  ask "  请选择 [0-2]: " a
+  case "${a:-0}" in
+    1)
+      local ts; ts="$(date +%Y%m%d-%H%M%S)"
+      cp -a /etc/resolv.conf "/root/resolv.conf.bak-$ts" 2>/dev/null || true
+      if systemctl is-active --quiet systemd-resolved 2>/dev/null || [ -L /etc/resolv.conf ]; then
+        info "检测到 systemd-resolved —— 用 drop-in 配置（重启后不会被覆盖）"
+        mkdir -p /etc/systemd/resolved.conf.d
+        cat > /etc/systemd/resolved.conf.d/99-nat64.conf <<RESOLVED_EOF
+[Resolve]
+DNS=$NAT64_DNS
+FallbackDNS=223.5.5.5 119.29.29.29
+Domains=~.
+RESOLVED_EOF
+        if systemctl restart systemd-resolved 2>/dev/null; then
+          ok "已应用 /etc/systemd/resolved.conf.d/99-nat64.conf"
+        else
+          err "systemd-resolved 重启失败"; return 1
+        fi
+      else
+        { for n in $NAT64_DNS; do echo "nameserver $n"; done; } > /etc/resolv.conf
+        ok "已写入 /etc/resolv.conf"
+      fi
+      echo
+      info "验证（应该看到 2a00:1098: / 2a01:4f8: 开头的合成地址）："
+      getent ahostsv6 ipv4.google.com 2>/dev/null | awk '{print $1}' | sort -u | head -3 | sed 's/^/    /' \
+        || warn "解析失败 —— 检查这台机器到 IPv6 DNS 的连通性"
+      ;;
+    2)
+      rm -f /etc/systemd/resolved.conf.d/99-nat64.conf
+      systemctl restart systemd-resolved 2>/dev/null || true
+      local f
+      f="$(ls -1t /root/resolv.conf.bak-* 2>/dev/null | head -1)"
+      if [ -n "$f" ] && [ ! -L "$f" ]; then
+        cp -a "$f" /etc/resolv.conf
+        ok "已恢复 /etc/resolv.conf（来自 $f）"
+      else
+        ok "已移除 NAT64 的 resolved 配置"
+      fi
+      resolvectl status 2>/dev/null | head -8 | sed 's/^/    /'
+      ;;
+    *) return 0 ;;
+  esac
 }
 
 act_lite() {
@@ -641,10 +747,14 @@ menu() {
   printf '  %s10)%s NodeQuality  %sIP质量 / 硬件 / 网络 / 回程%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   printf '  %s11)%s TcpQuality   %sTCP 质量测试%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
+  printf '%s\n' "${BOLD}  ── IPv6 / WARP ──────────────────────────────────────────${NC}"
+  printf '  %s12)%s WARP (warp-go)   %s给纯 IPv6 机器加 IPv4 出口%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s13)%s NAT64 / DNS64    %s纯 DNS 方案，无需安装%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  echo
   printf '%s\n' "${BOLD}  ── 其他 ─────────────────────────────────────────────────${NC}"
-  printf '  %s12)%s 查看系统状态汇总\n' "$CYAN" "$NC"
-  printf '  %s13)%s 安装/卸载 %s 快捷命令  %s(之后直接敲 %s 进菜单)%s\n' "$GREEN" "$NC" "$CMD_NAME" "$DIM" "$CMD_NAME" "$NC"
-  printf '  %s14)%s %s重装系统 (DD)%s  %s会清空整台机器%s\n' "$GREEN" "$NC" "$RED" "$NC" "$DIM" "$NC"
+  printf '  %s14)%s 查看系统状态汇总\n' "$CYAN" "$NC"
+  printf '  %s15)%s 安装/卸载 %s 快捷命令  %s(之后直接敲 %s 进菜单)%s\n' "$GREEN" "$NC" "$CMD_NAME" "$DIM" "$CMD_NAME" "$NC"
+  printf '  %s16)%s %s重装系统 (DD)%s  %s会清空整台机器%s\n' "$GREEN" "$NC" "$RED" "$NC" "$DIM" "$NC"
   printf '   %s0)%s 退出\n' "$RED" "$NC"
   echo
   hr
@@ -655,7 +765,7 @@ main() {
   while true; do
     banner
     menu
-    if ! ask "  ${BOLD}请输入选项${NC} [0-14]: " choice; then
+    if ! ask "  ${BOLD}请输入选项${NC} [0-16]: " choice; then
       printf '\n  %s输入结束，退出%s\n\n' "$CYAN" "$NC"; exit 0
     fi
     case "${choice:-}" in
@@ -670,9 +780,11 @@ main() {
       9)  act_lite ;;
       10) act_nodequality ;;
       11) act_tcpquality ;;
-      12) act_status ;;
-      13) act_qc_menu ;;
-      14) act_reinstall ;;
+      12) act_warpgo ;;
+      13) act_nat64 ;;
+      14) act_status ;;
+      15) act_qc_menu ;;
+      16) act_reinstall ;;
       0|q|Q|quit|exit) printf '\n  %s再见%s\n\n' "$CYAN" "$NC"; exit 0 ;;
       "") continue ;;
       *)  err "无效选项：$choice" ;;
@@ -702,6 +814,8 @@ VPS 常用工具箱
   lite          Komari Lite Agent
   nodequality   NodeQuality 测评
   tcpquality    TcpQuality 测试
+  warp          WARP (warp-go) —— 给纯 IPv6 机器加 IPv4 出口
+  nat64         NAT64 / DNS64 —— 纯 DNS 方案，无需安装
   qc            安装/卸载 qc 快捷命令
   install       安装 qc 快捷命令，装完自动进入菜单
   uninstall     卸载 qc 快捷命令
@@ -724,6 +838,8 @@ case "${1:-}" in
   lite|komari)            act_lite ;;
   nodequality|nq)         act_nodequality ;;
   tcpquality|tq)          act_tcpquality ;;
+  warp|warpgo|warp-go)    act_warpgo ;;
+  nat64|dns64|dns)        act_nat64 ;;
   qc|cmd)                 act_qc_menu ;;
   install)
     # 装完直接进入菜单，省得再敲一次 qc
