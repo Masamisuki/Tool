@@ -16,19 +16,18 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="1.7"
+VERSION="1.8"
 
 # 安装后的命令名
 CMD_NAME="qc"
 INSTALL_PATH="/usr/local/bin/${CMD_NAME}"
 
-# 节点搭建：PSM (Proxy Stack Manager) —— JQ 的 proxy-stack
-# 安装器自带依赖引导（缺 curl/git 会自动补装），装完用 psm 打开菜单，重跑即更新
-PSM_URL="https://psm.jinqians.com"
+# 节点搭建：mozisen/vless-server
+# 一键部署 VLESS / Reality / Hysteria2 等节点；重跑本项即可重新配置
+VLESS_SERVER_URL="https://raw.githubusercontent.com/mozisen/surge/main/vless-server.sh"
 
 # BBR / TCP 调优（Eric86777/vps-tcp-tune）
 NET_TUNE_URL="https://raw.githubusercontent.com/Eric86777/vps-tcp-tune/refs/heads/main/net-tcp-tune.sh"
-NET_ALIAS_URL="https://raw.githubusercontent.com/Eric86777/vps-tcp-tune/refs/heads/main/install-alias.sh"
 
 # 自身在线地址（自安装/自更新时按顺序尝试，第一个成功即止）
 # 可用环境变量覆盖，例如：
@@ -283,46 +282,6 @@ act_net_tune() {
   info "以后随时输入 ${BOLD}bbr${NC} 即可再次打开调优菜单"
 }
 
-act_alias() {
-  local a
-  step "bbr 快捷命令 / 官方别名管理"
-  if command -v bbr >/dev/null 2>&1; then
-    ok "bbr 当前可用：$(command -v bbr)"
-  else
-    warn "bbr 当前不可用"
-  fi
-  echo
-  info "  1) 安装 / 修复 bbr 命令  ${DIM}(推荐：装完立刻可用，无需 source)${NC}"
-  info "  2) 安装官方别名           ${DIM}(写入 ~/.bashrc，需 source 或重连 SSH)${NC}"
-  info "  3) 卸载官方别名"
-  info "  4) 卸载 bbr 命令"
-  info "  0) 返回"
-  echo
-  ask "  请选择 [0-4]: " a
-  case "${a:-0}" in
-    1)
-      if install_bbr_cmd; then
-        ok "已安装 /usr/local/bin/bbr"
-        info "现在直接敲 ${BOLD}bbr${NC} 试试"
-      fi
-      ;;
-    2)
-      run_remote "官方别名安装" "${NET_ALIAS_URL}?$(date +%s)" bash install
-      echo
-      dim "提示：执行 source ~/.bashrc（或重连 SSH）后生效"
-      ;;
-    3) run_remote "官方别名卸载" "${NET_ALIAS_URL}?$(date +%s)" bash uninstall ;;
-    4)
-      if [ -f /usr/local/bin/bbr ]; then
-        rm -f /usr/local/bin/bbr && ok "已删除 /usr/local/bin/bbr"
-      else
-        info "/usr/local/bin/bbr 不存在"
-      fi
-      ;;
-    *) return 0 ;;
-  esac
-}
-
 act_tcpfit() {
   step "tcpfit —— 单机 TCP 精细调优"
   info "实测推导参数，不使用抄来的固定值；交互式菜单"
@@ -341,23 +300,16 @@ act_keysh() {
 }
 
 act_node() {
-  step "节点搭建 —— PSM (Proxy Stack Manager)"
-  info "JQ 的 proxy-stack，支持 VLESS / Hysteria2 / TUIC / Snell 等多种协议"
+  step "节点搭建 —— mozisen/vless-server"
+  info "一键部署 VLESS / Reality / Hysteria2 等节点的脚本"
   echo
-  dim "  安装器自带依赖引导：缺 curl / git 会自动补装"
-  dim "  装完输入 psm 打开菜单；重跑同一条命令即可更新"
+  dim "  源：github.com/mozisen/surge"
+  dim "  重跑本项即可重新配置 / 重新安装"
   echo
-  warn "会占用 80/443 等端口并写 systemd 服务，确认机器上没有冲突的服务"
+  warn "会占用端口并写 systemd 服务，确认机器上没有冲突的服务"
   if ! confirm "确认继续？"; then warn "已取消"; return 0; fi
 
-  run_remote "PSM 安装器" "$PSM_URL" bash
-
-  echo
-  if command -v psm >/dev/null 2>&1; then
-    ok "安装完成，之后输入 ${BOLD}psm${NC} 打开菜单"
-  else
-    dim "  如果没看到 psm 命令，重新登录 SSH 或执行 hash -r 再试"
-  fi
+  run_remote "vless-server.sh" "${VLESS_SERVER_URL}?$(date +%s)" bash
 }
 
 act_lite() {
@@ -679,21 +631,20 @@ menu() {
   printf '%s\n' "${BOLD}  ── 网络调优 ─────────────────────────────────────────────${NC}"
   printf '   %s5)%s BBR v3 优化      %snet-tcp-tune 综合调优（菜单）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   printf '   %s6)%s tcpfit           %sTCP 精细调优（实测推导）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '   %s7)%s 管理 bbr 快捷命令 / 官方别名\n' "$GREEN" "$NC"
   echo
   printf '%s\n' "${BOLD}  ── 安全 / 代理 / 监控 ───────────────────────────────────${NC}"
-  printf '   %s8)%s key.sh           %sSSH 密钥登录加固%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '   %s9)%s 节点搭建          %sPSM (Proxy Stack Manager)%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '  %s10)%s Komari 探针安装    %sLite Agent%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s7)%s key.sh           %sSSH 密钥登录加固%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s8)%s 节点搭建          %svless-server 一键节点%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s9)%s Komari 探针安装    %sLite Agent%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
   printf '%s\n' "${BOLD}  ── 测评 ─────────────────────────────────────────────────${NC}"
-  printf '  %s11)%s NodeQuality  %sIP质量 / 硬件 / 网络 / 回程%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '  %s12)%s TcpQuality   %sTCP 质量测试%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s10)%s NodeQuality  %sIP质量 / 硬件 / 网络 / 回程%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s11)%s TcpQuality   %sTCP 质量测试%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
   printf '%s\n' "${BOLD}  ── 其他 ─────────────────────────────────────────────────${NC}"
-  printf '  %s13)%s 查看系统状态汇总\n' "$CYAN" "$NC"
-  printf '  %s14)%s 安装/卸载 %s 快捷命令  %s(之后直接敲 %s 进菜单)%s\n' "$GREEN" "$NC" "$CMD_NAME" "$DIM" "$CMD_NAME" "$NC"
-  printf '  %s15)%s %s重装系统 (DD)%s  %s会清空整台机器%s\n' "$GREEN" "$NC" "$RED" "$NC" "$DIM" "$NC"
+  printf '  %s12)%s 查看系统状态汇总\n' "$CYAN" "$NC"
+  printf '  %s13)%s 安装/卸载 %s 快捷命令  %s(之后直接敲 %s 进菜单)%s\n' "$GREEN" "$NC" "$CMD_NAME" "$DIM" "$CMD_NAME" "$NC"
+  printf '  %s14)%s %s重装系统 (DD)%s  %s会清空整台机器%s\n' "$GREEN" "$NC" "$RED" "$NC" "$DIM" "$NC"
   printf '   %s0)%s 退出\n' "$RED" "$NC"
   echo
   hr
@@ -704,7 +655,7 @@ main() {
   while true; do
     banner
     menu
-    if ! ask "  ${BOLD}请输入选项${NC} [0-15]: " choice; then
+    if ! ask "  ${BOLD}请输入选项${NC} [0-14]: " choice; then
       printf '\n  %s输入结束，退出%s\n\n' "$CYAN" "$NC"; exit 0
     fi
     case "${choice:-}" in
@@ -714,15 +665,14 @@ main() {
       4)  act_bootstrap ;;
       5)  act_net_tune ;;
       6)  act_tcpfit ;;
-      7)  act_alias ;;
-      8)  act_keysh ;;
-      9)  act_node ;;
-      10) act_lite ;;
-      11) act_nodequality ;;
-      12) act_tcpquality ;;
-      13) act_status ;;
-      14) act_qc_menu ;;
-      15) act_reinstall ;;
+      7)  act_keysh ;;
+      8)  act_node ;;
+      9)  act_lite ;;
+      10) act_nodequality ;;
+      11) act_tcpquality ;;
+      12) act_status ;;
+      13) act_qc_menu ;;
+      14) act_reinstall ;;
       0|q|Q|quit|exit) printf '\n  %s再见%s\n\n' "$CYAN" "$NC"; exit 0 ;;
       "") continue ;;
       *)  err "无效选项：$choice" ;;
@@ -747,9 +697,8 @@ VPS 常用工具箱
   bootstrap     一键基础初始化 (deps + tz + journal)
   tunenet       net-tcp-tune 调优
   tcpfit        tcpfit 调优
-  alias         管理 bbr 快捷命令 / 官方别名
   key           SSH 加固 (key.sh)
-  node          节点搭建 (PSM / proxy-stack)
+  node          节点搭建 (mozisen/vless-server)
   lite          Komari Lite Agent
   nodequality   NodeQuality 测评
   tcpquality    TcpQuality 测试
@@ -770,9 +719,8 @@ case "${1:-}" in
   bootstrap|init)         act_bootstrap ;;
   tunenet|bbr)            act_net_tune ;;
   tcpfit)                 act_tcpfit ;;
-  alias)                  act_alias ;;
   key|key.sh)             act_keysh ;;
-  node|psm)               act_node ;;
+  node|vless)             act_node ;;
   lite|komari)            act_lite ;;
   nodequality|nq)         act_nodequality ;;
   tcpquality|tq)          act_tcpquality ;;
