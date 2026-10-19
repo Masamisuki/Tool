@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="1.9"
+VERSION="2.0"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -440,6 +440,109 @@ act_tcpquality() {
     bash
 }
 
+act_iperf3() {
+  step "iperf3 服务端 —— 一键启动 / 查看状态"
+  info "给其他机器测速用；没装会自动装，没启动会自动启动"
+  echo
+
+  # ---------- ① 依赖检查 ----------
+  if ! command -v iperf3 >/dev/null 2>&1; then
+    info "iperf3 未安装，正在安装 ..."
+    if command -v apt-get >/dev/null 2>&1; then
+      apt-get update -qq >/dev/null 2>&1
+      DEBIAN_FRONTEND=noninteractive apt-get install -y -qq iperf3 >/dev/null 2>&1
+    elif command -v dnf >/dev/null 2>&1; then
+      dnf install -y -q iperf3 >/dev/null 2>&1
+    elif command -v yum >/dev/null 2>&1; then
+      yum install -y -q iperf3 >/dev/null 2>&1
+    elif command -v apk >/dev/null 2>&1; then
+      apk add --no-cache iperf3 >/dev/null 2>&1
+    fi
+    if ! command -v iperf3 >/dev/null 2>&1; then
+      err "自动安装失败，请手动装：apt install -y iperf3"
+      return 1
+    fi
+    ok "已安装：$(iperf3 --version 2>&1 | head -1)"
+  else
+    ok "iperf3 已安装：$(iperf3 --version 2>&1 | head -1)"
+  fi
+  echo
+
+  # ---------- ② 当前状态 ----------
+  local running=0 curport=""
+  if pgrep -x iperf3 >/dev/null 2>&1; then
+    running=1
+    curport=$(ss -tlnp 2>/dev/null | grep iperf3 | head -1 | sed -E 's/.*:([0-9]+)[[:space:]].*/\1/')
+    ok "iperf3 已在运行（PID $(pgrep -x iperf3 | tr '\n' ' ')，端口 ${curport:-未知}）"
+    ss -tlnp 2>/dev/null | grep iperf3 | sed 's/^/    /'
+  else
+    info "iperf3 当前未运行"
+  fi
+  echo
+
+  # ---------- ③ 选端口 ----------
+  local port
+  if ! ask "  监听端口 [默认 ${curport:-5201}]: " port; then
+    warn "输入结束，已取消"; return 0
+  fi
+  port="${port:-${curport:-5201}}"
+  if ! [ "$port" -ge 1 ] 2>/dev/null || [ "$port" -gt 65535 ] 2>/dev/null; then
+    err "端口不合法：$port"; return 1
+  fi
+
+  # ---------- ④ 启动 / 重启 ----------
+  if [ "$running" = 1 ]; then
+    if [ -n "$curport" ] && [ "$curport" = "$port" ]; then
+      ok "已经在 $port 端口运行，无需重启"
+    else
+      info "当前在 ${curport:-未知} 端口，要换到 $port 吗？"
+      if confirm "重启 iperf3 到端口 $port？"; then
+        pkill -x iperf3 2>/dev/null || true
+        sleep 1
+        iperf3 -s -D -p "$port" >/dev/null 2>&1 || true
+      else
+        dim "  保持不变"; return 0
+      fi
+    fi
+  else
+    info "正在启动 ..."
+    iperf3 -s -D -p "$port" >/dev/null 2>&1 || true
+  fi
+  sleep 1
+
+  # ---------- ⑤ 验证 + 用法 ----------
+  if pgrep -x iperf3 >/dev/null 2>&1; then
+    echo
+    ok "iperf3 服务端已启动"
+    ss -tlnp 2>/dev/null | grep iperf3 | sed 's/^/    /'
+
+    echo
+    info "防火墙放行（如果开了防火墙）："
+    dim "  iptables -I INPUT -p tcp --dport $port -j ACCEPT"
+    dim "  nft add rule inet filter input tcp dport $port accept"
+    dim "  ⚠️ 云安全组也要放行 TCP $port（控制台里加）"
+
+    echo
+    local myip
+    if [ "$HAVE_CURL" = 1 ]; then
+      myip=$(curl -4 -s --max-time 5 https://ifconfig.me 2>/dev/null)
+    elif [ "$HAVE_WGET" = 1 ]; then
+      myip=$(wget -q -T 5 -t 1 -O - https://ifconfig.me 2>/dev/null)
+    fi
+    myip="${myip:-<本机IP>}"
+    info "测速命令（在【另一台机器】上跑）："
+    dim "  iperf3 -c $myip -p $port -t 30 -P 8 -R      # 下载方向（服务器→你）"
+    dim "  iperf3 -c $myip -p $port -t 30 -P 8         # 上传方向（你→服务器）"
+    echo
+    dim "  -P 8 是多流（单流受 TCP 拥塞影响，测不准）；-R 是反向"
+    dim "  停服务: pkill -x iperf3"
+  else
+    err "启动失败 —— 端口 $port 可能被占用"
+    ss -tlnp 2>/dev/null | grep ":$port " | sed 's/^/    /' || true
+    return 1
+  fi
+}
+
 act_status() {
   step "系统状态汇总"
   local cc qd
@@ -453,6 +556,32 @@ act_status() {
   info "时区    : $(timedatectl show -p Timezone --value 2>/dev/null || cat /etc/timezone 2>/dev/null || echo 未知)"
   info "当前时间: $(date '+%Y-%m-%d %H:%M:%S %Z')"
   info "运行时长: $(uptime -p 2>/dev/null || uptime)"
+  hr
+  info "网络地址:"
+  local v4 v6 p4 p6 gw4 gw6 vfilter
+  # 过滤掉 docker / 网桥 / 容器 等虚拟网卡，只留真实对外网卡
+  vfilter='^(docker|br-|veth|virbr|cni|flannel|cali|kube|podman|lxc)'
+  v4=$(ip -4 -o addr show scope global 2>/dev/null | awk -v re="$vfilter" '$2 !~ re {print $4}' | tr '\n' ' ' | sed 's/ $//')
+  v6=$(ip -6 -o addr show scope global 2>/dev/null | awk -v re="$vfilter" '$2 !~ re {print $4}' | tr '\n' ' ' | sed 's/ $//')
+  gw4=$(ip -4 route show default 2>/dev/null | awk '{print $3}' | head -1)
+  gw6=$(ip -6 route show default 2>/dev/null | awk '{print $3}' | head -1)
+  printf '  %s本地 IPv4%s : %s\n' "$DIM" "$NC" "${v4:-无}"
+  printf '  %s本地 IPv6%s : %s\n' "$DIM" "$NC" "${v6:-无}"
+  printf '  %s默认网关%s : IPv4 %s   IPv6 %s\n' "$DIM" "$NC" "${gw4:-无}" "${gw6:-无}"
+  # 出口 IP：best effort，各 5 秒超时，拿不到就写"取不到"
+  if command -v curl >/dev/null 2>&1; then
+    p4=$(curl -4 -s --max-time 5 https://ifconfig.me 2>/dev/null)
+    p6=$(curl -6 -s --max-time 5 https://ifconfig.me 2>/dev/null)
+  elif command -v wget >/dev/null 2>&1; then
+    p4=$(wget -q -T 5 -t 1 -O - https://ifconfig.me 2>/dev/null)
+    p6=$(wget -q -T 5 -t 1 -O - https://ifconfig.me 2>/dev/null)
+  fi
+  if [ "$HAVE_CURL" = 1 ] || [ "$HAVE_WGET" = 1 ]; then
+    printf '  %s出口 IPv4%s : %s\n' "$DIM" "$NC" "${p4:-取不到（可能没有 IPv4 出口）}"
+    printf '  %s出口 IPv6%s : %s\n' "$DIM" "$NC" "${p6:-取不到（可能没有 IPv6 出口）}"
+  else
+    dim "  出口 IP: 需要 curl 或 wget（可选 1 装依赖）"
+  fi
   hr
   cc=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo '?')
   qd=$(sysctl -n net.core.default_qdisc 2>/dev/null || echo '?')
@@ -746,15 +875,16 @@ menu() {
   printf '%s\n' "${BOLD}  ── 测评 ─────────────────────────────────────────────────${NC}"
   printf '  %s10)%s NodeQuality  %sIP质量 / 硬件 / 网络 / 回程%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   printf '  %s11)%s TcpQuality   %sTCP 质量测试%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s12)%s iperf3 服务端 %s没装/没启动都会自动处理%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
   printf '%s\n' "${BOLD}  ── IPv6 / WARP ──────────────────────────────────────────${NC}"
-  printf '  %s12)%s WARP (warp-go)   %s给纯 IPv6 机器加 IPv4 出口%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '  %s13)%s NAT64 / DNS64    %s纯 DNS 方案，无需安装%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s13)%s WARP (warp-go)   %s给纯 IPv6 机器加 IPv4 出口%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s14)%s NAT64 / DNS64    %s纯 DNS 方案，无需安装%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
   printf '%s\n' "${BOLD}  ── 其他 ─────────────────────────────────────────────────${NC}"
-  printf '  %s14)%s 查看系统状态汇总\n' "$CYAN" "$NC"
-  printf '  %s15)%s 安装/卸载 %s 快捷命令  %s(之后直接敲 %s 进菜单)%s\n' "$GREEN" "$NC" "$CMD_NAME" "$DIM" "$CMD_NAME" "$NC"
-  printf '  %s16)%s %s重装系统 (DD)%s  %s会清空整台机器%s\n' "$GREEN" "$NC" "$RED" "$NC" "$DIM" "$NC"
+  printf '  %s15)%s 查看系统状态汇总 %s(含 IPv4 / IPv6 地址)%s\n' "$CYAN" "$NC" "$DIM" "$NC"
+  printf '  %s16)%s 安装/卸载 %s 快捷命令  %s(之后直接敲 %s 进菜单)%s\n' "$GREEN" "$NC" "$CMD_NAME" "$DIM" "$CMD_NAME" "$NC"
+  printf '  %s17)%s %s重装系统 (DD)%s  %s会清空整台机器%s\n' "$GREEN" "$NC" "$RED" "$NC" "$DIM" "$NC"
   printf '   %s0)%s 退出\n' "$RED" "$NC"
   echo
   hr
@@ -765,7 +895,7 @@ main() {
   while true; do
     banner
     menu
-    if ! ask "  ${BOLD}请输入选项${NC} [0-16]: " choice; then
+    if ! ask "  ${BOLD}请输入选项${NC} [0-17]: " choice; then
       printf '\n  %s输入结束，退出%s\n\n' "$CYAN" "$NC"; exit 0
     fi
     case "${choice:-}" in
@@ -780,11 +910,12 @@ main() {
       9)  act_lite ;;
       10) act_nodequality ;;
       11) act_tcpquality ;;
-      12) act_warpgo ;;
-      13) act_nat64 ;;
-      14) act_status ;;
-      15) act_qc_menu ;;
-      16) act_reinstall ;;
+      12) act_iperf3 ;;
+      13) act_warpgo ;;
+      14) act_nat64 ;;
+      15) act_status ;;
+      16) act_qc_menu ;;
+      17) act_reinstall ;;
       0|q|Q|quit|exit) printf '\n  %s再见%s\n\n' "$CYAN" "$NC"; exit 0 ;;
       "") continue ;;
       *)  err "无效选项：$choice" ;;
@@ -814,6 +945,7 @@ VPS 常用工具箱
   lite          Komari Lite Agent
   nodequality   NodeQuality 测评
   tcpquality    TcpQuality 测试
+  iperf3        iperf3 服务端（没装自动装，没启动自动启动）
   warp          WARP (warp-go) —— 给纯 IPv6 机器加 IPv4 出口
   nat64         NAT64 / DNS64 —— 纯 DNS 方案，无需安装
   qc            安装/卸载 qc 快捷命令
@@ -838,6 +970,7 @@ case "${1:-}" in
   lite|komari)            act_lite ;;
   nodequality|nq)         act_nodequality ;;
   tcpquality|tq)          act_tcpquality ;;
+  iperf3|iperf)           act_iperf3 ;;
   warp|warpgo|warp-go)    act_warpgo ;;
   nat64|dns64|dns)        act_nat64 ;;
   qc|cmd)                 act_qc_menu ;;
