@@ -47,7 +47,7 @@ http-response-jq (?i)^https:\/\/edith\.(?:xiaohongshu|rnote)\.com\/api\/sns\/v4\
 
 [小红书]移除详情页感兴趣的人 = type=http-response, pattern=(?i)^https:\/\/edith\.(?:xiaohongshu|rnote)\.com\/api\/sns\/v5\/recommend\/user\/follow_recommend\?, script-path=https://rucu6.pages.dev/Scripts/xiaohongshu.js, requires-body=true
 
-{{{rednote-feedtime}}}[小红书]首页笔记标题前显示时间 = type=http-response, pattern=(?i)^https:\/\/(?:edith|rec|www)\.(?:xiaohongshu|rnote)\.com\/api\/sns\/v6\/homefeed\?, script-path=https://loon.103516.xyz/Script/RedNote/rednote-feedtime.js, requires-body=true
+{{{rednote-feedtime}}}[小红书]首页笔记标题前显示时间 = type=http-response, pattern=(?i)^https:\/\/(?:edith|rec|www)\.(?:xiaohongshu|rnote)\.com\/api\/sns\/v6\/homefeed\?, script-path=https://loon.103516.xyz/Script/RedNote/RedNote.feedtime.js, requires-body=true
 
 [小红书]移除信息流广告 = type=http-response, pattern=(?i)^https:\/\/(?:edith|rec|www)\.(?:xiaohongshu|rnote)\.com\/api\/sns\/v4\/followfeed\?, script-path=https://rucu6.pages.dev/Scripts/xiaohongshu.js, requires-body=true
 

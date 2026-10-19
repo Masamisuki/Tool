@@ -13,7 +13,7 @@
 [Script]
 [X_Web]去除广告 = type=http-response, pattern=(?i)^https?:\/\/x\.com\/i\/api\/graphql\/[^\/]+\/(HomeTimeline|HomeLatestTimeline|TweetDetail), script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/X/X_ads.js, requires-body=true
 
-[X_Web]自定义首页顶部标签 = type=http-response, pattern=(?i)^https?:\/\/x\.com\/i\/api\/graphql\/[^\/]+\/PinnedTimelines\?, script-path=https://loon.103516.xyz/Script/X_Web/XWebEnhance.js, requires-body=true, argument=pinned_tags="{{{pinned_tags}}}"
+[X_Web]自定义首页顶部标签 = type=http-response, pattern=(?i)^https?:\/\/x\.com\/i\/api\/graphql\/[^\/]+\/PinnedTimelines\?, script-path=https://loon.103516.xyz/Script/X_Web/XWeb.enhance.js, requires-body=true, argument=pinned_tags="{{{pinned_tags}}}"
 
 [MITM]
 hostname = %APPEND% x.com

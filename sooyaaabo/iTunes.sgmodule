@@ -12,7 +12,7 @@
 [Script]
 {{{iTunes-chxm1023}}}[iTunes]会员Crack@chxm1023 = type=http-response, pattern=(?i)^https?:\/\/buy\.itunes\.apple\.com\/verifyReceipt$, script-path=https://raw.githubusercontent.com/chxm1023/Rewrite/main/iTunes.js, requires-body=true
 
-{{{iTunes-ddgksf2013}}}[iTunes]会员Crack@ddgksf2013 = type=http-response, pattern=(?i)^https?:\/\/buy\.itunes\.apple\.com\/verifyReceipt$, script-path=https://loon.103516.xyz/Script/iTunes/iTunes-ddgksf2013.js, requires-body=true
+{{{iTunes-ddgksf2013}}}[iTunes]会员Crack@ddgksf2013 = type=http-response, pattern=(?i)^https?:\/\/buy\.itunes\.apple\.com\/verifyReceipt$, script-path=https://loon.103516.xyz/Script/iTunes/iTunes.ddgksf2013.js, requires-body=true
 
 {{{iTunes-Guding88}}}[iTunes]会员Crack@Guding88 = type=http-response, pattern=(?i)^https?:\/\/buy\.itunes\.apple\.com\/verifyReceipt$, script-path=https://raw.githubusercontent.com/Guding88/Script/main/APPheji_iTunes.js, requires-body=true
 
