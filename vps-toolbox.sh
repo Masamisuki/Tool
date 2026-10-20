@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="2.0"
+VERSION="2.1"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -35,6 +35,9 @@ WARPGO_URL="https://gitlab.com/fscarmen/warp/-/raw/main/warp-go.sh"
 # NAT64 / DNS64 网关（第三方公共服：Mythic Beasts 英国 / Hetzner 德国）
 # 只换 DNS 就能让纯 IPv6 机器访问 IPv4 域名，但对 IPv4 字面量无效
 NAT64_DNS="2a00:1098:2b::1 2a00:1098:2c::1 2a01:4f8:c2c:123f::1"
+
+# Docker 官方安装脚本
+DOCKER_GET_URL="https://get.docker.com"
 
 # 自身在线地址（自安装/自更新时按顺序尝试，第一个成功即止）
 # 可用环境变量覆盖，例如：
@@ -543,6 +546,94 @@ act_iperf3() {
   fi
 }
 
+act_docker() {
+  step "Docker 安装 —— 容器化应用的前置依赖"
+  if command -v docker >/dev/null 2>&1; then
+    ok "Docker 已安装：$(docker --version 2>/dev/null)"
+    docker compose version 2>/dev/null | sed 's/^/    /' || true
+    docker info --format '    数据目录: {{.DockerRootDir}}   存储驱动: {{.Driver}}' 2>/dev/null || true
+    echo
+    if ! confirm "已安装，是否重新安装 / 更新？"; then
+      info "保持现状"; return 0
+    fi
+    echo
+  fi
+
+  info "将使用 Docker 官方脚本：$DOCKER_GET_URL"
+  dim "  自动配置 apt/yum 源，安装 docker-ce + compose 插件 + buildx"
+  dim "  国内机器如果卡住，先在「1) 安装基础依赖」里确认网络，或自行配镜像源"
+  echo
+  if ! confirm "确认安装？"; then warn "已取消"; return 0; fi
+
+  local tmp
+  tmp="$(mktemp "${TMPDIR:-/tmp}/get-docker.XXXXXX.sh")"
+  step "下载安装脚本"
+  if ! fetch "$DOCKER_GET_URL" "$tmp"; then
+    err "下载失败（$DOCKER_GET_URL 不通）"; rm -f "$tmp"; return 1
+  fi
+  [ -s "$tmp" ] || { err "下载内容为空"; rm -f "$tmp"; return 1; }
+  ok "已下载 $(wc -c < "$tmp") 字节"
+
+  step "执行安装（约 1-3 分钟）"
+  hr
+  if [ "$HAVE_TTY" = 1 ]; then
+    sh "$tmp" < /dev/tty
+  else
+    sh "$tmp"
+  fi
+  local rc=$?
+  hr
+  rm -f "$tmp"
+
+  echo
+  if command -v docker >/dev/null 2>&1; then
+    ok "$(docker --version 2>/dev/null)"
+    printf '  服务状态: '; systemctl is-active docker 2>/dev/null || echo unknown
+    docker compose version 2>/dev/null | sed 's/^/  /' || dim "  (compose 插件可能需单独装)"
+    if [ -z "$(docker ps -q 2>/dev/null)" ] && ! docker info >/dev/null 2>&1; then
+      warn "docker 命令在但守护进程没起来，试：systemctl enable --now docker"
+    fi
+  else
+    err "安装失败（退出码 $rc）"
+    dim "  排查：确认能访问 download.docker.com，或手动执行"
+    dim "  curl -fsSL $DOCKER_GET_URL | sh"
+    return 1
+  fi
+}
+
+act_flyx() {
+  step "FLYX 面板 —— 转发 + 节点编排（Xray / sing-box / Snell）"
+  echo
+  info "执行作者提供的原始命令（未做任何修改）："
+  echo
+  dim "  curl -L https://github.com/kure29/flyx/releases/latest/download/panel_install.sh -o panel_install.sh && chmod +x panel_install.sh && ./panel_install.sh"
+  echo
+
+  if ! command -v docker >/dev/null 2>&1; then
+    warn "未检测到 Docker —— 这个脚本会自己要求 Docker"
+    dim "  可以先选「16) Docker 安装」"
+    echo
+  fi
+
+  dim "  当前目录: $(pwd)（panel_install.sh 会以它为部署目录）"
+  echo
+  if ! confirm "确认执行？"; then warn "已取消"; return 0; fi
+  echo
+
+  if [ "$HAVE_TTY" = 1 ]; then
+    bash -c 'curl -L https://github.com/kure29/flyx/releases/latest/download/panel_install.sh -o panel_install.sh && chmod +x panel_install.sh && ./panel_install.sh' < /dev/tty
+  else
+    bash -c 'curl -L https://github.com/kure29/flyx/releases/latest/download/panel_install.sh -o panel_install.sh && chmod +x panel_install.sh && ./panel_install.sh'
+  fi
+
+  echo
+  info "装完记得："
+  dim "  ① 访问 http://<本机IP>:6366"
+  dim "  ② 默认账号 admin_user / admin_user —— 立刻改密码"
+  dim "  ③ 设置 → 基本 → 面板后端地址 = http://<本机IP>:6365（是 6365，不是 6366）"
+  dim "  ④ 节点页新建节点 → 安装 → 复制命令到节点机 root 执行"
+}
+
 act_status() {
   step "系统状态汇总"
   local cc qd
@@ -881,10 +972,14 @@ menu() {
   printf '  %s13)%s WARP (warp-go)   %s给纯 IPv6 机器加 IPv4 出口%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   printf '  %s14)%s NAT64 / DNS64    %s纯 DNS 方案，无需安装%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
+  printf '%s\n' "${BOLD}  ── 面板 / 容器 ──────────────────────────────────────────${NC}"
+  printf '  %s15)%s FLYX 面板        %s转发 + 节点编排（Xray/sing-box/Snell）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s16)%s Docker 安装      %s官方脚本（容器化应用的前置）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  echo
   printf '%s\n' "${BOLD}  ── 其他 ─────────────────────────────────────────────────${NC}"
-  printf '  %s15)%s 查看系统状态汇总 %s(含 IPv4 / IPv6 地址)%s\n' "$CYAN" "$NC" "$DIM" "$NC"
-  printf '  %s16)%s 安装/卸载 %s 快捷命令  %s(之后直接敲 %s 进菜单)%s\n' "$GREEN" "$NC" "$CMD_NAME" "$DIM" "$CMD_NAME" "$NC"
-  printf '  %s17)%s %s重装系统 (DD)%s  %s会清空整台机器%s\n' "$GREEN" "$NC" "$RED" "$NC" "$DIM" "$NC"
+  printf '  %s17)%s 查看系统状态汇总 %s(含 IPv4 / IPv6 地址)%s\n' "$CYAN" "$NC" "$DIM" "$NC"
+  printf '  %s18)%s 安装/卸载 %s 快捷命令  %s(之后直接敲 %s 进菜单)%s\n' "$GREEN" "$NC" "$CMD_NAME" "$DIM" "$CMD_NAME" "$NC"
+  printf '  %s19)%s %s重装系统 (DD)%s  %s会清空整台机器%s\n' "$GREEN" "$NC" "$RED" "$NC" "$DIM" "$NC"
   printf '   %s0)%s 退出\n' "$RED" "$NC"
   echo
   hr
@@ -895,7 +990,7 @@ main() {
   while true; do
     banner
     menu
-    if ! ask "  ${BOLD}请输入选项${NC} [0-17]: " choice; then
+    if ! ask "  ${BOLD}请输入选项${NC} [0-19]: " choice; then
       printf '\n  %s输入结束，退出%s\n\n' "$CYAN" "$NC"; exit 0
     fi
     case "${choice:-}" in
@@ -913,9 +1008,11 @@ main() {
       12) act_iperf3 ;;
       13) act_warpgo ;;
       14) act_nat64 ;;
-      15) act_status ;;
-      16) act_qc_menu ;;
-      17) act_reinstall ;;
+      15) act_flyx ;;
+      16) act_docker ;;
+      17) act_status ;;
+      18) act_qc_menu ;;
+      19) act_reinstall ;;
       0|q|Q|quit|exit) printf '\n  %s再见%s\n\n' "$CYAN" "$NC"; exit 0 ;;
       "") continue ;;
       *)  err "无效选项：$choice" ;;
@@ -948,6 +1045,8 @@ VPS 常用工具箱
   iperf3        iperf3 服务端（没装自动装，没启动自动启动）
   warp          WARP (warp-go) —— 给纯 IPv6 机器加 IPv4 出口
   nat64         NAT64 / DNS64 —— 纯 DNS 方案，无需安装
+  flyx          FLYX 面板 —— 转发 + 节点编排（需 Docker）
+  docker        安装 Docker（官方脚本）
   qc            安装/卸载 qc 快捷命令
   install       安装 qc 快捷命令，装完自动进入菜单
   uninstall     卸载 qc 快捷命令
@@ -973,6 +1072,8 @@ case "${1:-}" in
   iperf3|iperf)           act_iperf3 ;;
   warp|warpgo|warp-go)    act_warpgo ;;
   nat64|dns64|dns)        act_nat64 ;;
+  flyx|flvx|panel)        act_flyx ;;
+  docker|dockerd)         act_docker ;;
   qc|cmd)                 act_qc_menu ;;
   install)
     # 装完直接进入菜单，省得再敲一次 qc
