@@ -16,15 +16,12 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="2.2"
+VERSION="2.3"
 
 # 安装后的命令名
 CMD_NAME="qc"
 INSTALL_PATH="/usr/local/bin/${CMD_NAME}"
 
-# 节点搭建：mozisen/vless-server
-# 一键部署 VLESS / Reality / Hysteria2 等节点；重跑本项即可重新配置
-VLESS_SERVER_URL="https://raw.githubusercontent.com/mozisen/surge/main/vless-server.sh"
 
 # BBR / TCP 调优（Eric86777/vps-tcp-tune）
 NET_TUNE_URL="https://raw.githubusercontent.com/Eric86777/vps-tcp-tune/refs/heads/main/net-tcp-tune.sh"
@@ -313,17 +310,36 @@ act_keysh() {
     bash
 }
 
-act_node() {
-  step "节点搭建 —— mozisen/vless-server"
-  info "一键部署 VLESS / Reality / Hysteria2 等节点的脚本"
+act_embyproxy() {
+  step "emby-proxy —— Emby HTTPS 反代管理器（Caddy / Nginx）"
+  info "给 Emby 源站快速套一层域名 HTTPS 反代，支持多个入口和同域名多路径"
   echo
-  dim "  源：github.com/mozisen/surge"
-  dim "  重跑本项即可重新配置 / 重新安装"
+  info "执行作者提供的原始命令（未做任何修改）："
   echo
-  warn "会占用端口并写 systemd 服务，确认机器上没有冲突的服务"
-  if ! confirm "确认继续？"; then warn "已取消"; return 0; fi
+  dim "  bash <(curl -fsSL https://raw.githubusercontent.com/wuuduf/emby-proxy/main/setup-emby-proxy.sh)"
+  echo
+  dim "  装完可用短命令: ep"
+  dim "  要求: Debian/Ubuntu + systemd，安全组放行 80/443，域名 A 记录指向本机"
+  dim "  脚本只允许固定源站，不会被当成通用代理"
+  echo
+  if ! confirm "确认执行？"; then warn "已取消"; return 0; fi
+  echo
 
-  run_remote "vless-server.sh" "${VLESS_SERVER_URL}?$(date +%s)" bash
+  if [ "$HAVE_TTY" = 1 ]; then
+    bash -c 'bash <(curl -fsSL https://raw.githubusercontent.com/wuuduf/emby-proxy/main/setup-emby-proxy.sh)' < /dev/tty
+  else
+    bash -c 'bash <(curl -fsSL https://raw.githubusercontent.com/wuuduf/emby-proxy/main/setup-emby-proxy.sh)'
+  fi
+
+  echo
+  info "装完之后："
+  dim "  ep            打开菜单"
+  dim "  ep doctor     自检（系统/DNS/端口/源站）"
+  dim "  ep status     查看现有入口"
+  dim "  菜单里选 3    新增反代入口"
+  echo
+  dim "  访问验证: https://你的域名/"
+  dim "  ⚠️ /_emby_proxy_health 返回 200 只代表反代链路通，不代表 Emby 能登录/播放"
 }
 
 act_warpgo() {
@@ -997,7 +1013,7 @@ menu() {
   echo
   printf '%s\n' "${BOLD}  ── 安全 / 代理 / 监控 ───────────────────────────────────${NC}"
   printf '   %s7)%s key.sh           %sSSH 密钥登录加固%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '   %s8)%s 节点搭建          %svless-server 一键节点%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s8)%s emby-proxy       %sEmby HTTPS 反代（Caddy/Nginx）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   printf '   %s9)%s Komari 探针安装    %sLite Agent%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
   printf '%s\n' "${BOLD}  ── 测评 ─────────────────────────────────────────────────${NC}"
@@ -1038,7 +1054,7 @@ main() {
       5)  act_net_tune ;;
       6)  act_tcpfit ;;
       7)  act_keysh ;;
-      8)  act_node ;;
+      8)  act_embyproxy ;;
       9)  act_lite ;;
       10) act_nodequality ;;
       11) act_tcpquality ;;
@@ -1075,7 +1091,7 @@ VPS 常用工具箱
   tunenet       net-tcp-tune 调优
   tcpfit        tcpfit 调优
   key           SSH 加固 (key.sh)
-  node          节点搭建 (mozisen/vless-server)
+  emby          emby-proxy —— Emby HTTPS 反代（Caddy/Nginx）
   lite          Komari Lite Agent
   nodequality   NodeQuality 测评
   tcpquality    TcpQuality 测试
@@ -1102,7 +1118,7 @@ case "${1:-}" in
   tunenet|bbr)            act_net_tune ;;
   tcpfit)                 act_tcpfit ;;
   key|key.sh)             act_keysh ;;
-  node|vless)             act_node ;;
+  emby|embyproxy|ep)      act_embyproxy ;;
   lite|komari)            act_lite ;;
   nodequality|nq)         act_nodequality ;;
   tcpquality|tq)          act_tcpquality ;;
