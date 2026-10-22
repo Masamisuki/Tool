@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="2.1"
+VERSION="2.2"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -444,11 +444,11 @@ act_tcpquality() {
 }
 
 act_iperf3() {
-  step "iperf3 服务端 —— 一键启动 / 查看状态"
-  info "给其他机器测速用；没装会自动装，没启动会自动启动"
+  step "iperf3 服务端 —— 状态 / 启动 / 停止"
+  info "需要测速时才启动，用完可以关掉（不占端口、不随开机启动）"
   echo
 
-  # ---------- ① 依赖检查 ----------
+  # ---------- 确保已安装 ----------
   if ! command -v iperf3 >/dev/null 2>&1; then
     info "iperf3 未安装，正在安装 ..."
     if command -v apt-get >/dev/null 2>&1; then
@@ -466,84 +466,120 @@ act_iperf3() {
       return 1
     fi
     ok "已安装：$(iperf3 --version 2>&1 | head -1)"
-  else
-    ok "iperf3 已安装：$(iperf3 --version 2>&1 | head -1)"
-  fi
-  echo
-
-  # ---------- ② 当前状态 ----------
-  local running=0 curport=""
-  if pgrep -x iperf3 >/dev/null 2>&1; then
-    running=1
-    curport=$(ss -tlnp 2>/dev/null | grep iperf3 | head -1 | sed -E 's/.*:([0-9]+)[[:space:]].*/\1/')
-    ok "iperf3 已在运行（PID $(pgrep -x iperf3 | tr '\n' ' ')，端口 ${curport:-未知}）"
-    ss -tlnp 2>/dev/null | grep iperf3 | sed 's/^/    /'
-  else
-    info "iperf3 当前未运行"
-  fi
-  echo
-
-  # ---------- ③ 选端口 ----------
-  local port
-  if ! ask "  监听端口 [默认 ${curport:-5201}]: " port; then
-    warn "输入结束，已取消"; return 0
-  fi
-  port="${port:-${curport:-5201}}"
-  if ! [ "$port" -ge 1 ] 2>/dev/null || [ "$port" -gt 65535 ] 2>/dev/null; then
-    err "端口不合法：$port"; return 1
   fi
 
-  # ---------- ④ 启动 / 重启 ----------
-  if [ "$running" = 1 ]; then
-    if [ -n "$curport" ] && [ "$curport" = "$port" ]; then
-      ok "已经在 $port 端口运行，无需重启"
+  local a running curport port myip unit_state
+  while true; do
+    # ---------- 刷新状态 ----------
+    running=0; curport=""
+    if pgrep -x iperf3 >/dev/null 2>&1; then
+      running=1
+      curport=$(ss -tlnp 2>/dev/null | grep iperf3 | head -1 | sed -E 's/.*:([0-9]+)[[:space:]].*/\1/')
+    fi
+    unit_state=""
+    if systemctl list-unit-files 2>/dev/null | grep -q '^iperf3\.service'; then
+      unit_state=$(systemctl is-enabled iperf3.service 2>/dev/null || echo unknown)
+    fi
+
+    echo
+    hr
+    if [ "$running" = 1 ]; then
+      ok "当前状态：iperf3 【运行中】"
+      printf '    PID  : %s\n' "$(pgrep -x iperf3 | tr '\n' ' ')"
+      printf '    端口 : %s\n' "${curport:-未知}"
+      ss -tlnp 2>/dev/null | grep iperf3 | sed 's/^/    /'
     else
-      info "当前在 ${curport:-未知} 端口，要换到 $port 吗？"
-      if confirm "重启 iperf3 到端口 $port？"; then
-        pkill -x iperf3 2>/dev/null || true
-        sleep 1
-        iperf3 -s -D -p "$port" >/dev/null 2>&1 || true
-      else
-        dim "  保持不变"; return 0
-      fi
+      warn "当前状态：iperf3 【未运行 / 已关闭】"
+      dim "    不占端口，也不随开机启动 —— 只有你手动启动时才会跑"
     fi
-  else
-    info "正在启动 ..."
-    iperf3 -s -D -p "$port" >/dev/null 2>&1 || true
-  fi
-  sleep 1
-
-  # ---------- ⑤ 验证 + 用法 ----------
-  if pgrep -x iperf3 >/dev/null 2>&1; then
-    echo
-    ok "iperf3 服务端已启动"
-    ss -tlnp 2>/dev/null | grep iperf3 | sed 's/^/    /'
-
-    echo
-    info "防火墙放行（如果开了防火墙）："
-    dim "  iptables -I INPUT -p tcp --dport $port -j ACCEPT"
-    dim "  nft add rule inet filter input tcp dport $port accept"
-    dim "  ⚠️ 云安全组也要放行 TCP $port（控制台里加）"
-
-    echo
-    local myip
-    if [ "$HAVE_CURL" = 1 ]; then
-      myip=$(curl -4 -s --max-time 5 https://ifconfig.me 2>/dev/null)
-    elif [ "$HAVE_WGET" = 1 ]; then
-      myip=$(wget -q -T 5 -t 1 -O - https://ifconfig.me 2>/dev/null)
+    if [ -n "$unit_state" ] && [ "$unit_state" = "enabled" ]; then
+      warn "检测到 iperf3.service 处于 enabled（开机会自动启动）"
+      dim "    永久关闭开机自启: systemctl disable --now iperf3"
     fi
-    myip="${myip:-<本机IP>}"
-    info "测速命令（在【另一台机器】上跑）："
-    dim "  iperf3 -c $myip -p $port -t 30 -P 8 -R      # 下载方向（服务器→你）"
-    dim "  iperf3 -c $myip -p $port -t 30 -P 8         # 上传方向（你→服务器）"
+    hr
     echo
-    dim "  -P 8 是多流（单流受 TCP 拥塞影响，测不准）；-R 是反向"
-    dim "  停服务: pkill -x iperf3"
-  else
-    err "启动失败 —— 端口 $port 可能被占用"
-    ss -tlnp 2>/dev/null | grep ":$port " | sed 's/^/    /' || true
-    return 1
-  fi
+    info "  1) 启动（可指定端口，默认 5201）"
+    info "  2) 停止（关闭，释放端口）"
+    info "  3) 重启（换端口）"
+    info "  4) 显示测速命令"
+    info "  0) 返回"
+    echo
+    if ! ask "  请选择 [0-4]: " a; then return 0; fi
+
+    case "${a:-0}" in
+      1)
+        if [ "$running" = 1 ]; then
+          warn "已经在运行（端口 ${curport:-?}）。要换端口请选 3。"
+        else
+          if ! ask "  监听端口 [默认 5201]: " port; then return 0; fi
+          port="${port:-5201}"
+          if ! [ "$port" -ge 1 ] 2>/dev/null || [ "$port" -gt 65535 ] 2>/dev/null; then
+            err "端口不合法：$port"; continue
+          fi
+          iperf3 -s -D -p "$port" >/dev/null 2>&1 || true
+          sleep 1
+          if pgrep -x iperf3 >/dev/null 2>&1; then
+            ok "已启动（端口 $port）"
+            dim "  防火墙放行: iptables -I INPUT -p tcp --dport $port -j ACCEPT"
+            dim "  ⚠️ 云安全组也要放行 TCP $port"
+          else
+            err "启动失败 —— 端口 $port 可能被占用"
+            ss -tlnp 2>/dev/null | grep ":$port " | sed 's/^/    /' || true
+          fi
+        fi
+        ;;
+      2)
+        if [ "$running" = 1 ]; then
+          pkill -x iperf3 2>/dev/null || true
+          sleep 1
+          if pgrep -x iperf3 >/dev/null 2>&1; then
+            err "停止失败，进程还在：$(pgrep -x iperf3 | tr '\n' ' ')"
+          else
+            ok "已停止，端口已释放"
+          fi
+        else
+          dim "  本来就没在跑"
+        fi
+        ;;
+      3)
+        if [ "$running" = 0 ]; then
+          warn "当前没在运行，请选 1 启动"
+        else
+          if ! ask "  新端口 [当前 ${curport:-5201}]: " port; then return 0; fi
+          port="${port:-5201}"
+          pkill -x iperf3 2>/dev/null || true
+          sleep 1
+          iperf3 -s -D -p "$port" >/dev/null 2>&1 || true
+          sleep 1
+          if pgrep -x iperf3 >/dev/null 2>&1; then
+            ok "已重启到端口 $port"
+          else
+            err "重启失败 —— 端口 $port 可能被占用"
+          fi
+        fi
+        ;;
+      4)
+        if [ "$running" = 1 ]; then
+          myip=""
+          if [ "$HAVE_CURL" = 1 ]; then
+            myip=$(curl -4 -s --max-time 5 https://ifconfig.me 2>/dev/null)
+          elif [ "$HAVE_WGET" = 1 ]; then
+            myip=$(wget -q -T 5 -t 1 -O - https://ifconfig.me 2>/dev/null)
+          fi
+          myip="${myip:-<本机IP>}"
+          echo
+          info "在【另一台机器】上跑："
+          dim "  iperf3 -c $myip -p ${curport:-5201} -t 30 -P 8 -R      # 下载方向（服务器→你）"
+          dim "  iperf3 -c $myip -p ${curport:-5201} -t 30 -P 8         # 上传方向（你→服务器）"
+          echo
+          dim "  -P 8 是多流（单流受 TCP 拥塞影响，测不准）；-R 是反向"
+        else
+          warn "iperf3 没在运行，先选 1 启动"
+        fi
+        ;;
+      *) return 0 ;;
+    esac
+  done
 }
 
 act_docker() {
@@ -633,6 +669,7 @@ act_flyx() {
   dim "  ③ 设置 → 基本 → 面板后端地址 = http://<本机IP>:6365（是 6365，不是 6366）"
   dim "  ④ 节点页新建节点 → 安装 → 复制命令到节点机 root 执行"
 }
+
 
 act_status() {
   step "系统状态汇总"
@@ -966,7 +1003,7 @@ menu() {
   printf '%s\n' "${BOLD}  ── 测评 ─────────────────────────────────────────────────${NC}"
   printf '  %s10)%s NodeQuality  %sIP质量 / 硬件 / 网络 / 回程%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   printf '  %s11)%s TcpQuality   %sTCP 质量测试%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '  %s12)%s iperf3 服务端 %s没装/没启动都会自动处理%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s12)%s iperf3 服务端 %s状态 / 启动 / 停止（用完可关）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
   printf '%s\n' "${BOLD}  ── IPv6 / WARP ──────────────────────────────────────────${NC}"
   printf '  %s13)%s WARP (warp-go)   %s给纯 IPv6 机器加 IPv4 出口%s\n' "$GREEN" "$NC" "$DIM" "$NC"
@@ -1042,7 +1079,7 @@ VPS 常用工具箱
   lite          Komari Lite Agent
   nodequality   NodeQuality 测评
   tcpquality    TcpQuality 测试
-  iperf3        iperf3 服务端（没装自动装，没启动自动启动）
+  iperf3        iperf3 服务端（状态 / 启动 / 停止，用完可关）
   warp          WARP (warp-go) —— 给纯 IPv6 机器加 IPv4 出口
   nat64         NAT64 / DNS64 —— 纯 DNS 方案，无需安装
   flyx          FLYX 面板 —— 转发 + 节点编排（需 Docker）
