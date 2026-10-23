@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="2.4"
+VERSION="2.5"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -314,21 +314,44 @@ act_embyproxy() {
   step "emby-proxy —— Emby HTTPS 反代管理器（Caddy / Nginx）"
   info "给 Emby 源站快速套一层域名 HTTPS 反代，支持多个入口和同域名多路径"
   echo
-  info "执行作者提供的原始命令（未做任何修改）："
-  echo
-  dim "  bash <(curl -fsSL https://raw.githubusercontent.com/wuuduf/emby-proxy/main/setup-emby-proxy.sh)"
-  echo
-  dim "  装完可用短命令: ep"
-  dim "  要求: Debian/Ubuntu + systemd，安全组放行 80/443，域名 A 记录指向本机"
-  dim "  脚本只允许固定源站，不会被当成通用代理"
-  echo
-  if ! confirm "确认执行？"; then warn "已取消"; return 0; fi
-  echo
+
+  local up="https://raw.githubusercontent.com/wuuduf/emby-proxy/main/setup-emby-proxy.sh"
+  local cmd="bash <(curl -fsSL ${up})"
+
+  # ---------- 检测是否已经装过 ----------
+  local installed=0
+  if [ -x /usr/local/bin/ep ] || [ -x /usr/bin/ep ] \
+     || command -v ep >/dev/null 2>&1 \
+     || [ -d /opt/emby-proxy ] || [ -d /etc/emby-proxy ]; then
+    installed=1
+  fi
+
+  if [ "$installed" = 1 ]; then
+    # ================= 已安装：不询问，直接执行 =================
+    ok "检测到 emby-proxy 已安装 —— 直接执行（升级 / 重新配置）"
+    dim "  已有站点配置会被保留，脚本只追加它自己托管的部分"
+    command -v ep >/dev/null 2>&1 && dim "  短命令: $(command -v ep)"
+    echo
+    info "执行："
+    dim "  $cmd"
+    echo
+  else
+    info "执行作者提供的原始命令（未做任何修改）："
+    echo
+    dim "  $cmd"
+    echo
+    dim "  装完可用短命令: ep"
+    dim "  要求: Debian/Ubuntu + systemd，安全组放行 80/443，域名 A 记录指向本机"
+    dim "  脚本只允许固定源站，不会被当成通用代理"
+    echo
+    if ! confirm "确认执行？"; then warn "已取消"; return 0; fi
+    echo
+  fi
 
   if [ "$HAVE_TTY" = 1 ]; then
-    bash -c 'bash <(curl -fsSL https://raw.githubusercontent.com/wuuduf/emby-proxy/main/setup-emby-proxy.sh)' < /dev/tty
+    bash -c "$cmd" < /dev/tty
   else
-    bash -c 'bash <(curl -fsSL https://raw.githubusercontent.com/wuuduf/emby-proxy/main/setup-emby-proxy.sh)'
+    bash -c "$cmd"
   fi
 
   echo
@@ -354,7 +377,21 @@ act_warpgo() {
   warn "不要选 3~7：那些会把 IPv6 一起劫持，原生 IPv6 性能会崩"
   echo
   warn "「全局」会改写 IPv4 默认路由，确认机器上没有别的 IPv4 配置"
-  if ! confirm "确认继续？"; then warn "已取消"; return 0; fi
+
+  # ---------- 检测是否已经装过 ----------
+  local installed=0
+  if command -v warp-go >/dev/null 2>&1 || [ -x /opt/warp-go/warp-go ] || [ -d /opt/warp-go ]; then
+    installed=1
+  fi
+
+  if [ "$installed" = 1 ]; then
+    ok "检测到 warp-go 已安装 —— 直接执行（重新配置 / 重装）"
+    [ -x /opt/warp-go/warp-go ] && dim "  程序: /opt/warp-go/warp-go"
+    command -v warp-go >/dev/null 2>&1 && dim "  短命令: $(command -v warp-go)"
+    echo
+  else
+    if ! confirm "确认继续？"; then warn "已取消"; return 0; fi
+  fi
 
   run_remote "warp-go.sh" "$WARPGO_URL" bash
 
@@ -604,11 +641,20 @@ act_docker() {
     ok "Docker 已安装：$(docker --version 2>/dev/null)"
     docker compose version 2>/dev/null | sed 's/^/    /' || true
     docker info --format '    数据目录: {{.DockerRootDir}}   存储驱动: {{.Driver}}' 2>/dev/null || true
+    printf '    服务状态: '; systemctl is-active docker 2>/dev/null || echo unknown
+    local cnt
+    cnt=$(docker ps -q 2>/dev/null | wc -l)
+    printf '    运行中容器: %s 个\n' "${cnt:-0}"
     echo
-    if ! confirm "已安装，是否重新安装 / 更新？"; then
-      info "保持现状"; return 0
-    fi
+    dim "  已安装，跳过安装（重装会重启 docker 守护进程，把所有容器停掉）"
+    dim "  真要重装：curl -fsSL $DOCKER_GET_URL | sh"
     echo
+    info "常用命令："
+    dim "  docker ps                看运行中的容器"
+    dim "  docker compose up -d     按当前目录的 compose 启动"
+    dim "  docker system df         看空间占用"
+    dim "  docker image prune -f    清悬空镜像"
+    return 0
   fi
 
   info "将使用 Docker 官方脚本：$DOCKER_GET_URL"
