@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="2.3"
+VERSION="2.4"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -656,33 +656,77 @@ act_docker() {
 act_flyx() {
   step "FLYX 面板 —— 转发 + 节点编排（Xray / sing-box / Snell）"
   echo
-  info "执行作者提供的原始命令（未做任何修改）："
-  echo
-  dim "  curl -L https://github.com/kure29/flyx/releases/latest/download/panel_install.sh -o panel_install.sh && chmod +x panel_install.sh && ./panel_install.sh"
-  echo
 
-  if ! command -v docker >/dev/null 2>&1; then
-    warn "未检测到 Docker —— 这个脚本会自己要求 Docker"
-    dim "  可以先选「16) Docker 安装」"
+  local up="https://github.com/kure29/flyx/releases/latest/download/panel_install.sh"
+  local cmd="curl -L ${up} -o panel_install.sh && chmod +x panel_install.sh && ./panel_install.sh"
+
+  # ---------- 检测是否已经装过 ----------
+  local installed=0 instdir="" myip=""
+  if command -v docker >/dev/null 2>&1; then
+    if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx 'flux-panel-backend'; then
+      installed=1
+    fi
+  fi
+  if [ "$installed" = 0 ]; then
+    local probe
+    for probe in "$(pwd)" /root /opt/flvx-panel; do
+      if [ -f "$probe/docker-compose.yml" ] && grep -q 'flux-panel-backend' "$probe/docker-compose.yml" 2>/dev/null; then
+        installed=1
+        instdir="$probe"
+        break
+      fi
+    done
+  fi
+  # 已装但还没定位到目录时，从容器标签里问出来
+  if [ "$installed" = 1 ] && [ -z "$instdir" ] && command -v docker >/dev/null 2>&1; then
+    instdir=$(docker inspect flux-panel-backend \
+      --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' 2>/dev/null || true)
+    [ "$instdir" = "<no value>" ] && instdir=""
+  fi
+
+  if [ "$installed" = 1 ]; then
+    # ================= 已安装：不询问，直接执行 =================
+    ok "检测到 FLYX 面板已安装 —— 直接执行（升级 / 重建）"
+    dim "  面板数据在 Docker 数据卷里，重建容器不会丢配置"
+    echo
+    if command -v docker >/dev/null 2>&1; then
+      docker ps -a --filter name=flux-panel-backend --format '    {{.Names}}   {{.Status}}   {{.Ports}}' 2>/dev/null || true
+    fi
+    [ -n "$instdir" ] && dim "  部署目录: $instdir"
+    myip=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit }}')
+    dim "  面板地址: http://${myip:-<本机IP>}:6366"
+    echo
+    info "执行："
+    dim "  $cmd"
+    echo
+  else
+    # ================= 未安装：显示命令 + 确认 =================
+    info "执行作者提供的原始命令（未做任何修改）："
+    echo
+    dim "  $cmd"
+    echo
+    if ! command -v docker >/dev/null 2>&1; then
+      warn "未检测到 Docker —— 这个脚本会自己要求 Docker"
+      dim "  可以先选「16) Docker 安装」"
+      echo
+    fi
+    dim "  当前目录: $(pwd)（panel_install.sh 会以它为部署目录）"
+    echo
+    if ! confirm "确认执行？"; then warn "已取消"; return 0; fi
     echo
   fi
 
-  dim "  当前目录: $(pwd)（panel_install.sh 会以它为部署目录）"
-  echo
-  if ! confirm "确认执行？"; then warn "已取消"; return 0; fi
-  echo
-
   if [ "$HAVE_TTY" = 1 ]; then
-    bash -c 'curl -L https://github.com/kure29/flyx/releases/latest/download/panel_install.sh -o panel_install.sh && chmod +x panel_install.sh && ./panel_install.sh' < /dev/tty
+    bash -c "$cmd" < /dev/tty
   else
-    bash -c 'curl -L https://github.com/kure29/flyx/releases/latest/download/panel_install.sh -o panel_install.sh && chmod +x panel_install.sh && ./panel_install.sh'
+    bash -c "$cmd"
   fi
 
   echo
-  info "装完记得："
+  info "装完之后："
   dim "  ① 访问 http://<本机IP>:6366"
   dim "  ② 默认账号 admin_user / admin_user —— 立刻改密码"
-  dim "  ③ 设置 → 基本 → 面板后端地址 = http://<本机IP>:6365（是 6365，不是 6366）"
+  dim "  ③ 设置 → 基础设置 → 面板后端地址 = http://<本机IP>:6365（是 6365，不是 6366）"
   dim "  ④ 节点页新建节点 → 安装 → 复制命令到节点机 root 执行"
 }
 
