@@ -5,16 +5,16 @@
 #!category=去广告
 #!loon_version=3.5.2(1005)
 #!homepage=https://loonlab.103516.xyz/Plugin/
-#!date=2026-10-02 12:00
+#!date=2026-10-25 23:00
 #!arguments=555dy_script:"",51xyk_script:"",51job_script:"",alibaba_script:"",blued_script:"",boohee_script:"",bilibilimanga_script:"",caixin_script:"",donghuafeng_script:"",dianping_script:"",feikechaguan_script:"",huifutianxia_script:"",ccblife_script:"",jingxi_script:"",adnetwork_script:"",lvtusuishenting_script:"",lawson_script:"",maidanba_script:"",maimai_script:"",meilixiuxing_script:"",pupu_script:"",quda_script:"",qmai_script:"",renrentv_script:"",sodalife_script:"",qqnews_script:"",tuhu_script:"",vgtime_script:"",youdao_script:"",winnipeg_script:"",mishop_script:"",xiaotucc_script:"",xiangjiao_script:"",xiaomang_script:"",usmile_script:"",youxi_script:"",zhaoshangzhengquan_script:"",zhangshanggongjiao_script:"",zhuanzhuan_script:"",picc_script:"",airchina_script:""
 #!arguments-desc=555dy_script: 555电影\n可选值: 留空启用, # 禁用\n\n51xyk_script: 51信用卡管家\n可选值: 留空启用, # 禁用\n\n51job_script: 51Job\n可选值: 留空启用, # 禁用\n\nalibaba_script: 阿里巴巴\n可选值: 留空启用, # 禁用\n\nblued_script: Blued\n可选值: 留空启用, # 禁用\n\nboohee_script: 薄荷健康\n可选值: 留空启用, # 禁用\n\nbilibilimanga_script: 哔哩哔哩漫画\n可选值: 留空启用, # 禁用\n\ncaixin_script: 财新\n可选值: 留空启用, # 禁用\n\ndonghuafeng_script: 动画疯\n可选值: 留空启用, # 禁用\n\ndianping_script: 大众点评\n可选值: 留空启用, # 禁用\n\nfeikechaguan_script: 飞客茶馆\n可选值: 留空启用, # 禁用\n\nhuifutianxia_script: 汇付天下\n可选值: 留空启用, # 禁用\n\nccblife_script: 建行生活\n可选值: 留空启用, # 禁用\n\njingxi_script: 京喜\n可选值: 留空启用, # 禁用\n\nadnetwork_script: 广告联盟\n可选值: 留空启用, # 禁用\n\nlvtusuishenting_script: 旅途随身听\n可选值: 留空启用, # 禁用\n\nlawson_script: 罗森点点\n可选值: 留空启用, # 禁用\n\nmaidanba_script: 买单吧\n可选值: 留空启用, # 禁用\n\nmaimai_script: 脉脉\n可选值: 留空启用, # 禁用\n\nmeilixiuxing_script: 美丽修行\n可选值: 留空启用, # 禁用\n\npupu_script: 朴朴超市\n可选值: 留空启用, # 禁用\n\nquda_script: 去哒\n可选值: 留空启用, # 禁用\n\nqmai_script: 企迈\n可选值: 留空启用, # 禁用\n\nrenrentv_script: 人人视频\n可选值: 留空启用, # 禁用\n\nsodalife_script: 苏打校园\n可选值: 留空启用, # 禁用\n\nqqnews_script: 腾讯新闻\n可选值: 留空启用, # 禁用\n\ntuhu_script: 途虎养车\n可选值: 留空启用, # 禁用\n\nvgtime_script: 游戏时光\n可选值: 留空启用, # 禁用\n\nyoudao_script: 网易有道词典\n可选值: 留空启用, # 禁用\n\nwinnipeg_script: 温尼伯站\n可选值: 留空启用, # 禁用\n\nmishop_script: 小米商城\n可选值: 留空启用, # 禁用\n\nxiaotucc_script: 小兔充充\n可选值: 留空启用, # 禁用\n\nxiangjiao_script: 香蕉是一种水果\n可选值: 留空启用, # 禁用\n\nxiaomang_script: 小芒\n可选值: 留空启用, # 禁用\n\nusmile_script: 笑容加\n可选值: 留空启用, # 禁用\n\nyouxi_script: 悠洗\n可选值: 留空启用, # 禁用\n\nzhaoshangzhengquan_script: 招商证券\n可选值: 留空启用, # 禁用\n\nzhangshanggongjiao_script: 掌上公交\n可选值: 留空启用, # 禁用\n\nzhuanzhuan_script: 转转\n可选值: 留空启用, # 禁用\n\npicc_script: 中国人保\n可选值: 留空启用, # 禁用\n\nairchina_script: 中国国际航空\n可选值: 留空启用, # 禁用
 
 [Body Rewrite]
 http-response (?i)^https?:\/\/beta-api\.crunchyroll\.com\/cms "offset_ms\":\\d+" "offset_ms\":99999999999999"
 http-response (?i)^https?:\/\/adservice\.sigmob\.cn\/extconfig "false" "true"
-http-response (?i)^https?:\/\/47\.100\.65\.202\/api\/mobile\/index\.php\?version=\d&mobile=yes&module=basicdata&type=forumlist "adv" "fmz200"
-http-response (?i)^https?:\/\/api\.m\.jd\.com\/client\.action\?functionId=lite_advertising "jdLiteAdvertisingVO" "fmz200"
-http-response (?i)^https?:\/\/api\.m\.jd\.com\/client\.action\?functionId=lite_SmartPush "pushData" "fmz200"
+http-response (?i)^https?:\/\/47\.100\.65\.202\/api\/mobile\/index\.php\?(?:[^#?&]+&)*version=\d&mobile=yes&module=basicdata&type=forumlist "adv" "fmz200"
+http-response (?i)^https?:\/\/api\.m\.jd\.com\/client\.action\?(?:[^#?&]+&)*functionId=lite_advertising "jdLiteAdvertisingVO" "fmz200"
+http-response (?i)^https?:\/\/api\.m\.jd\.com\/client\.action\?(?:[^#?&]+&)*functionId=lite_SmartPush "pushData" "fmz200"
 http-response-jq (?i)^https:\/\/bp-api\.bestv\.cn\/cms\/api\/free\/open\/advertisingV2 '.dt = []'
 http-response-jq (?i)^https:\/\/bp-api\.bestv\.cn\/cms\/api\/c\/search\/hot\/v(2|4) '.dt.hot = [] | .dt.recommand = [] | .dt.bannerList = []'
 http-response-jq (?i)^https?:\/\/p\.kuaidi100\.com\/mobile\/mobileapi\.do$ 'delpaths([["adsplash"]])'
@@ -61,7 +61,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/tianqi\.2345\.com\/api\/content\/getContentFeeds\.php data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
-(?i)^https?:\/\/ad\.life\.360\.cn\/v2\/app\/advertisement\/config\?sdk_ver= data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/ad\.life\.360\.cn\/v2\/app\/advertisement\/config\?(?:[^#?&]+&)*sdk_ver= data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/evs\.500\.com\/esinfo\/loading\/loading data-type=text data="" status-code=404
 
@@ -127,7 +127,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/interface\.aomiapp\.com\/aomi-ads data-type=text data="" status-code=404
 
-(?i)^https?:\/\/aes\.acfun\.cn\/s\?adzones data-type=text data="" status-code=404
+(?i)^https?:\/\/aes\.acfun\.cn\/s\?(?:[^#?&]+&)*adzones data-type=text data="" status-code=404
 
 (?i)^https?:\/\/api-new\.app\.acfun\.cn\/rest\/app\/flash\/screen\/ data-type=text data="" status-code=404
 
@@ -175,7 +175,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/mime\.baidu\.com\/v5\/start_screen_ads\/list data-type=text data="" status-code=404
 
-(?i)^https?:\/\/mime\.baidu\.com\/v5\/hotpatch\/check\?hotpatch data-type=text data="" status-code=404
+(?i)^https?:\/\/mime\.baidu\.com\/v5\/hotpatch\/check\?(?:[^#?&]+&)*hotpatch data-type=text data="" status-code=404
 
 (?i)^https?:\/\/mime\.baidu\.com\/sapi\/v1\/lccorpus\/(applist|pannellist) data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
@@ -183,11 +183,11 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/mime\.baidu\.com\/commer\/pocket_api\/enterprise_list data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
-(?i)^https?:\/\/mbd\.baidu\.com\/ccs\/v1\/start\/confsync\?appname=baidu_input data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/mbd\.baidu\.com\/ccs\/v1\/start\/confsync\?(?:[^#?&]+&)*appname=baidu_input data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/appwk\.baidu\.com\/xpage\/interface\/wknaad data-type=text data="" status-code=200
 
-(?i)^https?:\/\/www\.banyuetanapp\.com\/byt-api\/ad\/getAdvertList\?adSpaceId=100000002 data-type=text data="" status-code=200
+(?i)^https?:\/\/www\.banyuetanapp\.com\/byt-api\/ad\/getAdvertList\?(?:[^#?&]+&)*adSpaceId=100000002 data-type=text data="" status-code=200
 
 (?i)^https:\/\/api\.boohee\.com\/meta-interface\/v1\/index\/page_float_bubbles\? data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
@@ -287,7 +287,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/app\.hbooker\.com\/setting\/get_startpage_url_list data-type=text data="" status-code=404
 
-(?i)^https?:\/\/fintechappdr\.cgws\.com\/api\/business-operation\/app\/a\/flash\/window\/get\?type=2 data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/fintechappdr\.cgws\.com\/api\/business-operation\/app\/a\/flash\/window\/get\?(?:[^#?&]+&)*type=2 data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/js-ad\.ayximgs\.com\.ad-universe-cdn\.hzhcbkj\.cn\/xgapp\.php\/v2\/top_notice data-type=text data="" status-code=404
 
@@ -297,21 +297,21 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/gw\.csdn\.net\/cms-app\/v\d+\/home_page\/open_advertisement data-type=text data="" status-code=404
 
-(?i)^https?:\/\/delivery-api\.imdada\.cn\/v2_0\/dada\/promote\/imax\?privacyParam data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/delivery-api\.imdada\.cn\/v2_0\/dada\/promote\/imax\?(?:[^#?&]+&)*privacyParam data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/delivery-api\.imdada\.cn\/v1_0\/transporter\/screen\/ads_list data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/delivery-api\.imdada\.cn\/v1_0\/transporter\/ad data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
-(?i)^https:\/\/se-api\.djiits\.com\/api\/components\/launch_ad\.json\?abbrv_url=1&country=cn&language=zh-CN data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https:\/\/se-api\.djiits\.com\/api\/components\/launch_ad\.json\?(?:[^#?&]+&)*abbrv_url=1&country=cn&language=zh-CN data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/sdk\.alibaba\.com\.ailbaba\.me\/xgapp\.php\/v\d\/version data-type=text data="" status-code=200
 
-(?i)^https?:\/\/sdk\.alibaba\.com\.ailbaba\.me\/xgapp\.php\/v\d\/advert\?position=[^2]+ data-type=text data="" status-code=200
+(?i)^https?:\/\/sdk\.alibaba\.com\.ailbaba\.me\/xgapp\.php\/v\d\/advert\?(?:[^#?&]+&)*position=[^2]+ data-type=text data="" status-code=200
 
 (?i)^https?:\/\/sdk\.alibaba\.com\.ailbaba\.me\/xgapp\.php\/v\d\/top_notice\? data-type=text data="" status-code=200
 
-(?i)^https?:\/\/sdk\.alibaba\.com\.ailbaba\.me\/(dsx|xgapp)\.php\/v\d\/(top_notice\?|version|advert\?position=[^2]+) data-type=text data="" status-code=200
+(?i)^https?:\/\/sdk\.alibaba\.com\.ailbaba\.me\/(dsx|xgapp)\.php\/v\d\/(top_notice\?|version|advert\?(?:[^#?&]+&)*position=[^2]+) data-type=text data="" status-code=200
 
 (?i)^https?:\/\/ssp\.dzh\.com\.cn\/v2api\/adgroupjson data-type=text data="" status-code=404
 
@@ -337,7 +337,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/www\.dpfile\.com\/sc\/indexpromotion data-type=text data="" status-code=404
 
-(?i)^https?:\/\/catfront\.dianping\.com\/api\/metric\?v=\d&p=rn_gcbu_mrn-joy-poidetail data-type=text data="" status-code=404
+(?i)^https?:\/\/catfront\.dianping\.com\/api\/metric\?(?:[^#?&]+&)*v=\d&p=rn_gcbu_mrn-joy-poidetail data-type=text data="" status-code=404
 
 (?i)^https?:\/\/awp-assets\.meituan\.net\/hfe\/fep\/\w+\.json data-type=text data="" status-code=404
 
@@ -349,13 +349,13 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/ddplus\.meituan\.net\/v\d\/mss_\w+\/(?>ehc|titansx|ddblue|edfu)\/ data-type=text data="" status-code=404
 
-(?i)^https?:\/\/e\.dangdang\.com\/media\/api.+\?action=getDeviceStartPage data-type=text data="" status-code=404
+(?i)^https?:\/\/e\.dangdang\.com\/media\/api.+\?(?:[^#?&]+&)*action=getDeviceStartPage data-type=text data="" status-code=404
 
 (?i)^https?:\/\/e\.dangdang\.com\/.+?getDeviceStartPage data-type=text data="" status-code=404
 
 (?i)^https?:\/\/api\.dangdang\.com\/mapi\d\/mobile\/init data-type=text data="" status-code=404
 
-(?i)^https?:\/\/mapi\.dangdang\.com\/index\.php\?action=init data-type=text data="" status-code=404
+(?i)^https?:\/\/mapi\.dangdang\.com\/index\.php\?(?:[^#?&]+&)*action=init data-type=text data="" status-code=404
 
 (?i)^https?:\/\/appdmkj\.5idream\.net\/appPic\/homepage data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
@@ -389,7 +389,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/dxy\.com\/app\/i\/ask\/biz\/feed\/launch data-type=text data="" status-code=404
 
-(?i)^https?:\/\/dq\.dxy\.cn\/api\.php\?action=getpostbanners data-type=text data="" status-code=404
+(?i)^https?:\/\/dq\.dxy\.cn\/api\.php\?(?:[^#?&]+&)*action=getpostbanners data-type=text data="" status-code=404
 
 (?i)^https?:\/\/img\.admobile\.top\/admobile-adRequest\/.*.(jpg|png) data-type=text data="" status-code=200
 
@@ -431,7 +431,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/staticlive\.douyucdn\.cn\/.+?\/getStartSend data-type=tiny-gif status-code=200
 
-(?i)^https?:\/\/capi\.douyucdn\.cn\/lapi\/sign\/app(api)?\/getinfo\?client_sys=ios data-type=text data="" status-code=404
+(?i)^https?:\/\/capi\.douyucdn\.cn\/lapi\/sign\/app(api)?\/getinfo\?(?:[^#?&]+&)*client_sys=ios data-type=text data="" status-code=404
 
 (?i)^https?:\/\/capi\.douyucdn\.cn\/api\/ios_app\/check_update data-type=tiny-gif status-code=200
 
@@ -453,17 +453,17 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/fuss10\.elemecdn\.com\/.+?\.mp4 data-type=tiny-gif status-code=200
 
-(?i)^https?:\/\/cube\.elemecdn\.com\/[\w\/]+\.jpeg\?x-oss-process=image\/resize,m_fill,w_1\d{3},h_2\d{3}\/format,webp\/ data-type=text data="" status-code=404
+(?i)^https?:\/\/cube\.elemecdn\.com\/[\w\/]+\.jpeg\?(?:[^#?&]+&)*x-oss-process=image\/resize,m_fill,w_1\d{3},h_2\d{3}\/format,webp\/ data-type=text data="" status-code=404
 
-(?i)^https?:\/\/cube\.elemecdn\.com\/[\w\/]+\.jpeg\?x-oss-process=image\/resize,m_fill,w_6\d{2},h_8\d{2}\/format,webp\/ data-type=text data="" status-code=404
+(?i)^https?:\/\/cube\.elemecdn\.com\/[\w\/]+\.jpeg\?(?:[^#?&]+&)*x-oss-process=image\/resize,m_fill,w_6\d{2},h_8\d{2}\/format,webp\/ data-type=text data="" status-code=404
 
-(?i)^https?:\/\/cube\.elemecdn\.com\/[\w\/]+\.jpeg\?x-oss-process=image\/resize,m_fill,w_\d{3},h_\d{4}\/format,webp\/ data-type=text data="" status-code=404
+(?i)^https?:\/\/cube\.elemecdn\.com\/[\w\/]+\.jpeg\?(?:[^#?&]+&)*x-oss-process=image\/resize,m_fill,w_\d{3},h_\d{4}\/format,webp\/ data-type=text data="" status-code=404
 
 (?i)^https?:\/\/cube\.elemecdn\.com\/\w\/\w{2}\/\w+mp4\.mp4\? data-type=text data="" status-code=404
 
 (?i)^https?:\/\/www1\.elecfans\.com\/www\/delivery\/ data-type=text data="" status-code=404
 
-(?i)^https?:\/\/(nr-op|cube)\.elemecdn\.com\/.+\.jpeg\?x-oss-process=image\/resize,m_fill,w_\d{4,},h_\d{4,}\/($|format,webp\/$) data-type=text data="" status-code=404
+(?i)^https?:\/\/(nr-op|cube)\.elemecdn\.com\/.+\.jpeg\?(?:[^#?&]+&)*x-oss-process=image\/resize,m_fill,w_\d{4,},h_\d{4,}\/($|format,webp\/$) data-type=text data="" status-code=404
 
 (?i)^https?:\/\/cdn-evone-ceph\.echargenet\.com\/gw-emas-cdn\/63c4e3b558bb610008969f89 data-type=text data="" status-code=200
 
@@ -483,7 +483,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/.+\.(pglstatp-toutiao|pstatp)\.com\/obj\/ad-pattern\/renderer data-type=text data="" status-code=404
 
-(?i)^https?:\/\/.+\.pstatp\.com\/obj\/mosaic-legacy\/.+\?from\=ad data-type=text data="" status-code=404
+(?i)^https?:\/\/.+\.pstatp\.com\/obj\/mosaic-legacy\/.+\?(?:[^#?&]+&)*from\=ad data-type=text data="" status-code=404
 
 (?i)^https?:\/\/.+\.pstatp\.com\/bytecom\/resource\/track_log\/src\/.+ data-type=text data="" status-code=404
 
@@ -499,11 +499,11 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/ptf\.flyertrip\.com\/common\/cf\/.*.jpg data-type=text data="" status-code=200
 
-(?i)^https?:\/\/47\.100\.65\.202\/source\/plugin\/mobile\/mobile\.php\?module=advis data-type=text data="" status-code=404
+(?i)^https?:\/\/47\.100\.65\.202\/source\/plugin\/mobile\/mobile\.php\?(?:[^#?&]+&)*module=advis data-type=text data="" status-code=404
 
-(?i)^https?:\/\/www\.flyert\.com\/.*\.php\?module=advis data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/www\.flyert\.com\/.*\.php\?(?:[^#?&]+&)*module=advis data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
-(?i)^https?:\/\/www\.flyert\.com(\.cn)?\/.*\.php\?module=advis data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/www\.flyert\.com(\.cn)?\/.*\.php\?(?:[^#?&]+&)*module=advis data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https:\/\/api\.flydigi\.com\/android\/v2\/ad data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
@@ -523,7 +523,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/api\.fengshows\.com\/api\/launchAD data-type=tiny-gif status-code=200
 
-(?i)^https:\/\/ecloud\.tppension\.cntaiping\.com\/fxtpplatform\/common\/anonymous\/common\/page\/queryStartPageNew\?language=zh-CN data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https:\/\/ecloud\.tppension\.cntaiping\.com\/fxtpplatform\/common\/anonymous\/common\/page\/queryStartPageNew\?(?:[^#?&]+&)*language=zh-CN data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/api\.futunn\.com\/v2\/optimus\/my-homepage-config data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
@@ -551,7 +551,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/kano\.guahao\.cn\/[a-zA-Z0-9]{12} data-type=text data="" status-code=200
 
-(?i)^https?:\/\/kano\.guahao\.cn\/.+?\?resize=\d{3}-\d{4} data-type=tiny-gif status-code=200
+(?i)^https?:\/\/kano\.guahao\.cn\/.+?\?(?:[^#?&]+&)*resize=\d{3}-\d{4} data-type=tiny-gif status-code=200
 
 (?i)^https?:\/\/app\.wy\.guahao\.com\/json\/white\/dayquestion\/getpopad data-type=text data="" status-code=404
 
@@ -559,9 +559,9 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/guanyu\.longfor\.com\/app-server\/api\/v1\/main\/start data-type=text data="" status-code=404
 
-(?i)^https?:\/\/gsp\.gacmotor\.com\/gateway\/webapi\/baseinfo\/advertise\/getAdvertiseByPositionCode\?positionCode=1 data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/gsp\.gacmotor\.com\/gateway\/webapi\/baseinfo\/advertise\/getAdvertiseByPositionCode\?(?:[^#?&]+&)*positionCode=1 data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
-(?i)^https?:\/\/gsp\.gacmotor\.com\/gateway\/app-api\/app\/version\/latestupdate\?flatform=2&innerVersion= data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/gsp\.gacmotor\.com\/gateway\/app-api\/app\/version\/latestupdate\?(?:[^#?&]+&)*flatform=2&innerVersion= data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/fuwu\.nhsa\.gov\.cn\/ebus\/fuwu\/api\/base\/cms\/iep\/web\/cms\/hmpgcfg\/queryAppHmpgCfgByApp data-type=text data="" status-code=404
 
@@ -619,7 +619,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/cmsfile\.wifi8\.com\/uploads\/png\/ data-type=tiny-gif status-code=200
 
-(?i)^https?:\/\/res\.hongyibo\.com\.cn\/os\/gs\/resapi\/activity\/mget\?_t data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/res\.hongyibo\.com\.cn\/os\/gs\/resapi\/activity\/mget\?(?:[^#?&]+&)*_t data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/api\.touker\.com\/v2\/IAdvertisementAPI\.queryStartAdvertisement data-type=text data="" status-code=200
 
@@ -647,7 +647,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/api\.huomao\.com\/channels\/loginAd data-type=text data="" status-code=404
 
-(?i)^https?:\/\/www\.gcores\.com\/gapi\/v1\/app-start-pages\?page data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/www\.gcores\.com\/gapi\/v1\/app-start-pages\?(?:[^#?&]+&)*page data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/explorer\.tratao\.com\/api\/client\/v4\/xtransfer\/ad\/ data-type=text data="" status-code=404
 
@@ -673,7 +673,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/img\.jiemian\.com\/ads\/ data-type=text data="" status-code=404
 
-(?i)^https?:\/\/api\.sogaha\.cn\/ssp\/ad\/get\?ip data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/api\.sogaha\.cn\/ssp\/ad\/get\?(?:[^#?&]+&)*ip data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/p\d\.pstatp.com\/origin data-type=text data="" status-code=404
 
@@ -683,7 +683,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/mobile-pic\.cache\.iciba\.com\/feeds_ad\/ data-type=text data="" status-code=404
 
-(?i)^https?:\/\/service\.iciba\.com\/popo\/open\/screens\/v\d\?adjson data-type=text data="" status-code=200
+(?i)^https?:\/\/service\.iciba\.com\/popo\/open\/screens\/v\d\?(?:[^#?&]+&)*adjson data-type=text data="" status-code=200
 
 (?i)^https?:\/\/\w+?\.kingsoft-office-service\.com\/ad data-type=text data="" status-code=200
 
@@ -699,7 +699,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/m.360buyimg\.com\/mobilecms\/s1125x2436_jfs\/ data-type=text data="" status-code=200
 
-(?i)^https?:\/\/api\.m\.jd\.com\/client\.action\?functionId=start data-type=tiny-gif status-code=200
+(?i)^https?:\/\/api\.m\.jd\.com\/client\.action\?(?:[^#?&]+&)*functionId=start data-type=tiny-gif status-code=200
 
 (?i)^https?:\/\/(bdsp-x|dsp-x)\.jd\.com\/adx\/ data-type=text data="" status-code=200
 
@@ -727,7 +727,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/res\.kfc\.com\.cn\/advertisement\/ data-type=text data="" status-code=404
 
-(?i)^https?:\/\/pocketuni\.net\/\?app=api&mod=Message&act=ad data-type=text data="" status-code=200
+(?i)^https?:\/\/pocketuni\.net\/\?(?:[^#?&]+&)*app=api&mod=Message&act=ad data-type=text data="" status-code=200
 
 (?i)^https?:\/\/cdn\.kuaidi100\.com\/images\/open\/appads data-type=tiny-gif status-code=200
 
@@ -819,7 +819,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https:\/\/web-mmap-pay\.line-apps\.com\/tw\/liff\/campaign\/v1\/aggregate\/ad\/banner\/ data-type=tiny-gif status-code=200
 
-(?i)^https:\/\/buy\.line\.me\/api\/graphql\?variables data-type=text data="" status-code=404
+(?i)^https:\/\/buy\.line\.me\/api\/graphql\?(?:[^#?&]+&)*variables data-type=text data="" status-code=404
 
 (?i)^https:\/\/obs\.line-scdn\.net\/r\/linecrs\/.+\/m180x180$ data-type=tiny-gif status-code=200
 
@@ -895,15 +895,15 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/app\.missevan\.com\/site\/launch\? data-type=text data="" status-code=404
 
-(?i)^https:\/\/p0\.pipi\.cn\/adAdmin\/\w+\.jpg\?imageMogr2\/quality\/ data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https:\/\/p0\.pipi\.cn\/adAdmin\/\w+\.jpg\?(?:[^#?&]+&)*imageMogr2\/quality\/ data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
-(?i)^https:\/\/p0\.pipi\.cn\/adAdmin\/\w+\.(jpg|png)\?imageMogr2\/thumbnail\/(860x0|!165x165|!1049x1169) data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https:\/\/p0\.pipi\.cn\/adAdmin\/\w+\.(jpg|png)\?(?:[^#?&]+&)*imageMogr2\/thumbnail\/(860x0|!165x165|!1049x1169) data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^http:\/\/dili\.sqcosmos\.com\/jiekou\/endpage\/ad data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/j-image\.missfresh\.cn\/img_(.+)\.gif$ data-type=text data="" status-code=404
 
-(?i)^https?:\/\/j-image\.missfresh\.cn\/img_(.+)\.(jpg|jpeg|gif|png)\?iopcmd=convert&dst=webp&q=85$ data-type=text data="" status-code=404
+(?i)^https?:\/\/j-image\.missfresh\.cn\/img_(.+)\.(jpg|jpeg|gif|png)\?(?:[^#?&]+&)*iopcmd=convert&dst=webp&q=85$ data-type=text data="" status-code=404
 
 (?i)^https?:\/\/mea\.meitudata\.com\/kaiping data-type=text data="" status-code=404
 
@@ -919,7 +919,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/s3plus\.meituan\.net\/v1\/mss_\w+\/(brandcpt-vedio|waimai-alita)\/\w+\.zip$ data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
-(?i)^http:\/\/59\.82\.113\.10\/amdc\/mobileDispatch\?appkey=213807& data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^http:\/\/59\.82\.113\.10\/amdc\/mobileDispatch\?(?:[^#?&]+&)*appkey=213807& data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/peisongapi\.meituan\.com\/client\/getInitiateImage data-type=text data="" status-code=200
 
@@ -953,7 +953,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/3g\.csair\.com\/CSMBP\/bookProcess\/homepopup\/queryAdvertisement data-type=text data="" status-code=200
 
-(?i)^https?:\/\/api\.nj\.nbtv\.cn\/v2\/advertise\/advertise-r1\/get-list\?data=u8obKDIrIWt2NR9wBuMwQ5O61eEsP data-type=text data="" status-code=200
+(?i)^https?:\/\/api\.nj\.nbtv\.cn\/v2\/advertise\/advertise-r1\/get-list\?(?:[^#?&]+&)*data=u8obKDIrIWt2NR9wBuMwQ5O61eEsP data-type=text data="" status-code=200
 
 (?i)^https?:\/\/api\.nj\.nbtv\.cn\/v\d\/common\/system-boot-inform\/detail data-type=text data="" status-code=200
 
@@ -1037,7 +1037,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/lf\-cdn\-tos\.bytescm\.com\/obj\/static\/ad data-type=text data="" status-code=404
 
-(?i)^https:\/\/mobile-consumer-sapp\.chery\.cn\/web\/position\/getShowList\?displayPlatform=1&tabType=0& data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https:\/\/mobile-consumer-sapp\.chery\.cn\/web\/position\/getShowList\?(?:[^#?&]+&)*displayPlatform=1&tabType=0& data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/(?>webapi|miniapp)\.qmai\.cn\/web\/cmk-center\/marketing\/canvas\/advert data-type=text data="" status-code=404
 
@@ -1099,13 +1099,13 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/a\.qiumibao\.com\/activities\/config\.php data-type=text data="" status-code=404
 
-(?i)^https?:\/\/a\.qiumibao\.com\/ios\/config\/\?version_code= data-type=text data="" status-code=404
+(?i)^https?:\/\/a\.qiumibao\.com\/ios\/config\/\?(?:[^#?&]+&)*version_code= data-type=text data="" status-code=404
 
 (?i)^https?:\/\/qde\.qunar\.com\/preload data-type=text data="" status-code=200
 
 (?i)^https?:\/\/homefront\.qunar\.com\/front\/splash\/ad data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
-(?i)^https?:\/\/client\.qunar\.com\/pitcher-proxy\?qrt=p_splashAd data-type=text data="" status-code=404
+(?i)^https?:\/\/client\.qunar\.com\/pitcher-proxy\?(?:[^#?&]+&)*qrt=p_splashAd data-type=text data="" status-code=404
 
 (?i)^https?:\/\/fmapp\.chinafamilymart\.com\.cn\/api\/app\/biz\/base\/appversion\/latest data-type=text data="" status-code=404
 
@@ -1113,17 +1113,17 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/y\.gtimg\.cn\/music\/common\/\/upload\/kg_ad\/.+?\d{3,4}x\d{4} data-type=text data="" status-code=200
 
-(?i)^https?:\/\/mi\.gdt\.qq\.com\/gdt_mview\.fcg\?posid= data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/mi\.gdt\.qq\.com\/gdt_mview\.fcg\?(?:[^#?&]+&)*posid= data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
-(?i)^https?:\/\/facade-api\.black-unique\.com\/app\/v1\/startScreen\?cityId=102923&channelId=0&width=1170&height=2532 data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/facade-api\.black-unique\.com\/app\/v1\/startScreen\?(?:[^#?&]+&)*cityId=102923&channelId=0&width=1170&height=2532 data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/facade-api\.black-unique\.com\/app\/v1\/startScreen\?.* data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
-(?i)^https?:\/\/facade-api\.black-unique\.com\/advertise\/v1\/get\?cityId=102923&positions=mine_popup data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/facade-api\.black-unique\.com\/advertise\/v1\/get\?(?:[^#?&]+&)*cityId=102923&positions=mine_popup data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/facade-api\.black-unique\.com\/advertise\/v1\/get\?.* data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
-(?i)^https?:\/\/us\.l\.qq\.com\/exapp\?spsa=\d data-type=text data="" status-code=404
+(?i)^https?:\/\/us\.l\.qq\.com\/exapp\?(?:[^#?&]+&)*spsa=\d data-type=text data="" status-code=404
 
 (?i)^https?:\/\/app\.peopleapp\.com\/Api\/\d+\/HomeApi\/(adv|getAdvertImage) data-type=text data="" status-code=404
 
@@ -1133,7 +1133,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/api\.rr\.tv\/.*?Version data-type=text data="" status-code=404
 
-(?i)^https?:\/\/api\.rr\.tv\/storage\/business\/rootName\/app\/homePage\?dataType=JSON data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/api\.rr\.tv\/storage\/business\/rootName\/app\/homePage\?(?:[^#?&]+&)*dataType=JSON data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/oneapph5\.dongfeng-nissan\.com\.cn\/mb-gw\/vmsp-discover\/rest\/business-service\/v1\/advert\/advertinfo data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
@@ -1141,7 +1141,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/api\.daydaycook\.com\.cn\/daydaycook\/server\/ad\/ data-type=text data="" status-code=404
 
-(?i)^https?:\/\/app\.meruki\.cn\/\?n=Sig\.Front\.AppFront\.GetOpenAdDoorzo data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/app\.meruki\.cn\/\?(?:[^#?&]+&)*n=Sig\.Front\.AppFront\.GetOpenAdDoorzo data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/dyncdn\.me\/static\/\d{0,2}\/js\/expla\d{0,4}\.js$ data-type=text data="" status-code=200
 
@@ -1171,11 +1171,11 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https:\/\/open\.e\.kuaishou\.cn\/rest\/e\/v3\/open data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
-(?i)^https:\/\/zlsdk\.1rtb\.net\/sdk\/req_ad\?sdk_version=\d+\.\d+\.\d+\.\d+&device_os=iOS&accept_ad_type=\d+&app_id=\d+&pid=\d+&sdk_version_code=\d+ data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https:\/\/zlsdk\.1rtb\.net\/sdk\/req_ad\?(?:[^#?&]+&)*sdk_version=\d+\.\d+\.\d+\.\d+&device_os=iOS&accept_ad_type=\d+&app_id=\d+&pid=\d+&sdk_version_code=\d+ data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/api\.gameplus\.qq\.com\/community\.OnloadSrv\/GetPreloadScreenInfo data-type=text data="" status-code=200
 
-(?i)^https?:\/\/ios\.sspai\.com\/api\/v3\/recommend\/page\/get\?ad\.*ios_home_modal data-type=text data="" status-code=404
+(?i)^https?:\/\/ios\.sspai\.com\/api\/v3\/recommend\/page\/get\?(?:[^#?&]+&)*ad\.*ios_home_modal data-type=text data="" status-code=404
 
 (?i)^https?:\/\/ecard\.shenzhentong\.com\/wxweb\/bwxppub2\/QryAdvertList\.do data-type=text data="" status-code=200
 
@@ -1261,15 +1261,15 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/pic\.k\.sohu\.com\/img\d\/wb\/tj\/ data-type=text data="" status-code=404
 
-(?i)^https?:\/\/s\.go\.sohu\.com\/adgtr\/\?gbcode= data-type=tiny-gif status-code=200
+(?i)^https?:\/\/s\.go\.sohu\.com\/adgtr\/\?(?:[^#?&]+&)*gbcode= data-type=tiny-gif status-code=200
 
-(?i)^https?:\/\/api\.sodalife\.xyz\/v1\/posters\?location=SODA_APP%3AHOME%3ABOTTOM data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/api\.sodalife\.xyz\/v1\/posters\?(?:[^#?&]+&)*location=SODA_APP%3AHOME%3ABOTTOM data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
-(?i)^https?:\/\/api\.sodalife\.xyz\/v1\/posters\?location=SODA_APP%3AHOME%3ACENTER data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/api\.sodalife\.xyz\/v1\/posters\?(?:[^#?&]+&)*location=SODA_APP%3AHOME%3ACENTER data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
-(?i)^https?:\/\/api\.sodalife\.xyz\/v1\/posters\?location=SODA_APP%3AMINE%3ABOTTOM data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/api\.sodalife\.xyz\/v1\/posters\?(?:[^#?&]+&)*location=SODA_APP%3AMINE%3ABOTTOM data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
-(?i)^https?:\/\/api\.sodalife\.xyz\/v1\/posters\?location=SODA_APP%3AREWARDS%3ACENTER data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/api\.sodalife\.xyz\/v1\/posters\?(?:[^#?&]+&)*location=SODA_APP%3AREWARDS%3ACENTER data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/api\.sodalife\.xyz\/v1\/goods data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
@@ -1361,7 +1361,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/iphone\.ac\.qq\.com\/.*\/Support\/(getSystemConf|bootScreen) data-type=text data="" status-code=404
 
-(?i)^https?:\/\/stat\.10jqka\.com\.cn\/q\?ld=mobile&id=ad data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/stat\.10jqka\.com\.cn\/q\?(?:[^#?&]+&)*ld=mobile&id=ad data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/(mkt-)?gateway\.tuhu\.cn(\/mkt)?\/mkt-cms\/circle\/recommend\/ data-type=text data="" status-code=404
 
@@ -1437,7 +1437,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https:\/\/god\.gameyw\.netease\.com\/v\d\/app\/static\/conf\/getByModuleNameList$ data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
-(?i)^https?:\/\/kaola-haitao\.oss\.kaolacdn.com\/.+?_\d{3,4}_\d{4}\.jpg\?x-oss-process=image\/resize,m_mfit,w_\d{3,4},h_\d{4}\/format,webp\/quality,Q_85 data-type=text data="" status-code=200
+(?i)^https?:\/\/kaola-haitao\.oss\.kaolacdn.com\/.+?_\d{3,4}_\d{4}\.jpg\?(?:[^#?&]+&)*x-oss-process=image\/resize,m_mfit,w_\d{3,4},h_\d{4}\/format,webp\/quality,Q_85 data-type=text data="" status-code=200
 
 (?i)^https?:\/\/sp\.kaola\.com\/api\/openad data-type=text data="" status-code=200
 
@@ -1513,7 +1513,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/mapi\.appvipshop\.com\/vips-mobile\/rest\/layout\/productList\/eventData\/v data-type=text data="" status-code=200
 
-(?i)^https?:\/\/mapi\.appvipshop\.com\/vips-mobile\/rest\/activity\/coupon\/float_entrance\/get\?api_key data-type=text data="" status-code=200
+(?i)^https?:\/\/mapi\.appvipshop\.com\/vips-mobile\/rest\/activity\/coupon\/float_entrance\/get\?(?:[^#?&]+&)*api_key data-type=text data="" status-code=200
 
 (?i)^https?:\/\/snailsleep\.net\/snail\/v\d\/adTask\/ data-type=text data="" status-code=404
 
@@ -1531,7 +1531,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/img\.wukongtv\.com\/wkremote\/AD\/iOS\/.*.(jpg|png|jpeg) data-type=text data="" status-code=200
 
-(?i)^https?:\/\/overseas\.weico\.cc\/portal\.php\?a=get_coopen_ads data-type=text data="" status-code=200
+(?i)^https?:\/\/overseas\.weico\.cc\/portal\.php\?(?:[^#?&]+&)*a=get_coopen_ads data-type=text data="" status-code=200
 
 (?i)^https?:\/\/cds\.wifi188\.com\/feeds\.sec data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
@@ -1547,7 +1547,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https:\/\/vapp\.tmuyun\.com\/api\/buoy\/list data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
-(?i)^https?:\/\/wcprd\.hilton\.com\.cn\/app-middleware\/graphql\?type=splashAd data-type=text data="" status-code=200
+(?i)^https?:\/\/wcprd\.hilton\.com\.cn\/app-middleware\/graphql\?(?:[^#?&]+&)*type=splashAd data-type=text data="" status-code=200
 
 (?i)^https?:\/\/cstore-en-public-tx\.seewo\.com\/easinote5_public data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
@@ -1593,9 +1593,9 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https:\/\/mgesq\.api\.mgtv\.com\/user\/center\/config data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
-(?i)^https?:\/\/api-miprint\.hannto\.com\/v1\/c\/res\/app\/ad\/\?app_version data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/api-miprint\.hannto\.com\/v1\/c\/res\/app\/ad\/\?(?:[^#?&]+&)*app_version data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
-(?i)^https?:\/\/api\.indeedpower\.com\/v1\/m\/edu\/module\/homepage_banner\/\?randomStr data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/api\.indeedpower\.com\/v1\/m\/edu\/module\/homepage_banner\/\?(?:[^#?&]+&)*randomStr data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/api\.jr\.mi\.com\/v\d\/adv\/ data-type=text data="" status-code=200
 
@@ -1619,7 +1619,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/api\.xiaoyi\.com\/v5\/app\/mobile\/ads data-type=text data="" status-code=404
 
-(?i)^https?:\/\/api\.xiaoyi\.com\/v5\/app\/config\?userid=.* data-type=text data="" status-code=404
+(?i)^https?:\/\/api\.xiaoyi\.com\/v5\/app\/config\?(?:[^#?&]+&)*userid=.* data-type=text data="" status-code=404
 
 (?i)^https?:\/\/shcss\.suning\.com\/shcss-web\/api\/appImage\/queryAppImage\.do data-type=text data="" status-code=200
 
@@ -1635,7 +1635,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/xxyx-client-api\.xiaoxiaoyouxuan\.com\/activity\/show data-type=text data="" status-code=404
 
-(?i)^https?:\/\/xxyx-client-api\.xiaoxiaoyouxuan\.com\/client\/urban\/activity\/index\/data\?agentId=12 data-type=text data="" status-code=404
+(?i)^https?:\/\/xxyx-client-api\.xiaoxiaoyouxuan\.com\/client\/urban\/activity\/index\/data\?(?:[^#?&]+&)*agentId=12 data-type=text data="" status-code=404
 
 (?i)^https?:\/\/statistic\.live\.126\.net\/statics\/report\/common\/form data-type=text data="" status-code=404
 
@@ -1643,33 +1643,33 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/myusmile\.online\/user\/version\/requestFirmwareUpdate\/ data-type=text data="" status-code=404
 
-(?i)^https?:\/\/wemallh5\.usmile\.com\/api\/sp-portal\/store\/usmile\/activity\/dayCheck\?pop data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/wemallh5\.usmile\.com\/api\/sp-portal\/store\/usmile\/activity\/dayCheck\?(?:[^#?&]+&)*pop data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/www\.myusmile\.online\/user\/userTagRecord\/popup data-type=text data="" status-code=404
 
-(?i)^https?:\/\/m\.ctrip\.com\/restapi\/soa2\/[0-9]{5}\/json\/getTimeZoneServerIpList\?__gw_os=IOS data-type=text data="" status-code=200
+(?i)^https?:\/\/m\.ctrip\.com\/restapi\/soa2\/[0-9]{5}\/json\/getTimeZoneServerIpList\?(?:[^#?&]+&)*__gw_os=IOS data-type=text data="" status-code=200
 
 (?i)^https?:\/\/ma-adx\.ctrip\.com\/_ma\.gif data-type=text data="" status-code=404
 
 (?i)^https?:\/\/m\.ctrip\.com\/restapi\/soa2\/13916\/json\/tripAds data-type=text data="" status-code=200
 
-(?i)^https?:\/\/mbd\.baidu\.com\/newspage\/api\/getmobads\?page\=landingshare data-type=text data="" status-code=404
+(?i)^https?:\/\/mbd\.baidu\.com\/newspage\/api\/getmobads\?(?:[^#?&]+&)*page\=landingshare data-type=text data="" status-code=404
 
 (?i)^https?:\/\/bgw\.xinyue\.qq\.com\/xyapi\.PageService\/GetIndexPopFlash data-type=text data="" status-code=200
 
-(?i)^https?:\/\/edit\.sinaapp\.com\/ua\?t=adv data-type=text data="" status-code=200
+(?i)^https?:\/\/edit\.sinaapp\.com\/ua\?(?:[^#?&]+&)*t=adv data-type=text data="" status-code=200
 
 (?i)^https?:\/\/app\.xinpianchang\.com\/open_screen\? data-type=text data="" status-code=404
 
 (?i)^https?:\/\/operationapi\.fosunhanig\.com\/ad\/v\d\/(PopupAdList|ScreenAdList|BannerList) data-type=text data="" status-code=200
 
-(?i)^https?:\/\/api\d\.sparke\.cn\/admodel\/list\?adspace=spgg&flag=\d$ data-type=text data="" status-code=404
+(?i)^https?:\/\/api\d\.sparke\.cn\/admodel\/list\?(?:[^#?&]+&)*adspace=spgg&flag=\d$ data-type=text data="" status-code=404
 
 (?i)^https?:\/\/app\.chinahxzq\.com\.cn:9302\/starway-api\/ad data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/app\.chinahxzq\.com\.cn\/starway\/adShow data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
-(?i)^https?:\/\/static\.api\.m\.panda\.tv\/index\.php\?method=clientconf\.firstscreen&__version=(play_cnmb|(\d+\.){0,3}\d+)&__plat=ios&__channel=appstore data-type=tiny-gif status-code=200
+(?i)^https?:\/\/static\.api\.m\.panda\.tv\/index\.php\?(?:[^#?&]+&)*method=clientconf\.firstscreen&__version=(play_cnmb|(\d+\.){0,3}\d+)&__plat=ios&__channel=appstore data-type=tiny-gif status-code=200
 
 (?i)^https?:\/\/imeclient\.openspeech\.cn\/adservice\/ data-type=text data="" status-code=200
 
@@ -1687,9 +1687,9 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/www\.cntv\.cn\/nettv\/adp\/ data-type=text data="" status-code=200
 
-(?i)^https:\/\/userpms-api\.suh\.cn\/apt\/api\/bannar\/PageList\?sysSearchKey=sysPat&showSearchKey=advertising&pageIndex=1&pagesize=100&lanSearchValue=1&locationSearchKey=&status=1& data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https:\/\/userpms-api\.suh\.cn\/apt\/api\/bannar\/PageList\?(?:[^#?&]+&)*sysSearchKey=sysPat&showSearchKey=advertising&pageIndex=1&pagesize=100&lanSearchValue=1&locationSearchKey=&status=1& data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
-(?i)^https:\/\/patient-api\.suh\.cn\/apt\/api\/userinfo\/GetNotice\?appname=pmsys&channel=6&device=ios&language=1&source=2&version= data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https:\/\/patient-api\.suh\.cn\/apt\/api\/userinfo\/GetNotice\?(?:[^#?&]+&)*appname=pmsys&channel=6&device=ios&language=1&source=2&version= data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/venus\.yhd\.com\/memhome\/launchConfig data-type=text data="" status-code=404
 
@@ -1749,9 +1749,9 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/api\.ulife\.group\/auth\/account\/getUpgradeStrategy data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
-(?i)^https?:\/\/api\.ulife\.group\/market\/frontEntrance\/getThirdAdvertising\?displayPort=1&type=15 data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/api\.ulife\.group\/market\/frontEntrance\/getThirdAdvertising\?(?:[^#?&]+&)*displayPort=1&type=15 data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
-(?i)^https?:\/\/api\.ulife\.group\/market\/memberCard\/listMemberCard\?isShowSecondaryCard=1 data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/api\.ulife\.group\/market\/memberCard\/listMemberCard\?(?:[^#?&]+&)*isShowSecondaryCard=1 data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/api\.ulife\.group\/auth\/account\/entrance data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
@@ -1805,7 +1805,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/119\.29\.29\.\d+\/d data-type=text data="" status-code=200
 
-(?i)^https?:\/\/djcapp\.game\.qq\.com\/daoju\/igw\/main\/\?_service=welink\.ad\.list&_ret_key=result&site_set data-type=text data="" status-code=200
+(?i)^https?:\/\/djcapp\.game\.qq\.com\/daoju\/igw\/main\/\?(?:[^#?&]+&)*_service=welink\.ad\.list&_ret_key=result&site_set data-type=text data="" status-code=200
 
 (?i)^https?:\/\/quanguo\.mygolbs\.com:8081\/MyBusServer\/servlet\/MyGoServer\.HttpPool\.HttpHandlerServlet data-type=text data="" status-code=200
 
@@ -1871,7 +1871,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/sichuan\.95504\.net\/v\d\/gd\/index\/get data-type=text data="" status-code=200
 
-(?i)^https?:\/\/app\.badmintoncn\.com\/mag\/operative\/v\d\/ad\/listNotEndByPlace\?place=first_page data-type=text data="" status-code=200
+(?i)^https?:\/\/app\.badmintoncn\.com\/mag\/operative\/v\d\/ad\/listNotEndByPlace\?(?:[^#?&]+&)*place=first_page data-type=text data="" status-code=200
 
 (?i)^https?:\/\/fastbuyer\.zbj\.com\/configure\/screenAdConfig\/ data-type=text data="" status-code=200
 
@@ -1879,13 +1879,13 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 (?i)^https?:\/\/app\.zhuanzhuan\.com\/zzx\/transfer\/getConfigInfo data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
-(?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/transfer\/userred\?scene=homePage data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/transfer\/userred\?(?:[^#?&]+&)*scene=homePage data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/app\.zhuanzhuan\.com\/zzopen\/popwindow\/getallpopwin\? data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzlogic\/getOpenScreen data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
-(?i)^https?:\/\/zjdr666\.com\/zjdr\.php\/v\d\/(version|top_notice\?|advert\?position=[^2]+) data-type=text data="" status-code=404
+(?i)^https?:\/\/zjdr666\.com\/zjdr\.php\/v\d\/(version|top_notice\?|advert\?(?:[^#?&]+&)*position=[^2]+) data-type=text data="" status-code=404
 
 (?i)^https?:\/\/adx-cn\.anythinktech\.com\/bid data-type=text data="" status-code=200
 
@@ -1918,7 +1918,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 {{{boohee_script}}}[广告拦截合集]薄荷 = type=http-response, pattern=(?i)^https:\/\/api\.boohee\.com\/meta-interface\/v1\/index\/plaza\?, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/bohe/bohe_ads.js, requires-body=true
 
-{{{boohee_script}}}[广告拦截合集]薄荷 = type=http-response, pattern=(?i)^https:\/\/api\.boohee\.com\/open-interface\/v1\/string\/market_page\?title=metabolism_config$, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/bohe/bohe_ads.js, requires-body=true
+{{{boohee_script}}}[广告拦截合集]薄荷 = type=http-response, pattern=(?i)^https:\/\/api\.boohee\.com\/open-interface\/v1\/string\/market_page\?(?:[^#?&]+&)*title=metabolism_config$, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/bohe/bohe_ads.js, requires-body=true
 
 {{{bilibilimanga_script}}}[广告拦截合集]哔哩哔哩漫画 = type=http-response, pattern=(?i)^https?:\/\/manga\.bilibili\.com\/twirp\/user\.v\d\.User\/(?>UCenterConf|GetInitInfo), script-path=https://raw.githubusercontent.com/zirawell/R-Store/main/Res/Scripts/AntiAd/bilibiliManga.js, requires-body=true
 
@@ -1928,15 +1928,15 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 {{{bilibilimanga_script}}}[广告拦截合集]哔哩哔哩漫画 = type=http-response, pattern=(?i)^https?:\/\/manga\.bilibili\.com\/twirp\/comic\.v\d\.Comic\/GetCommonBanner, script-path=https://raw.githubusercontent.com/zirawell/R-Store/main/Res/Scripts/AntiAd/bilibiliManga.js, requires-body=true
 
-{{{blued_script}}}[广告拦截合集]Blued = type=http-response, pattern=(?i)^https?:\/\/social\.blued\.cn\/users\/.+\/more\/ios\?v=2, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/blued.js, requires-body=true
+{{{blued_script}}}[广告拦截合集]Blued = type=http-response, pattern=(?i)^https?:\/\/social\.blued\.cn\/users\/.+\/more\/ios\?(?:[^#?&]+&)*v=2, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/blued.js, requires-body=true
 
-{{{caixin_script}}}[广告拦截合集]财新 = type=http-response, pattern=(?i)^https?:\/\/gg\.caixin\.com\/s\?z=caixin&op=1&c=3362, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/caixin/caixinAd.js, requires-body=true
+{{{caixin_script}}}[广告拦截合集]财新 = type=http-response, pattern=(?i)^https?:\/\/gg\.caixin\.com\/s\?(?:[^#?&]+&)*z=caixin&op=1&c=3362, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/caixin/caixinAd.js, requires-body=true
 
 {{{dianping_script}}}[广告拦截合集]大众点评 = type=http-response, pattern=(?i)^https?:\/\/img\.meituan\.net\/(?>dpmobile|goodsawardpic)\/, script-path=https://raw.githubusercontent.com/zirawell/R-Store/main/Res/Scripts/AntiAd/dianping.js, requires-body=true, timeout=60
 
 {{{donghuafeng_script}}}[广告拦截合集]动画疯 = type=http-response, pattern=(?i)^https?:\/\/api\.gamer\.com\.tw\/mobile_app\/anime\/v\d\/(token|m3u8).php\?, script-path=https://raw.githubusercontent.com/NobyDa/Script/master/Bahamut/BahamutAnimeAds.js, requires-body=true
 
-{{{feikechaguan_script}}}[广告拦截合集]飞客茶馆 = type=http-response, pattern=(?i)^https?:\/\/47\.100\.65\.202\/source\/plugin\/mobile\/mobile\.php\?module=threadpost&.+?&page=1, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/fly.js, requires-body=true
+{{{feikechaguan_script}}}[广告拦截合集]飞客茶馆 = type=http-response, pattern=(?i)^https?:\/\/47\.100\.65\.202\/source\/plugin\/mobile\/mobile\.php\?(?:[^#?&]+&)*module=threadpost&.+?&page=1, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/fly.js, requires-body=true
 
 {{{feikechaguan_script}}}[广告拦截合集]飞客茶馆 = type=http-response, pattern=(?i)^https?:\/\/www\.flyert\.com(\.cn)?\/.*plugin, script-path=https://raw.githubusercontent.com/zirawell/R-Store/main/Res/Scripts/AntiAd/flyert.js, requires-body=true
 
@@ -1944,11 +1944,11 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 {{{huifutianxia_script}}}[广告拦截合集]汇付天下 = type=http-response, pattern=(?i)^https:\/\/saas-ad\.cloudpnr\.com\/huifuad-base-api\/api\/tactics\/ad, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/huifutianxia_ads.js, requires-body=true
 
-{{{ccblife_script}}}[广告拦截合集]建行生活 = type=http-response, pattern=(?i)^https?:\/\/yunbusiness\.ccb\.com\/basic_service\/txCtrl\?txcode=A3341AB04, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/ccbLife/ccbLifeAds.js, requires-body=true, timeout=60
+{{{ccblife_script}}}[广告拦截合集]建行生活 = type=http-response, pattern=(?i)^https?:\/\/yunbusiness\.ccb\.com\/basic_service\/txCtrl\?(?:[^#?&]+&)*txcode=A3341AB04, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/ccbLife/ccbLifeAds.js, requires-body=true, timeout=60
 
 {{{ccblife_script}}}[广告拦截合集]建行生活 = type=http-response, pattern=(?i)^https?:\/\/g\.alicdn\.com\/.*o2o-ad, script-path=https://raw.githubusercontent.com/zirawell/R-Store/main/Res/Scripts/AntiAd/alicdn.js, requires-body=true, timeout=60
 
-{{{jingxi_script}}}[广告拦截合集]京喜 = type=http-response, pattern=(?i)^https?:\/\/api\.m\.jd\.com\/api\?functionId=delivery_show, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/jingxiAd.js, requires-body=true
+{{{jingxi_script}}}[广告拦截合集]京喜 = type=http-response, pattern=(?i)^https?:\/\/api\.m\.jd\.com\/api\?(?:[^#?&]+&)*functionId=delivery_show, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/jingxiAd.js, requires-body=true
 
 {{{adnetwork_script}}}[广告拦截合集]广告联盟 = type=http-response, pattern=(?i)^https:\/\/(api-access\.pangolin-sdk-toutiao\.com\/api\/ad\/union\/sdk\/get_ads|open\.e\.kuaishou\.com\/rest\/e\/v3\/open\/univ$|mi\.gdt\.qq\.com\/gdt_mview\.fcg\?), script-path=https://raw.githubusercontent.com/app2smile/rules/master/js/adsense.js, requires-body=true
 
@@ -1958,7 +1958,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 {{{lawson_script}}}[广告拦截合集]罗森点点 = type=http-response, pattern=(?i)^https:\/\/lawsonapi\.yorentown\.com\/portal\/app\/globalLaunch\/listAdvert, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/lawson.js, requires-body=true
 
-{{{maidanba_script}}}[广告拦截合集]买单吧 = type=http-response, pattern=(?i)^https?:\/\/creditcardapp\.bankcomm\.(com|cn)\/rcg\/index\.html\?callbackurl=rcg\/index\.html&orclogin=1&, script-path=https://raw.githubusercontent.com/zirawell/R-Store/main/Res/Scripts/AntiAd/mdb.js, requires-body=true
+{{{maidanba_script}}}[广告拦截合集]买单吧 = type=http-response, pattern=(?i)^https?:\/\/creditcardapp\.bankcomm\.(com|cn)\/rcg\/index\.html\?(?:[^#?&]+&)*callbackurl=rcg\/index\.html&orclogin=1&, script-path=https://raw.githubusercontent.com/zirawell/R-Store/main/Res/Scripts/AntiAd/mdb.js, requires-body=true
 
 {{{maimai_script}}}[广告拦截合集]脉脉 = type=http-response, pattern=(?i)^https:\/\/(h3\.)?open\.taou\.com\/maimai\/feed\/v6\/detail_recommend_feeds\?, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/maimai/maimai_ads.js, requires-body=true
 
@@ -1986,11 +1986,11 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 {{{renrentv_script}}}[广告拦截合集]人人视频 = type=http-response, pattern=(?i)^https?:\/\/api\.rr\.tv\/\w{3}\/level\/info, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/rrtv_json.js, requires-body=true
 
-{{{renrentv_script}}}[广告拦截合集]人人视频 = type=http-response, pattern=(?i)^https?:\/\/api\.rr\.tv\/v3plus\/index\/channel\?pageNum=1&position=CHANNEL_INDEX, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/rrtv_json.js, requires-body=true
+{{{renrentv_script}}}[广告拦截合集]人人视频 = type=http-response, pattern=(?i)^https?:\/\/api\.rr\.tv\/v3plus\/index\/channel\?(?:[^#?&]+&)*pageNum=1&position=CHANNEL_INDEX, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/rrtv_json.js, requires-body=true
 
 {{{renrentv_script}}}[广告拦截合集]人人视频 = type=http-response, pattern=(?i)^https?:\/\/api\.rr\.tv\/app\/config\/h5NativeBar, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/rrtv_json.js, requires-body=true
 
-{{{renrentv_script}}}[广告拦截合集]人人视频 = type=http-response, pattern=(?i)^https?:\/\/api\.rr\.tv\/v3plus\/index\/channel\?pageNum=1&position=CHANNEL_MY, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/rrtv_json.js, requires-body=true
+{{{renrentv_script}}}[广告拦截合集]人人视频 = type=http-response, pattern=(?i)^https?:\/\/api\.rr\.tv\/v3plus\/index\/channel\?(?:[^#?&]+&)*pageNum=1&position=CHANNEL_MY, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/rrtv_json.js, requires-body=true
 
 {{{renrentv_script}}}[广告拦截合集]人人视频 = type=http-response, pattern=(?i)^https?:\/\/api\.rr\.tv\/user\/privilege\/list, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/rrtv_json.js, requires-body=true
 
@@ -2002,7 +2002,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 {{{renrentv_script}}}[广告拦截合集]人人视频 = type=http-response, pattern=(?i)^https?:\/\/api\.rr\.tv\/user\/profile, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/rrtv_json.js, requires-body=true
 
-{{{sodalife_script}}}[广告拦截合集]苏打校园 = type=http-response, pattern=(?i)^https?:\/\/api\.sodalife\.xyz\/v1\/posters\?location=SODA_APP%3AHOME%3ATOP, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/soda.js, requires-body=true
+{{{sodalife_script}}}[广告拦截合集]苏打校园 = type=http-response, pattern=(?i)^https?:\/\/api\.sodalife\.xyz\/v1\/posters\?(?:[^#?&]+&)*location=SODA_APP%3AHOME%3ATOP, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/soda.js, requires-body=true
 
 {{{qqnews_script}}}[广告拦截合集]腾讯新闻 = type=http-response, pattern=(?i)^https?:\/\/(news\.ssp\.qq\.com\/app|r\.inews\.qq\.com\/(get(QQNewsUnreadList|TagFeedList)|gw\/page\/event_detail|news_feed\/hot_module_list)), script-path=https://raw.githubusercontent.com/app2smile/rules/master/js/qq-news.js, requires-body=true
 
@@ -2016,7 +2016,7 @@ http-response (?i)^https?:\/\/app\.zhuanzhuan\.com\/zz\/v2\/zzinfoshow\/getchoic
 
 {{{youdao_script}}}[广告拦截合集]网易有道词典 = type=http-response, pattern=(?i)^https?:\/\/dict\.youdao\.com\/(homepage\/promotion|course\/tab\/home|homepage\/tile), script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/youdao/dict-youdao-ad.js, requires-body=true
 
-{{{winnipeg_script}}}[广告拦截合集]温尼伯站 = type=http-response, pattern=(?i)^https:\/\/vue3-api\.zhixiny\.cn\/v1\/initui\?key=index, script-path=https://raw.githubusercontent.com/Sliverkiss/QuantumultX/main/AdBlock/xmApp/wnbz.js, requires-body=true
+{{{winnipeg_script}}}[广告拦截合集]温尼伯站 = type=http-response, pattern=(?i)^https:\/\/vue3-api\.zhixiny\.cn\/v1\/initui\?(?:[^#?&]+&)*key=index, script-path=https://raw.githubusercontent.com/Sliverkiss/QuantumultX/main/AdBlock/xmApp/wnbz.js, requires-body=true
 
 {{{xiangjiao_script}}}[广告拦截合集]香蕉是一种水果 = type=http-response, pattern=(?i)^https?:\/\/.+?\.(pipi|fuli|xiang(jiao|xiang))apps\.com\/(ucp\/index|getGlobalData|(\/|)vod\/reqplay\/), script-path=https://raw.githubusercontent.com/NobyDa/Script/master/QuantumultX/File/xjsp.js, requires-body=true
 
