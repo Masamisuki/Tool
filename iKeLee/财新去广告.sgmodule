@@ -15,7 +15,7 @@
 
 (?i)^https:\/\/mappsv5\.caixin\.com\/channelv5\/article_ad_ios_info\.json data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
-(?i)^https:\/\/gg\.caixin\.com\/s\?z=caixin&slot=\d+ data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+(?i)^https:\/\/gg\.caixin\.com\/s\?(?:[^#?&]+&)*z=caixin&slot=\d+ data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 (?i)^https:\/\/msgapi\.caixin\.com\/msg_api\/annmsg\/annlist data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
@@ -26,7 +26,7 @@
 
 移除财新FM广告 = type=http-response, pattern=(?i)^https:\/\/gateway\.caixin\.com\/api\/app-content\/fm\/index\/list\?, script-path=https://kelee.one/Resource/JavaScript/CaixinMedia/CaixinMedia_remove_ads.js, requires-body=true
 
-移除开屏广告 = type=http-response, pattern=(?i)^https:\/\/gg\.caixin\.com\/s\?z=caixin&op=\d, script-path=https://kelee.one/Resource/JavaScript/CaixinMedia/CaixinMedia_remove_ads.js, requires-body=true
+移除开屏广告 = type=http-response, pattern=(?i)^https:\/\/gg\.caixin\.com\/s\?(?:[^#?&]+&)*z=caixin&op=\d, script-path=https://kelee.one/Resource/JavaScript/CaixinMedia/CaixinMedia_remove_ads.js, requires-body=true
 
 移除正文广告 = type=http-response, pattern=(?i)^https:\/\/mappsv5\.caixin\.com\/articlev5\/\d+\/\d+\.json$, script-path=https://kelee.one/Resource/JavaScript/CaixinMedia/CaixinMedia_remove_ads.js, requires-body=true
 
