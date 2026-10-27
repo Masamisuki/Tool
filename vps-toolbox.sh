@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="2.5"
+VERSION="2.6"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -299,6 +299,70 @@ act_tcpfit() {
   run_remote "tcpfit" \
     "https://raw.githubusercontent.com/Kylin010/tcpfit/main/tcpfit.sh?$(date +%s)" \
     bash
+}
+
+act_bbrv3() {
+  step "BBRv3 内核 —— byJoey/Actions-bbr-v3（官方主线 + BBRv3 补丁）"
+  info "给 Debian 12+ / Ubuntu 24.04+ 装带 BBRv3 的官方主线内核（apt 装 .deb）"
+  echo
+
+  local up="https://raw.githubusercontent.com/byJoey/Actions-bbr-v3/main/install.sh"
+  local cmd="bash <(curl -fsSL ${up})"
+
+  # ---------- 检测（包名带 -joeyblog-bbrv3） ----------
+  local pkgs="" running=0 installed=0
+  pkgs=$(dpkg -l 2>/dev/null | awk '/^ii/ && $2 ~ /^linux-image-/ && $2 ~ /joeyblog-bbrv3/ {sub(/^linux-image-/, "", $2); print $2}')
+  [ -n "$pkgs" ] && installed=1
+  case "$(uname -r)" in *joeyblog-bbrv3*) running=1 ;; esac
+
+  hr
+  printf '  %s当前内核%s   : %s\n' "$DIM" "$NC" "$(uname -r)"
+  if [ "$running" = 1 ]; then
+    ok "BBRv3 内核【已安装，且正在运行】"
+  elif [ "$installed" = 1 ]; then
+    warn "BBRv3 内核【已安装，但当前没在运行】—— 需要重启"
+  else
+    warn "BBRv3 内核【未安装】"
+  fi
+  if [ -n "$pkgs" ]; then
+    printf '  %s已装的包%s   :\n' "$DIM" "$NC"
+    echo "$pkgs" | sed 's/^/      linux-image-/'
+  fi
+  printf '  %s拥塞控制%s   : %s\n' "$DIM" "$NC" "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)"
+  printf '  %s可用算法%s   : %s\n' "$DIM" "$NC" "$(cat /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null)"
+  printf '  %s队列规则%s   : %s\n' "$DIM" "$NC" "$(sysctl -n net.core.default_qdisc 2>/dev/null)"
+  hr
+  echo
+
+  warn "上游菜单只用 1（安装/更新）和 9（卸载）"
+  dim "  4-8、10、12 都别用 —— 参数一律交给 tcpfit（qc → 6）"
+  dim "  原因：qdisc 会打架 / sysctl.d 文件互相覆盖 / 疯批模式与整形相反"
+  echo
+  dim "  装完算法名仍然是 bbr（补丁替换的是实现，没改名）"
+  dim "  → tcpfit 设 bbr 时，实际跑的就是 BBRv3，零配置吻合"
+  dim "  ⚠️ 装内核前确认能回退：dpkg -l | grep linux-image"
+  echo
+
+  if [ "$installed" = 1 ]; then
+    ok "已安装 —— 直接进入上游菜单（不再询问）"
+    echo
+  else
+    if ! confirm "确认执行？"; then warn "已取消"; return 0; fi
+    echo
+  fi
+
+  if [ "$HAVE_TTY" = 1 ]; then
+    bash -c "$cmd" < /dev/tty
+  else
+    bash -c "$cmd"
+  fi
+
+  echo
+  info "后续："
+  dim "  ① 装了新内核 → 重启生效: reboot"
+  dim "  ② 重启后验证:        uname -r | grep joeyblog"
+  dim "  ③ 再跑 tcpfit 调参数: qc → 6"
+  dim "  ④ 卸载:              重跑本项 → 上游菜单选 9"
 }
 
 act_keysh() {
@@ -1100,29 +1164,30 @@ menu() {
   printf '%s\n' "${BOLD}  ── 网络调优 ─────────────────────────────────────────────${NC}"
   printf '   %s5)%s BBR v3 优化      %snet-tcp-tune 综合调优（菜单）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   printf '   %s6)%s tcpfit           %sTCP 精细调优（实测推导）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s7)%s BBRv3 内核        %s官方主线 + BBRv3 补丁（装内核）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
   printf '%s\n' "${BOLD}  ── 安全 / 代理 / 监控 ───────────────────────────────────${NC}"
-  printf '   %s7)%s key.sh           %sSSH 密钥登录加固%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '   %s8)%s emby-proxy       %sEmby HTTPS 反代（Caddy/Nginx）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '   %s9)%s Komari 探针安装    %sLite Agent%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s8)%s key.sh           %sSSH 密钥登录加固%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s9)%s emby-proxy       %sEmby HTTPS 反代（Caddy/Nginx）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s10)%s Komari 探针安装    %sLite Agent%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
   printf '%s\n' "${BOLD}  ── 测评 ─────────────────────────────────────────────────${NC}"
-  printf '  %s10)%s NodeQuality  %sIP质量 / 硬件 / 网络 / 回程%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '  %s11)%s TcpQuality   %sTCP 质量测试%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '  %s12)%s iperf3 服务端 %s状态 / 启动 / 停止（用完可关）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s11)%s NodeQuality  %sIP质量 / 硬件 / 网络 / 回程%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s12)%s TcpQuality   %sTCP 质量测试%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s13)%s iperf3 服务端 %s状态 / 启动 / 停止（用完可关）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
   printf '%s\n' "${BOLD}  ── IPv6 / WARP ──────────────────────────────────────────${NC}"
-  printf '  %s13)%s WARP (warp-go)   %s给纯 IPv6 机器加 IPv4 出口%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '  %s14)%s NAT64 / DNS64    %s纯 DNS 方案，无需安装%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s14)%s WARP (warp-go)   %s给纯 IPv6 机器加 IPv4 出口%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s15)%s NAT64 / DNS64    %s纯 DNS 方案，无需安装%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
   printf '%s\n' "${BOLD}  ── 面板 / 容器 ──────────────────────────────────────────${NC}"
-  printf '  %s15)%s FLYX 面板        %s转发 + 节点编排（Xray/sing-box/Snell）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '  %s16)%s Docker 安装      %s官方脚本（容器化应用的前置）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s16)%s FLYX 面板        %s转发 + 节点编排（Xray/sing-box/Snell）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s17)%s Docker 安装      %s官方脚本（容器化应用的前置）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
   printf '%s\n' "${BOLD}  ── 其他 ─────────────────────────────────────────────────${NC}"
-  printf '  %s17)%s 查看系统状态汇总 %s(含 IPv4 / IPv6 地址)%s\n' "$CYAN" "$NC" "$DIM" "$NC"
-  printf '  %s18)%s 安装/卸载 %s 快捷命令  %s(之后直接敲 %s 进菜单)%s\n' "$GREEN" "$NC" "$CMD_NAME" "$DIM" "$CMD_NAME" "$NC"
-  printf '  %s19)%s %s重装系统 (DD)%s  %s会清空整台机器%s\n' "$GREEN" "$NC" "$RED" "$NC" "$DIM" "$NC"
+  printf '  %s18)%s 查看系统状态汇总 %s(含 IPv4 / IPv6 地址)%s\n' "$CYAN" "$NC" "$DIM" "$NC"
+  printf '  %s19)%s 安装/卸载 %s 快捷命令  %s(之后直接敲 %s 进菜单)%s\n' "$GREEN" "$NC" "$CMD_NAME" "$DIM" "$CMD_NAME" "$NC"
+  printf '  %s20)%s %s重装系统 (DD)%s  %s会清空整台机器%s\n' "$GREEN" "$NC" "$RED" "$NC" "$DIM" "$NC"
   printf '   %s0)%s 退出\n' "$RED" "$NC"
   echo
   hr
@@ -1133,7 +1198,7 @@ main() {
   while true; do
     banner
     menu
-    if ! ask "  ${BOLD}请输入选项${NC} [0-19]: " choice; then
+    if ! ask "  ${BOLD}请输入选项${NC} [0-20]: " choice; then
       printf '\n  %s输入结束，退出%s\n\n' "$CYAN" "$NC"; exit 0
     fi
     case "${choice:-}" in
@@ -1143,19 +1208,20 @@ main() {
       4)  act_bootstrap ;;
       5)  act_net_tune ;;
       6)  act_tcpfit ;;
-      7)  act_keysh ;;
-      8)  act_embyproxy ;;
-      9)  act_lite ;;
-      10) act_nodequality ;;
-      11) act_tcpquality ;;
-      12) act_iperf3 ;;
-      13) act_warpgo ;;
-      14) act_nat64 ;;
-      15) act_flyx ;;
-      16) act_docker ;;
-      17) act_status ;;
-      18) act_qc_menu ;;
-      19) act_reinstall ;;
+      7)  act_bbrv3 ;;
+      8)  act_keysh ;;
+      9)  act_embyproxy ;;
+      10) act_lite ;;
+      11) act_nodequality ;;
+      12) act_tcpquality ;;
+      13) act_iperf3 ;;
+      14) act_warpgo ;;
+      15) act_nat64 ;;
+      16) act_flyx ;;
+      17) act_docker ;;
+      18) act_status ;;
+      19) act_qc_menu ;;
+      20) act_reinstall ;;
       0|q|Q|quit|exit) printf '\n  %s再见%s\n\n' "$CYAN" "$NC"; exit 0 ;;
       "") continue ;;
       *)  err "无效选项：$choice" ;;
@@ -1180,6 +1246,7 @@ VPS 常用工具箱
   bootstrap     一键基础初始化 (deps + tz + journal)
   tunenet       net-tcp-tune 调优
   tcpfit        tcpfit 调优
+  bbrv3         BBRv3 内核（byJoey/Actions-bbr-v3，装内核）
   key           SSH 加固 (key.sh)
   emby          emby-proxy —— Emby HTTPS 反代（Caddy/Nginx）
   lite          Komari Lite Agent
@@ -1207,6 +1274,7 @@ case "${1:-}" in
   bootstrap|init)         act_bootstrap ;;
   tunenet|bbr)            act_net_tune ;;
   tcpfit)                 act_tcpfit ;;
+  bbrv3|bbr3|kernel)      act_bbrv3 ;;
   key|key.sh)             act_keysh ;;
   emby|embyproxy|ep)      act_embyproxy ;;
   lite|komari)            act_lite ;;
