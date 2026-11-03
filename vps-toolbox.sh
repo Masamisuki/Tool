@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="2.6"
+VERSION="2.7"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -534,6 +534,221 @@ RESOLVED_EOF
       fi
       resolvectl status 2>/dev/null | head -8 | sed 's/^/    /'
       ;;
+    *) return 0 ;;
+  esac
+}
+
+# ---------------------------------------------------------------- IPv6 管理
+# 相比 net-tcp-tune 的同名功能，这里做了三处改进（都是实测验证过的坑）：
+#   1. all.disable_ipv6=1 会连带把 lo 的 IPv6 也禁掉，这里再单独把 lo 开回来，
+#      保留 ::1（否则部分程序解析 localhost 优先 IPv6 时会失败）
+#   2. 备份放 /var/lib/vps-toolbox/，不留在 /etc/sysctl.d/
+#      （放那边会被 sysctl --system 一起读走，形成隐式依赖）
+#   3. 恢复时静态/DHCPv6 的地址不会自己回来；检测到没地址会主动询问是否重启
+#      网络（实测 ifupdown 下 systemctl restart networking 可恢复，SSH 只是卡顿）
+
+_ipv6_addrs() {
+  ip -6 addr show scope global 2>/dev/null | awk '/inet6/{print $2}' | head -5
+}
+
+_ipv6_restore_hint() {
+  echo
+  local addrs
+  addrs="$(_ipv6_addrs)"
+  if [ -n "$addrs" ]; then
+    ok "当前 IPv6 地址："
+    printf '%s\n' "$addrs" | sed 's/^/    /'
+    return 0
+  fi
+  warn "当前没有 IPv6 地址 —— 需要重新触发网络配置才会回来"
+  local tool=""
+  if [ -d /etc/netplan ] && ls /etc/netplan/*.yaml >/dev/null 2>&1; then
+    tool="netplan";  dim "  Ubuntu(netplan):  netplan apply"
+  elif [ -f /etc/network/interfaces ]; then
+    tool="ifupdown"; dim "  Debian(ifupdown): systemctl restart networking"
+  elif systemctl is-active --quiet systemd-networkd 2>/dev/null; then
+    tool="networkd"; dim "  networkd:         systemctl restart systemd-networkd"
+  fi
+  dim "  然后确认：ip -6 addr show scope global"
+
+  [ -n "$tool" ] || return 0
+  echo
+  if ! confirm "要现在立刻重启网络让地址回来吗？（SSH 可能卡顿几秒）"; then
+    info "已跳过 —— 你也可以之后手动执行上面那条命令"
+    return 0
+  fi
+  case "$tool" in
+    netplan)   netplan apply >/dev/null 2>&1 ;;
+    ifupdown)  systemctl restart networking >/dev/null 2>&1 ;;
+    networkd)  systemctl restart systemd-networkd >/dev/null 2>&1 ;;
+  esac
+  sleep 3
+  addrs="$(_ipv6_addrs)"
+  if [ -n "$addrs" ]; then
+    ok "IPv6 地址已恢复："
+    printf '%s\n' "$addrs" | sed 's/^/    /'
+  else
+    warn "重启网络后仍没有地址 —— 请检查商家的 IPv6 下发配置"
+  fi
+}
+
+_ipv6_disable_runtime() {
+  if ! confirm "确认临时禁用 IPv6？（重启后自动恢复）"; then
+    info "已取消"; return 0
+  fi
+  sysctl -w net.ipv6.conf.all.disable_ipv6=1 >/dev/null 2>&1
+  sysctl -w net.ipv6.conf.default.disable_ipv6=1 >/dev/null 2>&1
+  # all=1 会连带禁掉 lo 的 IPv6，这里单独开回来（保留 ::1）
+  sysctl -w net.ipv6.conf.lo.disable_ipv6=0 >/dev/null 2>&1
+  local v
+  v=$(sysctl -n net.ipv6.conf.all.disable_ipv6 2>/dev/null)
+  echo
+  if [ "$v" = "1" ]; then
+    ok "IPv6 已临时禁用（只改运行时，不动任何配置文件）"
+    dim "  重启后自动恢复；要永久禁用请选 2"
+  else
+    err "禁用失败（当前值: ${v:-未知}）"
+    return 1
+  fi
+  _ipv6_restore_hint
+}
+
+_ipv6_disable_permanent() {
+  # 有 ifupdown 的 inet6 配置时，容易和 cloud-init / 静态地址打架
+  if [ -f /etc/network/interfaces ] \
+     && awk '$1=="iface" && $3=="inet6" {f=1} END{exit !f}' /etc/network/interfaces 2>/dev/null; then
+    warn "检测到 /etc/network/interfaces 里有 inet6 配置"
+    dim "  强行禁用可能和 cloud-init / 静态地址配置冲突"
+    confirm "仍要继续？" || { info "已取消"; return 0; }
+  fi
+  if ! confirm "确认永久禁用 IPv6？"; then
+    info "已取消"; return 0
+  fi
+
+  mkdir -p /var/lib/vps-toolbox
+  local bak=/var/lib/vps-toolbox/ipv6-state.bak
+  {
+    printf 'net.ipv6.conf.all.disable_ipv6=%s\n' "$(sysctl -n net.ipv6.conf.all.disable_ipv6 2>/dev/null || echo 0)"
+    printf 'net.ipv6.conf.default.disable_ipv6=%s\n' "$(sysctl -n net.ipv6.conf.default.disable_ipv6 2>/dev/null || echo 0)"
+  } > "$bak"
+  dim "  原状态已备份到 $bak"
+
+  cat > /etc/sysctl.d/99-disable-ipv6.conf <<'IPV6_EOF'
+# 永久禁用 IPv6（由 vps-toolbox 生成）
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+# all=1 会连带把 lo 也禁掉，这里单独把回环的 IPv6 开回来，
+# 避免 ::1 不可用导致部分程序连 localhost 失败。
+net.ipv6.conf.lo.disable_ipv6 = 0
+IPV6_EOF
+  sysctl --system >/dev/null 2>&1
+
+  local v
+  v=$(sysctl -n net.ipv6.conf.all.disable_ipv6 2>/dev/null)
+  echo
+  if [ "$v" = "1" ]; then
+    ok "IPv6 已永久禁用（重启后仍生效）"
+    dim "  配置: /etc/sysctl.d/99-disable-ipv6.conf"
+    dim "  备份: $bak"
+    dim "  恢复: 回到本菜单选 3"
+  else
+    err "禁用失败（当前值: ${v:-未知}），已回滚"
+    rm -f /etc/sysctl.d/99-disable-ipv6.conf
+    return 1
+  fi
+}
+
+_ipv6_restore() {
+  if [ ! -f /etc/sysctl.d/99-disable-ipv6.conf ]; then
+    warn "没有找到 /etc/sysctl.d/99-disable-ipv6.conf"
+    if [ "$(sysctl -n net.ipv6.conf.all.disable_ipv6 2>/dev/null)" = "1" ]; then
+      info "IPv6 当前是禁用的，但没有永久配置 —— 可能是临时禁用（重启即恢复）"
+      if confirm "要现在立刻恢复吗？"; then
+        sysctl -w net.ipv6.conf.all.disable_ipv6=0 >/dev/null 2>&1
+        sysctl -w net.ipv6.conf.default.disable_ipv6=0 >/dev/null 2>&1
+        ok "已在运行时恢复"
+        _ipv6_restore_hint
+      fi
+    else
+      dim "IPv6 本来就是启用的，无需操作"
+    fi
+    return 0
+  fi
+
+  if ! confirm "确认取消永久禁用并恢复 IPv6？"; then
+    info "已取消"; return 0
+  fi
+
+  rm -f /etc/sysctl.d/99-disable-ipv6.conf
+
+  local bak=/var/lib/vps-toolbox/ipv6-state.bak
+  local v_all=0 v_def=0
+  if [ -f "$bak" ]; then
+    v_all=$(sed -n 's/^net\.ipv6\.conf\.all\.disable_ipv6=//p' "$bak" | tail -1)
+    v_def=$(sed -n 's/^net\.ipv6\.conf\.default\.disable_ipv6=//p' "$bak" | tail -1)
+    [ -n "$v_all" ] || v_all=0
+    [ -n "$v_def" ] || v_def=0
+    dim "  从备份恢复: all=$v_all  default=$v_def"
+  else
+    dim "  没有备份，恢复到启用（0）"
+  fi
+  sysctl -w net.ipv6.conf.all.disable_ipv6="$v_all" >/dev/null 2>&1
+  sysctl -w net.ipv6.conf.default.disable_ipv6="$v_def" >/dev/null 2>&1
+  # 恢复时同样保证 lo 的 IPv6 是开着的
+  sysctl -w net.ipv6.conf.lo.disable_ipv6=0 >/dev/null 2>&1
+  sysctl --system >/dev/null 2>&1
+  rm -f "$bak"
+
+  local v
+  v=$(sysctl -n net.ipv6.conf.all.disable_ipv6 2>/dev/null)
+  echo
+  if [ "$v" = "1" ]; then
+    warn "IPv6 仍处于禁用状态 —— 还有别的配置在起作用"
+    dim "  排查: grep -rn disable_ipv6 /etc/sysctl.conf /etc/sysctl.d/ 2>/dev/null"
+    return 1
+  fi
+  ok "IPv6 已恢复启用"
+  _ipv6_restore_hint
+}
+
+act_ipv6() {
+  local a
+  step "IPv6 管理 —— 临时/永久禁用或恢复"
+  info "适用场景：商家 IPv6 路由不通、只想走 IPv4、或排查双栈带来的连接问题"
+  echo
+
+  local all
+  all=$(sysctl -n net.ipv6.conf.all.disable_ipv6 2>/dev/null || echo 0)
+  if [ "$all" = "1" ]; then
+    printf '  当前状态: %s已禁用%s\n' "$RED" "$NC"
+  else
+    printf '  当前状态: %s已启用%s\n' "$GREEN" "$NC"
+  fi
+
+  local addrs
+  addrs="$(_ipv6_addrs)"
+  if [ -n "$addrs" ]; then
+    printf '%s\n' "$addrs" | sed "s/^/  ${DIM}地址: /; s/\$/${NC}/"
+  else
+    dim "  地址: 无"
+  fi
+
+  if [ -f /etc/sysctl.d/99-disable-ipv6.conf ]; then
+    warn "存在永久禁用配置 /etc/sysctl.d/99-disable-ipv6.conf"
+  fi
+
+  echo
+  info "  1) 临时禁用      ${DIM}sysctl -w，只改运行时，重启自动恢复${NC}"
+  info "  2) 永久禁用      ${DIM}写 /etc/sysctl.d/99-disable-ipv6.conf${NC}"
+  info "  3) 取消永久禁用  ${DIM}删除配置并尽力恢复 IPv6${NC}"
+  info "  0) 返回"
+  echo
+  ask "  请选择 [0-3]: " a
+
+  case "${a:-0}" in
+    1) _ipv6_disable_runtime ;;
+    2) _ipv6_disable_permanent ;;
+    3) _ipv6_restore ;;
     *) return 0 ;;
   esac
 }
@@ -1179,15 +1394,16 @@ menu() {
   printf '%s\n' "${BOLD}  ── IPv6 / WARP ──────────────────────────────────────────${NC}"
   printf '  %s14)%s WARP (warp-go)   %s给纯 IPv6 机器加 IPv4 出口%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   printf '  %s15)%s NAT64 / DNS64    %s纯 DNS 方案，无需安装%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s16)%s IPv6 管理        %s临时/永久禁用或恢复 IPv6%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
   printf '%s\n' "${BOLD}  ── 面板 / 容器 ──────────────────────────────────────────${NC}"
-  printf '  %s16)%s FLYX 面板        %s转发 + 节点编排（Xray/sing-box/Snell）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '  %s17)%s Docker 安装      %s官方脚本（容器化应用的前置）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s17)%s FLYX 面板        %s转发 + 节点编排（Xray/sing-box/Snell）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s18)%s Docker 安装      %s官方脚本（容器化应用的前置）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
   printf '%s\n' "${BOLD}  ── 其他 ─────────────────────────────────────────────────${NC}"
-  printf '  %s18)%s 查看系统状态汇总 %s(含 IPv4 / IPv6 地址)%s\n' "$CYAN" "$NC" "$DIM" "$NC"
-  printf '  %s19)%s 安装/卸载 %s 快捷命令  %s(之后直接敲 %s 进菜单)%s\n' "$GREEN" "$NC" "$CMD_NAME" "$DIM" "$CMD_NAME" "$NC"
-  printf '  %s20)%s %s重装系统 (DD)%s  %s会清空整台机器%s\n' "$GREEN" "$NC" "$RED" "$NC" "$DIM" "$NC"
+  printf '  %s19)%s 查看系统状态汇总 %s(含 IPv4 / IPv6 地址)%s\n' "$CYAN" "$NC" "$DIM" "$NC"
+  printf '  %s20)%s 安装/卸载 %s 快捷命令  %s(之后直接敲 %s 进菜单)%s\n' "$GREEN" "$NC" "$CMD_NAME" "$DIM" "$CMD_NAME" "$NC"
+  printf '  %s21)%s %s重装系统 (DD)%s  %s会清空整台机器%s\n' "$GREEN" "$NC" "$RED" "$NC" "$DIM" "$NC"
   printf '   %s0)%s 退出\n' "$RED" "$NC"
   echo
   hr
@@ -1198,7 +1414,7 @@ main() {
   while true; do
     banner
     menu
-    if ! ask "  ${BOLD}请输入选项${NC} [0-20]: " choice; then
+    if ! ask "  ${BOLD}请输入选项${NC} [0-21]: " choice; then
       printf '\n  %s输入结束，退出%s\n\n' "$CYAN" "$NC"; exit 0
     fi
     case "${choice:-}" in
@@ -1217,11 +1433,12 @@ main() {
       13) act_iperf3 ;;
       14) act_warpgo ;;
       15) act_nat64 ;;
-      16) act_flyx ;;
-      17) act_docker ;;
-      18) act_status ;;
-      19) act_qc_menu ;;
-      20) act_reinstall ;;
+      16) act_ipv6 ;;
+      17) act_flyx ;;
+      18) act_docker ;;
+      19) act_status ;;
+      20) act_qc_menu ;;
+      21) act_reinstall ;;
       0|q|Q|quit|exit) printf '\n  %s再见%s\n\n' "$CYAN" "$NC"; exit 0 ;;
       "") continue ;;
       *)  err "无效选项：$choice" ;;
@@ -1255,6 +1472,7 @@ VPS 常用工具箱
   iperf3        iperf3 服务端（状态 / 启动 / 停止，用完可关）
   warp          WARP (warp-go) —— 给纯 IPv6 机器加 IPv4 出口
   nat64         NAT64 / DNS64 —— 纯 DNS 方案，无需安装
+  ipv6          IPv6 管理 —— 临时/永久禁用或恢复
   flyx          FLYX 面板 —— 转发 + 节点编排（需 Docker）
   docker        安装 Docker（官方脚本）
   qc            安装/卸载 qc 快捷命令
@@ -1283,6 +1501,7 @@ case "${1:-}" in
   iperf3|iperf)           act_iperf3 ;;
   warp|warpgo|warp-go)    act_warpgo ;;
   nat64|dns64|dns)        act_nat64 ;;
+  ipv6|ipv6mgr)           act_ipv6 ;;
   flyx|flvx|panel)        act_flyx ;;
   docker|dockerd)         act_docker ;;
   qc|cmd)                 act_qc_menu ;;
