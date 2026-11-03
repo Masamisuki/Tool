@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="2.7"
+VERSION="2.8"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -1253,17 +1253,29 @@ act_install_self() {
     info "当前是管道方式运行，从网络下载最新版"
   fi
 
+  # 已经装好了，而且就是从它自己运行（qc install）—— 什么都不用做。
+  # 以前这里会 cp 到自身，报 "are the same file" 然后失败，甚至把文件删掉。
+  if [ -n "$src" ] && [ "$src" -ef "$INSTALL_PATH" ] 2>/dev/null; then
+    echo
+    ok "本机已经安装好了：$INSTALL_PATH"
+    info "无需重复安装。要更新到最新版，用："
+    dim "    bash <(curl -fsSL ${SELF_URLS[0]}) install"
+    return 0
+  fi
+
   mkdir -p /usr/local/bin || { err "无法创建 /usr/local/bin"; return 1; }
 
   if [ -n "$src" ]; then
     cp -f "$src" "$INSTALL_PATH" || { err "复制失败"; return 1; }
   else
-    local u got=0
+    # 先下到临时文件，验证通过再原子替换 —— 失败时不会毁掉已存在的安装
+    local u got=0 tmp
+    tmp="$(mktemp "${TMPDIR:-/tmp}/vps-toolbox.XXXXXX")" || { err "无法创建临时文件"; return 1; }
     for u in "${SELF_URLS[@]}"; do
       dim "  尝试 $u"
-      if fetch "$u" "$INSTALL_PATH" 2>/dev/null \
-         && [ -s "$INSTALL_PATH" ] \
-         && head -n1 "$INSTALL_PATH" 2>/dev/null | grep -q '^#!'; then
+      if fetch "$u" "$tmp" 2>/dev/null \
+         && [ -s "$tmp" ] \
+         && head -n1 "$tmp" 2>/dev/null | grep -q '^#!'; then
         ok "  这个源可用"
         got=1
         break
@@ -1271,10 +1283,15 @@ act_install_self() {
       dim "  不可用，换下一个"
     done
     if [ "$got" != 1 ]; then
+      rm -f "$tmp"
       err "所有下载源都失败"
-      rm -f "$INSTALL_PATH"
+      if [ -f "$INSTALL_PATH" ]; then
+        warn "已保留原有的 $INSTALL_PATH，未做改动"
+      fi
       return 1
     fi
+    chmod +x "$tmp"
+    mv -f "$tmp" "$INSTALL_PATH" || { rm -f "$tmp"; err "写入 $INSTALL_PATH 失败"; return 1; }
   fi
   chmod +x "$INSTALL_PATH"
 
