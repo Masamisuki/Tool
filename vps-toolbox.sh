@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="2.9"
+VERSION="3.0"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -669,6 +669,58 @@ _ipv6_disable_runtime() {
 }
 
 
+# 生成 systemd 服务：启动后（等网络就绪）再强制设一次。
+# 只靠 /etc/sysctl.d 不够 —— 实测有的机器上 sysctl.d 应用得太早，
+# 或者被网络服务/cloud-init 覆盖，重启后 eth0 又变回 disable_ipv6=0。
+#
+# 注意：不能把 shell 变量直接写进 ExecStart —— systemd 会自己展开 $VAR/${VAR}，
+# 导致 ${d##*/} 被吃成空字符串。所以逻辑放到独立脚本里。
+_ipv6_helper_path() { printf '%s' "/usr/local/libexec/disable-ipv6.sh"; }
+
+_ipv6_write_helper() {
+  local p; p="$(_ipv6_helper_path)"
+  mkdir -p "$(dirname "$p")" || return 1
+  cat > "$p" <<'IPV6_HELPER_EOF'
+#!/bin/sh
+# 由 vps-toolbox 生成：开机后把每个非 lo 接口的 IPv6 关掉。
+for d in /sys/class/net/*; do
+  n=${d##*/}
+  [ "$n" = "lo" ] && continue
+  sysctl -q -w "net.ipv6.conf.$n.disable_ipv6=1" 2>/dev/null || true
+done
+sysctl -q -w net.ipv6.conf.lo.disable_ipv6=0 2>/dev/null || true
+exit 0
+IPV6_HELPER_EOF
+  chmod 755 "$p" || return 1
+}
+
+_ipv6_write_service() {
+  local p; p="$(_ipv6_helper_path)"
+  _ipv6_write_helper || return 1
+  cat > /etc/systemd/system/disable-ipv6.service <<IPV6_SVC_EOF
+[Unit]
+Description=Disable IPv6 (vps-toolbox)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/bin/sleep 3
+ExecStart=${p}
+
+[Install]
+WantedBy=multi-user.target
+IPV6_SVC_EOF
+}
+
+_ipv6_remove_service() {
+  systemctl disable --now disable-ipv6.service >/dev/null 2>&1 || true
+  rm -f /etc/systemd/system/disable-ipv6.service
+  rm -f "$(_ipv6_helper_path)"
+  systemctl daemon-reload >/dev/null 2>&1 || true
+}
+
 _ipv6_disable_permanent() {
   # 有 ifupdown 的 inet6 配置时，容易和 cloud-init / 静态地址打架
   if [ -f /etc/network/interfaces ] \
@@ -694,25 +746,38 @@ _ipv6_disable_permanent() {
   local bad
   bad="$(_ipv6_apply 1)" || true
 
+  # 落一份开机后再执行一次的服务，保证重启后不会被网络服务改回去
+  _ipv6_write_service
+  systemctl daemon-reload >/dev/null 2>&1 || true
+  systemctl enable disable-ipv6.service >/dev/null 2>&1 || true
+  systemctl restart disable-ipv6.service >/dev/null 2>&1 || true
+
   echo
   if _ipv6_is_disabled; then
     ok "IPv6 已永久禁用（重启后仍生效）"
-    dim "  配置: /etc/sysctl.d/99-disable-ipv6.conf"
+    dim "  sysctl: /etc/sysctl.d/99-disable-ipv6.conf"
+    dim "  开机重放: disable-ipv6.service ($(systemctl is-enabled disable-ipv6.service 2>/dev/null || echo unknown))"
     dim "  备份: $bak"
     dim "  恢复: 回到本菜单选 3"
   else
     err "禁用失败，未禁掉的接口：${bad:-未知}"
     dim "  逐个查：sysctl -a | grep 'net.ipv6.conf.*disable_ipv6'"
     rm -f /etc/sysctl.d/99-disable-ipv6.conf
+    _ipv6_remove_service
     _ipv6_apply 0 >/dev/null 2>&1 || true
     dim "  已回滚"
     return 1
   fi
 }
 
+
 _ipv6_restore() {
-  if [ ! -f /etc/sysctl.d/99-disable-ipv6.conf ]; then
-    warn "没有找到 /etc/sysctl.d/99-disable-ipv6.conf"
+  local has_conf=0 has_svc=0
+  [ -f /etc/sysctl.d/99-disable-ipv6.conf ] && has_conf=1
+  [ -f /etc/systemd/system/disable-ipv6.service ] && has_svc=1
+
+  if [ "$has_conf" = 0 ] && [ "$has_svc" = 0 ]; then
+    warn "没有找到永久禁用配置（sysctl / systemd 都没有）"
     if _ipv6_is_disabled; then
       info "IPv6 当前是禁用的，但没有永久配置 —— 可能是临时禁用（重启即恢复）"
       if confirm "要现在立刻恢复吗？"; then
@@ -733,6 +798,7 @@ _ipv6_restore() {
   fi
 
   rm -f /etc/sysctl.d/99-disable-ipv6.conf
+  _ipv6_remove_service
 
   local bak=/var/lib/vps-toolbox/ipv6-state.bak
   local v_all=0 v_def=0
