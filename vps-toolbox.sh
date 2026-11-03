@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.0"
+VERSION="3.1"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -735,11 +735,17 @@ _ipv6_disable_permanent() {
 
   mkdir -p /var/lib/vps-toolbox
   local bak=/var/lib/vps-toolbox/ipv6-state.bak
-  {
-    printf 'net.ipv6.conf.all.disable_ipv6=%s\n' "$(sysctl -n net.ipv6.conf.all.disable_ipv6 2>/dev/null || echo 0)"
-    printf 'net.ipv6.conf.default.disable_ipv6=%s\n' "$(sysctl -n net.ipv6.conf.default.disable_ipv6 2>/dev/null || echo 0)"
-  } > "$bak"
-  dim "  原状态已备份到 $bak"
+  # 只在第一次写：重复执行「永久禁用」时当前值已经是 1，
+  # 再覆盖就把「原始状态」冲掉了（老版本就是这个 bug）。
+  if [ -f "$bak" ]; then
+    dim "  已有原始状态备份，保留不动：$bak"
+  else
+    {
+      printf 'net.ipv6.conf.all.disable_ipv6=%s\n' "$(sysctl -n net.ipv6.conf.all.disable_ipv6 2>/dev/null || echo 0)"
+      printf 'net.ipv6.conf.default.disable_ipv6=%s\n' "$(sysctl -n net.ipv6.conf.default.disable_ipv6 2>/dev/null || echo 0)"
+    } > "$bak"
+    dim "  原始状态已备份到 $bak"
+  fi
 
   _ipv6_write_conf
   sysctl --system >/dev/null 2>&1
@@ -801,15 +807,17 @@ _ipv6_restore() {
   _ipv6_remove_service
 
   local bak=/var/lib/vps-toolbox/ipv6-state.bak
+  # 「取消禁用」的语义就是启用 IPv6，所以这里固定恢复成 0。
+  # 不再拿备份值当恢复依据 —— 老版本重复禁用会把备份写成 1，
+  # 那样恢复出来还是禁用状态，越修越乱。备份只留作排查参考。
   local v_all=0 v_def=0
   if [ -f "$bak" ]; then
-    v_all=$(sed -n 's/^net\.ipv6\.conf\.all\.disable_ipv6=//p' "$bak" | tail -1)
-    v_def=$(sed -n 's/^net\.ipv6\.conf\.default\.disable_ipv6=//p' "$bak" | tail -1)
-    [ -n "$v_all" ] || v_all=0
-    [ -n "$v_def" ] || v_def=0
-    dim "  从备份恢复: all=$v_all  default=$v_def"
-  else
-    dim "  没有备份，恢复到启用（0）"
+    local old_all; old_all=$(sed -n 's/^net\.ipv6\.conf\.all\.disable_ipv6=//p' "$bak" | tail -1)
+    if [ "$old_all" = "1" ]; then
+      dim "  备份记录的是 1（可能是旧版重复禁用写坏的），忽略，直接恢复为启用"
+    else
+      dim "  备份记录的原始状态: all=${old_all:-0}"
+    fi
   fi
   sysctl -w net.ipv6.conf.all.disable_ipv6="$v_all" >/dev/null 2>&1
   sysctl -w net.ipv6.conf.default.disable_ipv6="$v_def" >/dev/null 2>&1
