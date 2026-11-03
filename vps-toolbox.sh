@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="2.8"
+VERSION="2.9"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -539,16 +539,72 @@ RESOLVED_EOF
 }
 
 # ---------------------------------------------------------------- IPv6 管理
-# 相比 net-tcp-tune 的同名功能，这里做了三处改进（都是实测验证过的坑）：
-#   1. all.disable_ipv6=1 会连带把 lo 的 IPv6 也禁掉，这里再单独把 lo 开回来，
-#      保留 ::1（否则部分程序解析 localhost 优先 IPv6 时会失败）
-#   2. 备份放 /var/lib/vps-toolbox/，不留在 /etc/sysctl.d/
-#      （放那边会被 sysctl --system 一起读走，形成隐式依赖）
-#   3. 恢复时静态/DHCPv6 的地址不会自己回来；检测到没地址会主动询问是否重启
-#      网络（实测 ifupdown 下 systemctl restart networking 可恢复，SSH 只是卡顿）
+# 实测踩过的坑（都在 7.x 内核 + 静态 /128 地址的机器上复现过）：
+#   1. 不能只靠 net.ipv6.conf.all.disable_ipv6=1。某些内核里写 all 并不会
+#      传播到已经存在的接口，结果 all 读出来是 1、但 eth0 仍然是 0，
+#      IPv6 地址和出口完全正常。所以这里逐个接口显式设置并逐个校验。
+#   2. all=1 的接口会连带把 lo 也禁掉，::1 失效；这里最后把 lo 单独开回来。
+#   3. 备份放 /var/lib/vps-toolbox/，不留在 /etc/sysctl.d/（会被 sysctl --system 读走）。
+#   4. 恢复时静态/DHCPv6 地址不会自己回来；检测到没地址会询问是否重启网络。
+
+# 列出需要处理的物理/公网接口（排除 lo 和容器虚拟网卡）
+_ipv6_ifs() {
+  local i
+  for i in $(ls /sys/class/net 2>/dev/null); do
+    [ "$i" = "lo" ] && continue
+    case "$i" in
+      docker*|br-*|veth*|virbr*|cni*|flannel*|cali*|kube*|podman*|lxc*) continue ;;
+    esac
+    printf '%s\n' "$i"
+  done
+}
 
 _ipv6_addrs() {
   ip -6 addr show scope global 2>/dev/null | awk '/inet6/{print $2}' | head -5
+}
+
+# 所有非 lo 接口都 disable_ipv6=1 才算真的禁用；只看 all 会误判
+_ipv6_is_disabled() {
+  local i v seen=0
+  for i in $(_ipv6_ifs); do
+    seen=1
+    v=$(sysctl -n "net.ipv6.conf.${i}.disable_ipv6" 2>/dev/null)
+    [ "$v" = "1" ] || return 1
+  done
+  [ "$seen" = 1 ] || return 1
+  return 0
+}
+
+# 逐个接口设值，返回失败接口名（空=全成功）
+_ipv6_apply() {
+  local val="$1" i bad=""
+  for i in $(_ipv6_ifs); do
+    if ! sysctl -w "net.ipv6.conf.${i}.disable_ipv6=${val}" >/dev/null 2>&1; then
+      bad="$bad $i"
+    fi
+    # sysctl -w 成功但值没落下去，也算失败
+    if [ "$(sysctl -n "net.ipv6.conf.${i}.disable_ipv6" 2>/dev/null)" != "$val" ]; then
+      case " $bad " in *" $i "*) ;; *) bad="$bad $i" ;; esac
+    fi
+  done
+  sysctl -w net.ipv6.conf.lo.disable_ipv6=0 >/dev/null 2>&1
+  printf '%s' "${bad# }"
+  [ -z "$bad" ]
+}
+
+# 生成 /etc/sysctl.d/99-disable-ipv6.conf：显式列出每个接口
+_ipv6_write_conf() {
+  local i
+  {
+    echo "# 永久禁用 IPv6（由 vps-toolbox 生成）"
+    echo "# 注意：all=1 在部分内核上不会传播到已存在的接口，所以逐个显式列出。"
+    echo "net.ipv6.conf.all.disable_ipv6 = 1"
+    echo "net.ipv6.conf.default.disable_ipv6 = 1"
+    for i in $(_ipv6_ifs); do
+      echo "net.ipv6.conf.${i}.disable_ipv6 = 1"
+    done
+    echo "net.ipv6.conf.lo.disable_ipv6 = 0"
+  } > /etc/sysctl.d/99-disable-ipv6.conf
 }
 
 _ipv6_restore_hint() {
@@ -598,20 +654,20 @@ _ipv6_disable_runtime() {
   fi
   sysctl -w net.ipv6.conf.all.disable_ipv6=1 >/dev/null 2>&1
   sysctl -w net.ipv6.conf.default.disable_ipv6=1 >/dev/null 2>&1
-  # all=1 会连带禁掉 lo 的 IPv6，这里单独开回来（保留 ::1）
-  sysctl -w net.ipv6.conf.lo.disable_ipv6=0 >/dev/null 2>&1
-  local v
-  v=$(sysctl -n net.ipv6.conf.all.disable_ipv6 2>/dev/null)
+  local bad
+  bad="$(_ipv6_apply 1)" || true
   echo
-  if [ "$v" = "1" ]; then
+  if _ipv6_is_disabled; then
     ok "IPv6 已临时禁用（只改运行时，不动任何配置文件）"
     dim "  重启后自动恢复；要永久禁用请选 2"
   else
-    err "禁用失败（当前值: ${v:-未知}）"
+    err "仍有接口没禁掉：${bad:-未知}"
+    dim "  逐个查：sysctl -a | grep 'net.ipv6.conf.*disable_ipv6'"
     return 1
   fi
   _ipv6_restore_hint
 }
+
 
 _ipv6_disable_permanent() {
   # 有 ifupdown 的 inet6 配置时，容易和 cloud-init / 静态地址打架
@@ -633,27 +689,23 @@ _ipv6_disable_permanent() {
   } > "$bak"
   dim "  原状态已备份到 $bak"
 
-  cat > /etc/sysctl.d/99-disable-ipv6.conf <<'IPV6_EOF'
-# 永久禁用 IPv6（由 vps-toolbox 生成）
-net.ipv6.conf.all.disable_ipv6 = 1
-net.ipv6.conf.default.disable_ipv6 = 1
-# all=1 会连带把 lo 也禁掉，这里单独把回环的 IPv6 开回来，
-# 避免 ::1 不可用导致部分程序连 localhost 失败。
-net.ipv6.conf.lo.disable_ipv6 = 0
-IPV6_EOF
+  _ipv6_write_conf
   sysctl --system >/dev/null 2>&1
+  local bad
+  bad="$(_ipv6_apply 1)" || true
 
-  local v
-  v=$(sysctl -n net.ipv6.conf.all.disable_ipv6 2>/dev/null)
   echo
-  if [ "$v" = "1" ]; then
+  if _ipv6_is_disabled; then
     ok "IPv6 已永久禁用（重启后仍生效）"
     dim "  配置: /etc/sysctl.d/99-disable-ipv6.conf"
     dim "  备份: $bak"
     dim "  恢复: 回到本菜单选 3"
   else
-    err "禁用失败（当前值: ${v:-未知}），已回滚"
+    err "禁用失败，未禁掉的接口：${bad:-未知}"
+    dim "  逐个查：sysctl -a | grep 'net.ipv6.conf.*disable_ipv6'"
     rm -f /etc/sysctl.d/99-disable-ipv6.conf
+    _ipv6_apply 0 >/dev/null 2>&1 || true
+    dim "  已回滚"
     return 1
   fi
 }
@@ -661,11 +713,12 @@ IPV6_EOF
 _ipv6_restore() {
   if [ ! -f /etc/sysctl.d/99-disable-ipv6.conf ]; then
     warn "没有找到 /etc/sysctl.d/99-disable-ipv6.conf"
-    if [ "$(sysctl -n net.ipv6.conf.all.disable_ipv6 2>/dev/null)" = "1" ]; then
+    if _ipv6_is_disabled; then
       info "IPv6 当前是禁用的，但没有永久配置 —— 可能是临时禁用（重启即恢复）"
       if confirm "要现在立刻恢复吗？"; then
         sysctl -w net.ipv6.conf.all.disable_ipv6=0 >/dev/null 2>&1
         sysctl -w net.ipv6.conf.default.disable_ipv6=0 >/dev/null 2>&1
+        _ipv6_apply 0 >/dev/null 2>&1 || true
         ok "已在运行时恢复"
         _ipv6_restore_hint
       fi
@@ -694,17 +747,18 @@ _ipv6_restore() {
   fi
   sysctl -w net.ipv6.conf.all.disable_ipv6="$v_all" >/dev/null 2>&1
   sysctl -w net.ipv6.conf.default.disable_ipv6="$v_def" >/dev/null 2>&1
+  # 逐个接口恢复（不能只改 all，某些内核不传播）
+  _ipv6_apply "$v_all" >/dev/null 2>&1 || true
   # 恢复时同样保证 lo 的 IPv6 是开着的
   sysctl -w net.ipv6.conf.lo.disable_ipv6=0 >/dev/null 2>&1
   sysctl --system >/dev/null 2>&1
   rm -f "$bak"
 
-  local v
-  v=$(sysctl -n net.ipv6.conf.all.disable_ipv6 2>/dev/null)
   echo
-  if [ "$v" = "1" ]; then
+  if _ipv6_is_disabled; then
     warn "IPv6 仍处于禁用状态 —— 还有别的配置在起作用"
     dim "  排查: grep -rn disable_ipv6 /etc/sysctl.conf /etc/sysctl.d/ 2>/dev/null"
+    dim "  以及: sysctl -a | grep 'net.ipv6.conf.*disable_ipv6'"
     return 1
   fi
   ok "IPv6 已恢复启用"
@@ -717,12 +771,19 @@ act_ipv6() {
   info "适用场景：商家 IPv6 路由不通、只想走 IPv4、或排查双栈带来的连接问题"
   echo
 
-  local all
-  all=$(sysctl -n net.ipv6.conf.all.disable_ipv6 2>/dev/null || echo 0)
-  if [ "$all" = "1" ]; then
+  # 状态不能用 all 判断：某些内核里 all=1 但 eth0 仍是 0
+  if _ipv6_is_disabled; then
     printf '  当前状态: %s已禁用%s\n' "$RED" "$NC"
   else
-    printf '  当前状态: %s已启用%s\n' "$GREEN" "$NC"
+    local badif="" i
+    for i in $(_ipv6_ifs); do
+      [ "$(sysctl -n "net.ipv6.conf.${i}.disable_ipv6" 2>/dev/null)" = "1" ] || badif="$badif $i"
+    done
+    if [ -n "$badif" ] && [ "$(sysctl -n net.ipv6.conf.all.disable_ipv6 2>/dev/null)" = "1" ]; then
+      printf '  当前状态: %s部分禁用%s（%s 仍是启用，IPv6 实际在工作）\n' "$YELLOW" "$NC" "${badif# }"
+    else
+      printf '  当前状态: %s已启用%s\n' "$GREEN" "$NC"
+    fi
   fi
 
   local addrs
