@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.1"
+VERSION="3.2"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -462,8 +462,13 @@ act_warpgo() {
   echo
   step "验证出口"
   local v4 v6
-  v4=$(curl -4 -s --max-time 10 https://ifconfig.me 2>/dev/null)
-  v6=$(curl -6 -s --max-time 10 https://ifconfig.me 2>/dev/null)
+  if [ "$HAVE_CURL" = 1 ]; then
+    v4=$(curl -4 -s --max-time 10 https://ifconfig.me 2>/dev/null)
+    v6=$(curl -6 -s --max-time 10 https://ifconfig.me 2>/dev/null)
+  elif [ "$HAVE_WGET" = 1 ]; then
+    v4=$(wget -q -4 -T 10 -t 1 -O - https://ifconfig.me 2>/dev/null)
+    v6=$(wget -q -6 -T 10 -t 1 -O - https://ifconfig.me 2>/dev/null)
+  fi
   if [ -n "$v4" ]; then ok "IPv4 出口: $v4      ${DIM}(应该是 Cloudflare 的地址)${NC}"
   else warn "IPv4 出口取不到 —— 检查 WARP 是否已启动"; fi
   if [ -n "$v6" ]; then ok "IPv6 出口: $v6      ${DIM}(应该还是你原来的)${NC}"
@@ -1113,81 +1118,50 @@ act_docker() {
   fi
 }
 
-act_flyx() {
-  step "FLYX 面板 —— 转发 + 节点编排（Xray / sing-box / Snell）"
+act_psm() {
+  step "PSM —— Proxy Stack Manager（Reality 443 端口复用 / 多协议面板）"
+  info "jinqians/proxy-stack：Nginx stream SNI 分流 + Xray / sing-box / Hysteria2 / 证书 / 备份"
+  echo
+  dim "  装完命令：psm（之后直接敲 psm 进菜单）"
+  dim "  协议：Reality / Vision / XHTTP / SS2022、Hysteria2、AnyTLS、Snell、realm 中转"
+  dim "  还管：SSL 证书（acme.sh）、Cloudflare DDNS / Tunnel、Docker、SSH 加固、备份恢复"
+  echo
+  warn "会接管公网 TCP 443（Nginx stream）—— 装前先确认 443 现在是谁在监听"
+  dim "  已有 Nginx 站点 / Xray / sing-box 的机器，建议先备份再让 PSM 接管"
   echo
 
-  local up="https://github.com/kure29/flyx/releases/latest/download/panel_install.sh"
-  local cmd="curl -L ${up} -o panel_install.sh && chmod +x panel_install.sh && ./panel_install.sh"
-
   # ---------- 检测是否已经装过 ----------
-  local installed=0 instdir="" myip=""
-  if command -v docker >/dev/null 2>&1; then
-    if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx 'flux-panel-backend'; then
-      installed=1
-    fi
-  fi
-  if [ "$installed" = 0 ]; then
-    local probe
-    for probe in "$(pwd)" /root /opt/flvx-panel; do
-      if [ -f "$probe/docker-compose.yml" ] && grep -q 'flux-panel-backend' "$probe/docker-compose.yml" 2>/dev/null; then
-        installed=1
-        instdir="$probe"
-        break
-      fi
-    done
-  fi
-  # 已装但还没定位到目录时，从容器标签里问出来
-  if [ "$installed" = 1 ] && [ -z "$instdir" ] && command -v docker >/dev/null 2>&1; then
-    instdir=$(docker inspect flux-panel-backend \
-      --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' 2>/dev/null || true)
-    [ "$instdir" = "<no value>" ] && instdir=""
+  local installed=0
+  if command -v psm >/dev/null 2>&1 || [ -x /usr/local/bin/psm ]; then
+    installed=1
   fi
 
   if [ "$installed" = 1 ]; then
     # ================= 已安装：不询问，直接执行 =================
-    ok "检测到 FLYX 面板已安装 —— 直接执行（升级 / 重建）"
-    dim "  面板数据在 Docker 数据卷里，重建容器不会丢配置"
-    echo
-    if command -v docker >/dev/null 2>&1; then
-      docker ps -a --filter name=flux-panel-backend --format '    {{.Names}}   {{.Status}}   {{.Ports}}' 2>/dev/null || true
-    fi
-    [ -n "$instdir" ] && dim "  部署目录: $instdir"
-    myip=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit }}')
-    dim "  面板地址: http://${myip:-<本机IP>}:6366"
-    echo
-    info "执行："
-    dim "  $cmd"
+    ok "检测到 PSM 已安装 —— 直接执行（升级 / 打开菜单）"
+    dim "  短命令: $(command -v psm 2>/dev/null || echo /usr/local/bin/psm)"
     echo
   else
     # ================= 未安装：显示命令 + 确认 =================
     info "执行作者提供的原始命令（未做任何修改）："
     echo
-    dim "  $cmd"
+    dim "  bash <(curl -fsSL https://psm.jinqians.com)"
     echo
-    if ! command -v docker >/dev/null 2>&1; then
-      warn "未检测到 Docker —— 这个脚本会自己要求 Docker"
-      dim "  可以先选「16) Docker 安装」"
-      echo
-    fi
-    dim "  当前目录: $(pwd)（panel_install.sh 会以它为部署目录）"
+    dim "  要求: Debian/Ubuntu + root；交互式菜单，装完输入 psm 打开"
     echo
     if ! confirm "确认执行？"; then warn "已取消"; return 0; fi
     echo
   fi
 
-  if [ "$HAVE_TTY" = 1 ]; then
-    bash -c "$cmd" < /dev/tty
-  else
-    bash -c "$cmd"
-  fi
+  run_remote "PSM" "https://psm.jinqians.com" bash
 
   echo
   info "装完之后："
-  dim "  ① 访问 http://<本机IP>:6366"
-  dim "  ② 默认账号 admin_user / admin_user —— 立刻改密码"
-  dim "  ③ 设置 → 基础设置 → 面板后端地址 = http://<本机IP>:6365（是 6365，不是 6366）"
-  dim "  ④ 节点页新建节点 → 安装 → 复制命令到节点机 root 执行"
+  dim "  psm             打开 PSM 主菜单"
+  dim "  Nginx 管理      安装 Nginx、初始化 stream SNI 分流、管理站点与伪装后端"
+  dim "  Xray 管理       创建 Reality / Vision / XHTTP 节点，生成分享链接和二维码"
+  dim "  SSL 证书        acme.sh 签发与续期"
+  dim "  备份管理        保存配置、节点状态和相关服务数据"
 }
 
 
@@ -1221,8 +1195,8 @@ act_status() {
     p4=$(curl -4 -s --max-time 5 https://ifconfig.me 2>/dev/null)
     p6=$(curl -6 -s --max-time 5 https://ifconfig.me 2>/dev/null)
   elif command -v wget >/dev/null 2>&1; then
-    p4=$(wget -q -T 5 -t 1 -O - https://ifconfig.me 2>/dev/null)
-    p6=$(wget -q -T 5 -t 1 -O - https://ifconfig.me 2>/dev/null)
+    p4=$(wget -q -4 -T 5 -t 1 -O - https://ifconfig.me 2>/dev/null)
+    p6=$(wget -q -6 -T 5 -t 1 -O - https://ifconfig.me 2>/dev/null)
   fi
   if [ "$HAVE_CURL" = 1 ] || [ "$HAVE_WGET" = 1 ]; then
     printf '  %s出口 IPv4%s : %s\n' "$DIM" "$NC" "${p4:-取不到（可能没有 IPv4 出口）}"
@@ -1515,7 +1489,7 @@ banner() {
     printf '  %s✔%s %s 命令已安装，任何地方输入 %s%s%s 即可打开本菜单\n' \
       "$GREEN" "$NC" "$CMD_NAME" "$BOLD" "$CMD_NAME" "$NC"
   else
-    printf '  %s提示：选 14 安装 %s%s%s 命令，以后直接敲 %s%s%s 进菜单%s\n' \
+    printf '  %s提示：选 20 安装 %s%s%s 命令，以后直接敲 %s%s%s 进菜单%s\n' \
       "$DIM" "$BOLD" "$CMD_NAME" "$NC" "$BOLD" "$CMD_NAME" "$NC" "$NC"
   fi
   echo
@@ -1549,7 +1523,7 @@ menu() {
   printf '  %s16)%s IPv6 管理        %s临时/永久禁用或恢复 IPv6%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
   printf '%s\n' "${BOLD}  ── 面板 / 容器 ──────────────────────────────────────────${NC}"
-  printf '  %s17)%s FLYX 面板        %s转发 + 节点编排（Xray/sing-box/Snell）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s17)%s PSM 面板         %sProxy Stack Manager：Reality 443 复用%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   printf '  %s18)%s Docker 安装      %s官方脚本（容器化应用的前置）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
   printf '%s\n' "${BOLD}  ── 其他 ─────────────────────────────────────────────────${NC}"
@@ -1586,7 +1560,7 @@ main() {
       14) act_warpgo ;;
       15) act_nat64 ;;
       16) act_ipv6 ;;
-      17) act_flyx ;;
+      17) act_psm ;;
       18) act_docker ;;
       19) act_status ;;
       20) act_qc_menu ;;
@@ -1625,7 +1599,7 @@ VPS 常用工具箱
   warp          WARP (warp-go) —— 给纯 IPv6 机器加 IPv4 出口
   nat64         NAT64 / DNS64 —— 纯 DNS 方案，无需安装
   ipv6          IPv6 管理 —— 临时/永久禁用或恢复
-  flyx          FLYX 面板 —— 转发 + 节点编排（需 Docker）
+  psm           PSM 面板 —— Proxy Stack Manager（Reality 443 复用）
   docker        安装 Docker（官方脚本）
   qc            安装/卸载 qc 快捷命令
   install       安装 qc 快捷命令，装完自动进入菜单
@@ -1654,7 +1628,7 @@ case "${1:-}" in
   warp|warpgo|warp-go)    act_warpgo ;;
   nat64|dns64|dns)        act_nat64 ;;
   ipv6|ipv6mgr)           act_ipv6 ;;
-  flyx|flvx|panel)        act_flyx ;;
+  psm|proxystack|proxy-stack) act_psm ;;
   docker|dockerd)         act_docker ;;
   qc|cmd)                 act_qc_menu ;;
   install)
