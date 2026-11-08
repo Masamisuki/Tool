@@ -28,8 +28,8 @@ proxies:
   - name: "🇭🇰Panstar-HKS Special"
     type: hysteria2
     server: 195.58.144.204
-    port: 56373
-    password: "cCfrU8xOVayIJ-klKRB1M5Zh1qP15nAz"
+    port: 443
+    password: "1588d4bb3385453bf83ddabb"
     sni: www.bing.com
     skip-cert-verify: true
     udp: true
