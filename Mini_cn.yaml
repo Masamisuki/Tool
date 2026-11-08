@@ -34,12 +34,12 @@ proxies:
     skip-cert-verify: true
     udp: true
 
-  - name: "🇭🇰HKCloudX-MiniV6"
+  - name: "🇯🇵NewNB-TYO2"
     type: ss
-    server: "2602:f506:81::6440:30d"
+    server: "2a14:7586:6109:1:be24:11ff:fe2a:53cf"
     port: 28641
     cipher: 2022-blake3-aes-128-gcm
-    password: "QsuAVmzD9hcK7RngDbdEgQ=="
+    password: "D06slaI9ZdKhEeicYIAmIg=="
     udp: true
   
   - name: "🇺🇸PPFlight-LIFT S"
