@@ -241,7 +241,7 @@ export function MetricTile({
           lineLimit={1}
           minScaleFactor={0.7}
         >
-          {badge ?? subtitle}
+          {badge ?? subtitle ?? ""}
         </Text>
       ) : null}
     </VStack>

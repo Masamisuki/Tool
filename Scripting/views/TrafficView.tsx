@@ -6,6 +6,7 @@ import {
   ScrollView,
   Spacer,
   Text,
+  useMemo,
   useState,
   VStack,
   type Color,
@@ -13,7 +14,7 @@ import {
 import { GradientBar } from "../components/GradientBar"
 import { Card, EmptyState, IconBadge, MetricTile, PAGE_BG, SectionHeader } from "../components/Kit"
 import { ActivityChips } from "../components/SegmentChips"
-import { refreshNow, useStore } from "../lib/store"
+import { refreshNow, useStoreSelector } from "../lib/store"
 import { formatBytes, formatSpeed, formatSpeedParts, ifaceDisplayName, isDirectPolicy } from "../lib/metrics"
 import { DOWN_TONE, TONES, UI, UP_TONE } from "../lib/ui"
 import type { TrafficEntry } from "../lib/surgeApi"
@@ -69,34 +70,67 @@ function SpeedPair({ down, up }: { down: number; up: number }) {
 }
 
 export function TrafficView() {
-  const state = useStore()
   const [sortBy, setSortBy] = useState<SortKey>("current")
+  // 秒级字段单独订阅，排序/聚合结果再 useMemo，避免一次 speeds 变动就重排全部条目
+  const traffic = useStoreSelector((s) => s.traffic)
+  const running = useStoreSelector((s) => s.running)
+  const inSpeed = useStoreSelector((s) => s.speeds.inSpeed)
+  const outSpeed = useStoreSelector((s) => s.speeds.outSpeed)
 
-  const interfaces = sortedEntries(state.traffic?.interface, sortBy)
-  const connectors = sortedEntries(state.traffic?.connector, sortBy)
-  const activeNodes = connectors.filter(
-    ([, v]) => v.inCurrentSpeed + v.outCurrentSpeed > 0
-  )
-  const ranked = sortedEntries(state.traffic?.connector, "total")
-    .map(([name, v]) => ({ name, total: v.in + v.out }))
-    .filter((r) => r.total > 0)
-    .slice(0, 10)
-  const maxTotal = ranked.length > 0 ? ranked[0].total : 1
+  const view = useMemo(() => {
+    const interfaces = sortedEntries(traffic?.interface, sortBy)
+    const connectors = sortedEntries(traffic?.connector, sortBy)
+    const activeNodes = connectors.filter(
+      ([, v]) => v.inCurrentSpeed + v.outCurrentSpeed > 0
+    )
+    const ranked = sortedEntries(traffic?.connector, "total")
+      .map(([name, v]) => ({ name, total: v.in + v.out }))
+      .filter((r) => r.total > 0)
+      .slice(0, 10)
+    const maxTotal = ranked.length > 0 ? ranked[0].total : 1
 
-  const downParts = state.running ? formatSpeedParts(state.speeds.inSpeed) : null
-  const upParts = state.running ? formatSpeedParts(state.speeds.outSpeed) : null
+    let directBytes = 0
+    let proxyBytes = 0
+    for (const [name, v] of connectors) {
+      const total = v.in + v.out
+      if (isDirectPolicy(name)) directBytes += total
+      else proxyBytes += total
+    }
+    const splitTotal = directBytes + proxyBytes
+    const directRatio = splitTotal > 0 ? directBytes / splitTotal : 0
+    const directPct = Math.round(directRatio * 100)
+    const proxyPct = splitTotal > 0 ? 100 - directPct : 0
 
-  let directBytes = 0
-  let proxyBytes = 0
-  for (const [name, v] of connectors) {
-    const total = v.in + v.out
-    if (isDirectPolicy(name)) directBytes += total
-    else proxyBytes += total
-  }
-  const splitTotal = directBytes + proxyBytes
-  const directRatio = splitTotal > 0 ? directBytes / splitTotal : 0
-  const directPct = Math.round(directRatio * 100)
-  const proxyPct = splitTotal > 0 ? 100 - directPct : 0
+    return {
+      interfaces,
+      connectors,
+      activeNodes,
+      ranked,
+      maxTotal,
+      directBytes,
+      proxyBytes,
+      splitTotal,
+      directRatio,
+      directPct,
+      proxyPct,
+    }
+  }, [traffic, sortBy])
+  const {
+    interfaces,
+    connectors,
+    activeNodes,
+    ranked,
+    maxTotal,
+    directBytes,
+    proxyBytes,
+    splitTotal,
+    directRatio,
+    directPct,
+    proxyPct,
+  } = view
+
+  const downParts = running ? formatSpeedParts(inSpeed) : null
+  const upParts = running ? formatSpeedParts(outSpeed) : null
 
   return (
     <ScrollView axes="vertical" refreshable={async () => { await refreshNow() }} background={PAGE_BG}>
@@ -122,7 +156,7 @@ export function TrafficView() {
           />
         </HStack>
 
-        {state.traffic ? (
+        {traffic ? (
           <Card>
             <SectionHeader title="本次运行分流" caption={formatBytes(splitTotal)} />
             <SplitBar ratio={directRatio} empty={splitTotal === 0} />
@@ -140,7 +174,7 @@ export function TrafficView() {
         </Picker>
 
         <Card spacing={14}>
-          <SectionHeader title="网卡" caption={state.traffic ? `${interfaces.length} 个接口` : "未连接"} />
+          <SectionHeader title="网卡" caption={traffic ? `${interfaces.length} 个接口` : "未连接"} />
           {interfaces.length === 0 ? (
             <EmptyState icon="network.slash" title="暂无接口数据" />
           ) : (
@@ -166,7 +200,7 @@ export function TrafficView() {
         </Card>
 
         <Card spacing={14}>
-          <SectionHeader title="活动中的节点" caption={state.traffic ? `${activeNodes.length} 个正在传输` : "未连接"} />
+          <SectionHeader title="活动中的节点" caption={traffic ? `${activeNodes.length} 个正在传输` : "未连接"} />
           {activeNodes.length === 0 ? (
             <EmptyState icon="pause.circle" title="当前没有节点在传输" />
           ) : (

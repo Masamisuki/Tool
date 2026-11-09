@@ -13,11 +13,23 @@ export function useTabAutoRefresh(tab: TabId, load: () => void | Promise<void>) 
   useEffect(() => {
     if (visibleTab !== tab) return
     if (needsSetup()) return
-    void load()
+    // 上一轮还没回来就不再叠加：慢响应（默认 30s 超时）时避免请求堆积
+    let inFlight = false
+    const run = async () => {
+      if (inFlight || needsSetup()) return
+      inFlight = true
+      try {
+        await load()
+      } catch {
+        // 失败交给页面自己展示状态，这里只保证计数复位
+      } finally {
+        inFlight = false
+      }
+    }
+    void run()
     if (!autoRefresh) return
     const id = setInterval(() => {
-      if (needsSetup()) return
-      void load()
+      void run()
     }, intervalSec * 1000)
     return () => clearInterval(id)
   }, [visibleTab, autoRefresh, intervalSec, config])

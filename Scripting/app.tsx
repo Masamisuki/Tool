@@ -108,7 +108,7 @@ export function SurgePanelApp() {
             scrollEdgeEffectHidden="bottom"
           >
             {TAB_ORDER.map((id, i) => (
-              <Tab key={id} title={TABS[id].title} value={i}>
+              <Tab key={id} title={TABS[id].title} systemImage={TABS[id].icon} value={i}>
                 {tabContent(id)}
               </Tab>
             ))}

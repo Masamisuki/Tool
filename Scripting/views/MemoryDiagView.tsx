@@ -11,11 +11,12 @@ import {
   Picker,
   ScrollView,
   Text,
+  useMemo,
   useState,
   VStack,
 } from "scripting"
 import { Card, IconBadge, PAGE_BG, SectionHeader, Tag, ValueText } from "../components/Kit"
-import { openActivity, savePrefs, useStore } from "../lib/store"
+import { openActivity, savePrefs, useStoreSelector } from "../lib/store"
 import { reloadProfile } from "../lib/surgeApi"
 import {
   analyzeMemoryTrend,
@@ -30,30 +31,52 @@ import {
 import { IS_GLASS, METRICS_HINT, UI, type Tone } from "../lib/ui"
 
 export function MemoryDiagView() {
-  const state = useStore()
+  const state = useStoreSelector((s) => ({
+    history: s.history,
+    memLong: s.memLong,
+    samples: s.samples,
+    config: s.config,
+    prefs: s.prefs,
+    metricsAvailable: s.metricsAvailable,
+  }))
   const dismiss = Navigation.useDismiss()
   const [confirmReload, setConfirmReload] = useState(false)
   const [actionMsg, setActionMsg] = useState<string | null>(null)
 
-  const rangeMin = (MEM_RANGE_OPTIONS.some((o) => o.minutes === state.prefs.memRangeMin)
-    ? state.prefs.memRangeMin
-    : 60) as MemRangeMin
-  const rangeMs = rangeMin * 60 * 1000
-  const windowPts = historyForRange(state.history, state.memLong, rangeMs)
-  const trend = analyzeMemoryTrend(windowPts, {
-    recentMs: Math.min(20 * 60 * 1000, rangeMs),
-    intervalSec: state.prefs.intervalSec,
-  })
+  // 窗口切片 + 趋势分析 + 80 个渐变 mark 只在 history / 范围变化时重算
+  const diag = useMemo(() => {
+    const rangeMin = (MEM_RANGE_OPTIONS.some((o) => o.minutes === state.prefs.memRangeMin)
+      ? state.prefs.memRangeMin
+      : 60) as MemRangeMin
+    const rangeMs = rangeMin * 60 * 1000
+    const windowPts = historyForRange(state.history, state.memLong, rangeMs)
+    const trend = analyzeMemoryTrend(windowPts, {
+      recentMs: Math.min(20 * 60 * 1000, rangeMs),
+      intervalSec: state.prefs.intervalSec,
+    })
+    const pts = downsample(windowPts, 80)
+    const base = pts.map((p) => ({
+      label: new Date(p.t),
+      value: Math.round((p.mem / (1024 * 1024)) * 10) / 10,
+      interpolationMethod: "monotone" as const,
+    }))
+    // 线/面两份 marks 预先生成，避免每次渲染重造 80 个 gradient 对象
+    const lineMarks = base.map((m) => ({ ...m, foregroundStyle: "systemPurple" as const }))
+    const areaMarks = base.map((m) => ({
+      ...m,
+      foregroundStyle: gradient("linear", {
+        colors: ["rgba(175,82,222,0.32)", "rgba(175,82,222,0.02)"],
+        startPoint: "top" as const,
+        endPoint: "bottom" as const,
+      }),
+    }))
+    const memYMax = Math.max(10, Math.max(0, ...base.map((m) => m.value)) * 1.15)
+    return { rangeMin, trend, count: base.length, lineMarks, areaMarks, memYMax }
+  }, [state.history, state.memLong, state.prefs.memRangeMin, state.prefs.intervalSec])
+  const { rangeMin, trend, count, lineMarks, areaMarks, memYMax } = diag
+
   const mem = state.samples ? gaugeValue(state.samples, "surge_memory_bytes") : null
   const currentMB = mem !== null ? mem / (1024 * 1024) : trend.currentMB
-
-  const pts = downsample(windowPts, 80)
-  const marks = pts.map((p) => ({
-    label: new Date(p.t),
-    value: Math.round((p.mem / (1024 * 1024)) * 10) / 10,
-    interpolationMethod: "monotone" as const,
-  }))
-  const memYMax = Math.max(10, Math.max(0, ...marks.map((m) => m.value)) * 1.15)
 
   const verdict: { icon: string; tone: Tone; title: string } =
     trend.level === "warning"
@@ -153,23 +176,14 @@ export function MemoryDiagView() {
                     <Text key={o.tag} tag={o.tag}>{o.label}</Text>
                   ))}
                 </Picker>
-                {marks.length >= 2 ? (
+                {count >= 2 ? (
                   <Chart
                     frame={{ height: 190 }}
                     chartYScale={{ domain: { from: 0, to: memYMax }, type: "linear" }}
                     chartXAxis={{ valueLabel: { format: "time" } }}
                   >
-                    <LineChart marks={marks.map((m) => ({ ...m, foregroundStyle: "systemPurple" as const }))} />
-                    <AreaChart
-                      marks={marks.map((m) => ({
-                        ...m,
-                        foregroundStyle: gradient("linear", {
-                          colors: ["rgba(175,82,222,0.32)", "rgba(175,82,222,0.02)"],
-                          startPoint: "top" as const,
-                          endPoint: "bottom" as const,
-                        }),
-                      }))}
-                    />
+                    <LineChart marks={lineMarks} />
+                    <AreaChart marks={areaMarks} />
                   </Chart>
                 ) : (
                   <Text font={13} foregroundStyle="secondaryLabel">采样数据不足…</Text>

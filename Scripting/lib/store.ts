@@ -182,6 +182,18 @@ let trafficInFlight = false
 let authSuspended = false
 let connectionGeneration = 0
 let schedulerGeneration = 0
+// 连续失败次数：失败越多下一次拉取越晚，避免断网时每秒一次白打请求把电量吃光
+let trafficFailStreak = 0
+let overviewFailStreak = 0
+
+const TRAFFIC_BACKOFF_MAX_MS = 30_000
+const OVERVIEW_BACKOFF_MAX_MS = 60_000
+
+/** 连续失败 streak 次的等待时长：成功（streak=0）时就是基础间隔 */
+function backoffDelay(streak: number, baseMs: number, maxMs: number): number {
+  if (streak <= 0) return baseMs
+  return Math.min(maxMs, baseMs * Math.pow(2, Math.min(streak, 10)))
+}
 
 function invalidateConnection() {
   connectionGeneration++
@@ -515,13 +527,14 @@ function connectionErrorState(error: unknown): Pick<StoreState, "error" | "error
   }
 }
 
-async function tickTraffic() {
+async function tickTraffic(): Promise<{ elapsed: number; ok: boolean } | undefined> {
   if (needsSetup() || trafficInFlight || authSuspended) return
   const generation = connectionGeneration
   const activeId = state.activeId
   const config = state.config
   trafficInFlight = true
   const t0 = Date.now()
+  let ok = false
   try {
     const traffic = await getTraffic(config)
     if (!connectionIsCurrent(generation, activeId)) return
@@ -545,6 +558,7 @@ async function tickTraffic() {
       running: true,
       updatedAt: now,
     })
+    ok = true
   } catch (e) {
     if (!connectionIsCurrent(generation, activeId)) return
     const kind = surgeApiErrorKind(e)
@@ -554,7 +568,9 @@ async function tickTraffic() {
   } finally {
     if (connectionIsCurrent(generation, activeId)) trafficInFlight = false
   }
-  return Date.now() - t0
+  if (ok) trafficFailStreak = 0
+  else trafficFailStreak++
+  return { elapsed: Date.now() - t0, ok }
 }
 
 function armTraffic(delay: number) {
@@ -570,23 +586,29 @@ function armTraffic(delay: number) {
       !schedulerIsCurrent(scheduler) ||
       !connectionIsCurrent(generation, activeId)
     ) return
-    const elapsed = (await tickTraffic()) ?? 0
+    const r = await tickTraffic()
     if (!schedulerIsCurrent(scheduler) || !connectionIsCurrent(generation, activeId)) return
-    armTraffic(Math.max(0, SPEED_REFRESH_MS - elapsed))
+    // 成功：扣掉本轮耗时，维持 1s 节奏；失败：1s → 2 → 4 → 8 → 16 → 30s 指数退避
+    const next =
+      r && !r.ok
+        ? backoffDelay(trafficFailStreak, SPEED_REFRESH_MS, TRAFFIC_BACKOFF_MAX_MS)
+        : Math.max(0, SPEED_REFRESH_MS - (r?.elapsed ?? 0))
+    armTraffic(next)
   }, delay)
 }
 
-async function tick() {
-  if (needsSetup() || authSuspended) return
+async function tick(): Promise<boolean> {
+  if (needsSetup() || authSuspended) return false
   const generation = connectionGeneration
   const { config, prefs, samples: prev, history, speeds, activeId, metricsAvailable, traffic } = state
   const now = Date.now()
+  let ok = false
   try {
     const { samples, fromMetrics } = await fetchOverviewSamples(config, {
       skipMetrics: metricsAvailable === false,
       traffic,
     })
-    if (!connectionIsCurrent(generation, activeId)) return
+    if (!connectionIsCurrent(generation, activeId)) return false
     const mem = fromMetrics ? gaugeValue(samples, "surge_memory_bytes") : null
     let newHistory = history
     let newMemLong = state.memLong
@@ -612,10 +634,11 @@ async function tick() {
       memLong: newMemLong,
       metricsAvailable: fromMetrics,
     })
+    ok = true
   } catch (e) {
-    if (!connectionIsCurrent(generation, activeId)) return
+    if (!connectionIsCurrent(generation, activeId)) return false
     patch(connectionErrorState(e))
-    if (surgeApiErrorKind(e) === "auth") return
+    if (surgeApiErrorKind(e) === "auth") return false
   }
 
   tickCount++
@@ -624,7 +647,7 @@ async function tick() {
   if (tickCount % 3 === 1 && !connectionsVisible) {
     try {
       const { requests } = await getRecentRequests(config)
-      if (!connectionIsCurrent(generation, activeId)) return
+      if (!connectionIsCurrent(generation, activeId)) return false
       patch({
         failedRecent: requests.filter((r) => r.failed).length,
         rejectedRecent: requests.filter((r) => r.rejected || isRejectPolicy(r.policyName)).length,
@@ -633,6 +656,9 @@ async function tick() {
       // 忽略
     }
   }
+  if (ok) overviewFailStreak = 0
+  else overviewFailStreak++
+  return ok
 }
 
 function scheduleNext() {
@@ -653,7 +679,7 @@ function scheduleNext() {
       !connectionIsCurrent(generation, activeId)
     ) return
     scheduleNext()
-  }, state.prefs.intervalSec * 1000)
+  }, backoffDelay(overviewFailStreak, state.prefs.intervalSec * 1000, OVERVIEW_BACKOFF_MAX_MS))
 }
 
 function clearTimers() {
@@ -678,6 +704,8 @@ export async function startPolling() {
   if (started) return
   if (needsSetup()) return
   authSuspended = false
+  trafficFailStreak = 0
+  overviewFailStreak = 0
   started = true
   schedulerGeneration++
   const generation = connectionGeneration
@@ -716,6 +744,8 @@ export async function refreshNow() {
   const scheduler = schedulerGeneration
   const activeId = state.activeId
   authSuspended = false
+  trafficFailStreak = 0
+  overviewFailStreak = 0
   if (state.metricsAvailable === false) patch({ metricsAvailable: null })
   await Promise.all([tick(), tickTraffic()])
   if (

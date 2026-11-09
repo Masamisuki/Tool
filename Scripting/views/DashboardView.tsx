@@ -15,12 +15,13 @@ import {
   Spacer,
   Text,
   useEffect,
+  useMemo,
   useState,
   VStack,
 } from "scripting"
 import { Card, HeroCard, IconBadge, MetricTile, PAGE_BG, SectionHeader, ValueText } from "../components/Kit"
 import { ConnectionPill } from "../components/ConnectionStatus"
-import { activeInstance, getState, needsSetup, openActivity, refreshNow, savePrefs, switchInstance, useStore } from "../lib/store"
+import { activeInstance, getState, needsSetup, openActivity, refreshNow, savePrefs, switchInstance, useStoreSelector } from "../lib/store"
 import {
   evaluateScript,
   getDns,
@@ -79,7 +80,23 @@ const FEATURE_TILES: Record<FeatureKey, { icon: string; tone: Tone }> = {
 }
 
 export function DashboardView() {
-  const state = useStore()
+  // 只订阅低频变化的切片：1Hz 的 speeds / speedHistory 交给 LiveSpeedCard 单独订阅，
+  // 否则整页（内存图 60 个渐变 mark、所有 MetricTile）会每秒重绘一遍。
+  const state = useStoreSelector((s) => ({
+    samples: s.samples,
+    metricsAvailable: s.metricsAvailable,
+    history: s.history,
+    visibleTab: s.visibleTab,
+    config: s.config,
+    prefs: s.prefs,
+    instances: s.instances,
+    activeId: s.activeId,
+    updatedAt: s.updatedAt,
+    error: s.error,
+    errorKind: s.errorKind,
+    failedRecent: s.failedRecent,
+    rejectedRecent: s.rejectedRecent,
+  }))
   const inst = activeInstance()
   const [showDiag, setShowDiag] = useState(false)
   const [showInst, setShowInst] = useState(false)
@@ -96,10 +113,6 @@ export function DashboardView() {
   const info = state.metricsAvailable === false ? null : state.samples ? buildInfo(state.samples) : null
   const noMetrics = state.metricsAvailable === false
   const memParts = mem !== null ? formatBytesParts(mem) : null
-  const downParts = state.running ? formatSpeedParts(state.speeds.inSpeed) : null
-  const upParts = state.running ? formatSpeedParts(state.speeds.outSpeed) : null
-  const peakIn = state.peakSpeeds.inSpeed
-  const peakOut = state.peakSpeeds.outSpeed
   const isHome = Script.env === "home_screen"
   const setup = needsSetup()
   const version = info?.version ?? inst.version
@@ -186,42 +199,24 @@ export function DashboardView() {
     await refreshNow().catch(() => {})
   }
 
-  const chartPts = downsample(state.history, 60)
-  const memValues = chartPts.map((p) => Math.round((p.mem / (1024 * 1024)) * 10) / 10)
-  const memYMax = niceUpper(Math.max(0, ...memValues))
-  const memMarks = chartPts.map((p, i) => ({
-    label: new Date(p.t),
-    value: memValues[i],
-    // monotone 保单调、不过冲；catmullRom 会在尖峰前插出负值
-    interpolationMethod: "monotone" as const,
-    foregroundStyle: gradient("linear", {
-      colors: ["rgba(175,82,222,0.45)", "rgba(175,82,222,0.02)"],
-      startPoint: "top" as const,
-      endPoint: "bottom" as const,
-    }),
-  }))
-
-  // 实时速率双线（KB/s）：foregroundStyleBy 是官方的多序列写法；
-  // 两个 LineChart 子组件会被串成一条折线（实测出现连接线伪影），必须用单 LineChart + 序列编码
-  const speedMarks = state.speedHistory.flatMap((p) => [
-    {
+  // 内存趋势只在 history 变化（≈5s）时重建：60 个 gradient 对象不必每秒重造
+  const memChart = useMemo(() => {
+    const pts = downsample(state.history, 60)
+    const values = pts.map((p) => Math.round((p.mem / (1024 * 1024)) * 10) / 10)
+    const yMax = niceUpper(Math.max(0, ...values))
+    const marks = pts.map((p, i) => ({
       label: new Date(p.t),
-      value: toKbps(p.inSpeed),
+      value: values[i],
+      // monotone 保单调、不过冲；catmullRom 会在尖峰前插出负值
       interpolationMethod: "monotone" as const,
-      lineStyle: LINE_STYLE,
-      foregroundStyleBy: { value: "下载", label: "下载" },
-    },
-    {
-      label: new Date(p.t),
-      value: toKbps(p.outSpeed),
-      interpolationMethod: "monotone" as const,
-      lineStyle: LINE_STYLE,
-      foregroundStyleBy: { value: "上传", label: "上传" },
-    },
-  ])
-  const speedYMax = niceUpper(
-    Math.max(0, ...state.speedHistory.flatMap((p) => [toKbps(p.inSpeed), toKbps(p.outSpeed)]))
-  )
+      foregroundStyle: gradient("linear", {
+        colors: ["rgba(175,82,222,0.45)", "rgba(175,82,222,0.02)"],
+        startPoint: "top" as const,
+        endPoint: "bottom" as const,
+      }),
+    }))
+    return { count: pts.length, yMax, marks }
+  }, [state.history])
 
   const latestEvent = events && events.length > 0 ? events[0] : null
   const hideAddresses = state.prefs.hideAddresses
@@ -343,48 +338,8 @@ export function DashboardView() {
 
         {!setup ? (
           <>
-            {/* 实时速率主卡：点按进入活动 → 流量 */}
-            <HeroCard onTap={() => openActivity("traffic")}>
-              <HStack>
-                <Text font={13} fontWeight="semibold" foregroundStyle="rgba(255,255,255,0.85)">实时速率</Text>
-                <Spacer />
-                <Text font={11} foregroundStyle="rgba(255,255,255,0.7)">1 秒采样 · 近 1 分钟</Text>
-                <Image systemName="chevron.right" font={10} foregroundStyle="rgba(255,255,255,0.7)" />
-              </HStack>
-              <HStack spacing={12} alignment="top">
-                <SpeedColumn
-                  icon="arrow.down.circle.fill"
-                  label="下载"
-                  parts={downParts}
-                  peak={peakIn > 0 ? formatSpeedParts(peakIn) : null}
-                />
-                <SpeedColumn
-                  icon="arrow.up.circle.fill"
-                  label="上传"
-                  parts={upParts}
-                  peak={peakOut > 0 ? formatSpeedParts(peakOut) : null}
-                />
-              </HStack>
-              {state.traffic && speedMarks.length >= 4 ? (
-                <Chart
-                  frame={{ height: 84 }}
-                  chartYScale={{ domain: { from: 0, to: speedYMax }, type: "linear" }}
-                  chartXAxis="hidden"
-                  chartYAxis="hidden"
-                  chartLegend="hidden"
-                  chartForegroundStyleScale={{
-                    "下载": "white",
-                    "上传": "rgba(160,235,255,0.9)",
-                  }}
-                >
-                  <LineChart marks={speedMarks} />
-                </Chart>
-              ) : (
-                <Text font={12} foregroundStyle="rgba(255,255,255,0.7)" frame={{ height: 84 }}>
-                  采样中，稍后展示速率曲线…
-                </Text>
-              )}
-            </HeroCard>
+            {/* 实时速率主卡：点按进入活动 → 流量。单独订阅 1Hz 切片，避免整页跟着重绘 */}
+            <LiveSpeedCard onTap={() => openActivity("traffic")} />
 
             {/* 快捷开关 */}
             {features ? (
@@ -457,13 +412,13 @@ export function DashboardView() {
               />
               {noMetrics ? (
                 <Text font={13} foregroundStyle="secondaryLabel">{METRICS_HINT}</Text>
-              ) : memMarks.length >= 2 ? (
+              ) : memChart.count >= 2 ? (
                 <Chart
                   frame={{ height: 120 }}
-                  chartYScale={{ domain: { from: 0, to: memYMax }, type: "linear" }}
+                  chartYScale={{ domain: { from: 0, to: memChart.yMax }, type: "linear" }}
                   chartXAxis={{ valueLabel: { format: "time" } }}
                 >
-                  <AreaChart marks={memMarks} />
+                  <AreaChart marks={memChart.marks} />
                 </Chart>
               ) : (
                 <Text font={13} foregroundStyle="secondaryLabel">采样中，稍后展示趋势…</Text>
@@ -542,6 +497,94 @@ function SpeedColumn({
         {peak ? `峰值 ${peak.value} ${peak.unit}` : "全部网络接口"}
       </Text>
     </VStack>
+  )
+}
+
+/** 实时速率主卡：独立订阅 1Hz 切片，把每秒重绘隔离在这一块里 */
+function LiveSpeedCard({ onTap }: { onTap: () => void }) {
+  const live = useStoreSelector((s) => ({
+    running: s.running,
+    inSpeed: s.speeds.inSpeed,
+    outSpeed: s.speeds.outSpeed,
+    peakIn: s.peakSpeeds.inSpeed,
+    peakOut: s.peakSpeeds.outSpeed,
+    speedHistory: s.speedHistory,
+    hasTraffic: s.traffic !== null && s.traffic !== undefined,
+  }))
+  const downParts = live.running ? formatSpeedParts(live.inSpeed) : null
+  const upParts = live.running ? formatSpeedParts(live.outSpeed) : null
+
+  // 实时速率双线（KB/s）：foregroundStyleBy 是官方多序列写法；两个 LineChart 子组件会被串成一条折线。
+  // marks 与 Y 轴上界一次遍历算完，不再对同一份 speedHistory 二次 flatMap
+  const speed = useMemo(() => {
+    const marks = live.speedHistory.flatMap((p) => [
+      {
+        label: new Date(p.t),
+        value: toKbps(p.inSpeed),
+        interpolationMethod: "monotone" as const,
+        lineStyle: LINE_STYLE,
+        foregroundStyleBy: { value: "下载", label: "下载" },
+      },
+      {
+        label: new Date(p.t),
+        value: toKbps(p.outSpeed),
+        interpolationMethod: "monotone" as const,
+        lineStyle: LINE_STYLE,
+        foregroundStyleBy: { value: "上传", label: "上传" },
+      },
+    ])
+    let top = 0
+    for (const p of live.speedHistory) {
+      const i = toKbps(p.inSpeed)
+      const o = toKbps(p.outSpeed)
+      if (i > top) top = i
+      if (o > top) top = o
+    }
+    return { marks, yMax: niceUpper(top) }
+  }, [live.speedHistory])
+
+  return (
+    <HeroCard onTap={onTap}>
+      <HStack>
+        <Text font={13} fontWeight="semibold" foregroundStyle="rgba(255,255,255,0.85)">实时速率</Text>
+        <Spacer />
+        <Text font={11} foregroundStyle="rgba(255,255,255,0.7)">1 秒采样 · 近 1 分钟</Text>
+        <Image systemName="chevron.right" font={10} foregroundStyle="rgba(255,255,255,0.7)" />
+      </HStack>
+      <HStack spacing={12} alignment="top">
+        <SpeedColumn
+          icon="arrow.down.circle.fill"
+          label="下载"
+          parts={downParts}
+          peak={live.peakIn > 0 ? formatSpeedParts(live.peakIn) : null}
+        />
+        <SpeedColumn
+          icon="arrow.up.circle.fill"
+          label="上传"
+          parts={upParts}
+          peak={live.peakOut > 0 ? formatSpeedParts(live.peakOut) : null}
+        />
+      </HStack>
+      {live.hasTraffic && speed.marks.length >= 4 ? (
+        <Chart
+          frame={{ height: 84 }}
+          chartYScale={{ domain: { from: 0, to: speed.yMax }, type: "linear" }}
+          chartXAxis="hidden"
+          chartYAxis="hidden"
+          chartLegend="hidden"
+          chartForegroundStyleScale={{
+            "下载": "white",
+            "上传": "rgba(160,235,255,0.9)",
+          }}
+        >
+          <LineChart marks={speed.marks} />
+        </Chart>
+      ) : (
+        <Text font={12} foregroundStyle="rgba(255,255,255,0.7)" frame={{ height: 84 }}>
+          采样中，稍后展示速率曲线…
+        </Text>
+      )}
+    </HeroCard>
   )
 }
 
