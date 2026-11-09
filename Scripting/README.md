@@ -13,9 +13,9 @@
 ## 使用
 
 1. **导入脚本**（任选其一）：
-   - **一键导入**：[在 Scripting 中打开 Surge Panel](https://www.scripting.fun/import_scripts/?urls=%5B%22https%3A%2F%2Fgithub.com%2Fbluenight91%2FScripting-Scripts%2Ftree%2Fmain%2FSurge%2520Panel%22%5D)
-   - 在 Scripting 中填入本目录的 GitHub 链接：`https://github.com/bluenight91/Scripting-Scripts/tree/main/Surge%20Panel`
-   - 或将整个 `Surge Panel` 目录放入 Scripting 的脚本目录
+   - **一键导入**：[在 Scripting 中打开 Surge Panel](https://www.scripting.fun/import_scripts/?urls=%5B%22https%3A%2F%2Fgithub.com%2FMasamisuki%2FTool%2Ftree%2Fmain%2FScripting%22%5D)
+   - 在 Scripting 中填入本目录的 GitHub 链接：`https://github.com/Masamisuki/Tool/tree/main/Scripting`
+   - 或将整个 `Scripting` 目录放入 Scripting 的脚本目录
 2. 按下方示例在 Surge 中开启 HTTP API
 3. 首次打开不会自动连接。到仪表盘或「设置 → 实例」选择本机 / 局域网预设，填写地址和 Key，可先测试再保存
 4. 可选：Scripting 设置 → Show Home Tab → 选择本脚本
