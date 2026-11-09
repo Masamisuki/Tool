@@ -1,7 +1,7 @@
 // 小组件数据桥：面板运行时把精简后的状态写入 Storage，widget.tsx 只读缓存渲染。
 // 注意：这里不引入 lib/ui.ts（它模块加载即读 Device.systemVersion），以保证小组件扩展内可安全加载。
-import { Widget, type DynamicShapeStyle, type ShapeStyle } from "scripting"
-import { displayHostPort, gaugeValue, type MetricSample } from "./metrics"
+import { Widget } from "scripting"
+import { buildInfo, displayHostPort, gaugeValue, type MetricSample } from "./metrics"
 import type { TrafficSnapshot } from "./surgeApi"
 
 export const WIDGET_CACHE_KEY = "surge_panel_widget_cache_v1"
@@ -16,78 +16,54 @@ const CURVE_POINTS = 24
 
 // ---------- 设置 ----------
 
-export type WidgetAccent = "indigo" | "blue" | "teal" | "green" | "orange" | "purple"
-
 export type WidgetSettings = {
-  style: "compact" | "detailed"
-  accent: WidgetAccent
-  showChart: boolean
   showMemory: boolean
   showUptime: boolean
   showRequests: boolean
-  showTotals: boolean
-  showPeak: boolean
+  showDns: boolean
+  showInterfaces: boolean
 }
 
 export const DEFAULT_WIDGET_SETTINGS: WidgetSettings = {
-  style: "detailed",
-  accent: "indigo",
-  showChart: true,
   showMemory: true,
   showUptime: true,
   showRequests: true,
-  showTotals: true,
-  showPeak: true,
-}
-
-const styleOf = (light: ShapeStyle, dark: ShapeStyle): DynamicShapeStyle => ({ light, dark })
-
-export const WIDGET_ACCENTS: { tag: WidgetAccent; label: string; style: DynamicShapeStyle }[] = [
-  { tag: "indigo", label: "靛蓝", style: styleOf("#4F46E5", "#A69CFF") },
-  { tag: "blue", label: "蓝色", style: styleOf("#0A6CB8", "#56C7DF") },
-  { tag: "teal", label: "青色", style: styleOf("#0F8A7E", "#5FE0D0") },
-  { tag: "green", label: "绿色", style: styleOf("#217A51", "#62D5A3") },
-  { tag: "orange", label: "橙色", style: styleOf("#B4611A", "#FFB05C") },
-  { tag: "purple", label: "紫色", style: styleOf("#7040CB", "#C0A6FF") },
-]
-
-/** 小组件内使用的强调色；返回 { light, dark } 供 DynamicShapeStyle 使用 */
-export function widgetAccentColor(accent: WidgetAccent): DynamicShapeStyle {
-  const hit = WIDGET_ACCENTS.find((a) => a.tag === accent) ?? WIDGET_ACCENTS[0]
-  return hit.style
+  showDns: true,
+  showInterfaces: true,
 }
 
 export function loadWidgetSettings(): WidgetSettings {
   const saved = (Storage.get(WIDGET_SETTINGS_KEY) as Partial<WidgetSettings> | null) ?? {}
-  const d = DEFAULT_WIDGET_SETTINGS
   return {
-    style: saved.style === "compact" ? "compact" : "detailed",
-    accent: WIDGET_ACCENTS.some((a) => a.tag === saved.accent) ? (saved.accent as WidgetAccent) : d.accent,
-    showChart: saved.showChart !== false,
     showMemory: saved.showMemory !== false,
     showUptime: saved.showUptime !== false,
     showRequests: saved.showRequests !== false,
-    showTotals: saved.showTotals !== false,
-    showPeak: saved.showPeak !== false,
+    showDns: saved.showDns !== false,
+    showInterfaces: saved.showInterfaces !== false,
   }
 }
 
 export function saveWidgetSettings(next: WidgetSettings) {
   const safe: WidgetSettings = {
-    style: next.style === "compact" ? "compact" : "detailed",
-    accent: WIDGET_ACCENTS.some((a) => a.tag === next.accent) ? next.accent : DEFAULT_WIDGET_SETTINGS.accent,
-    showChart: next.showChart !== false,
     showMemory: next.showMemory !== false,
     showUptime: next.showUptime !== false,
     showRequests: next.showRequests !== false,
-    showTotals: next.showTotals !== false,
-    showPeak: next.showPeak !== false,
+    showDns: next.showDns !== false,
+    showInterfaces: next.showInterfaces !== false,
   }
   Storage.set(WIDGET_SETTINGS_KEY, safe)
   return safe
 }
 
 // ---------- 快照 ----------
+
+/** 单张网卡的累计流量；totalBytes 用于排序与比例条 */
+export type WidgetIface = {
+  name: string
+  inBytes: number
+  outBytes: number
+  totalBytes: number
+}
 
 export type WidgetSnapshot = {
   v: number
@@ -116,9 +92,13 @@ export type WidgetSnapshot = {
   totalOut: number
   /** 流量统计起始时间（毫秒），0 表示未知 */
   since: number
+  /** 引擎版本标签，形如 Surge 5.102.0 • Build 3813；空字符串表示未知 */
+  build: string
   /** 最近的下行 / 上行速率序列（字节每秒） */
   down: number[]
   up: number[]
+  /** 各网卡累计流量，按 totalBytes 降序，最多 4 条 */
+  ifaces: WidgetIface[]
 }
 
 export const EMPTY_WIDGET_SNAPSHOT: WidgetSnapshot = {
@@ -144,8 +124,10 @@ export const EMPTY_WIDGET_SNAPSHOT: WidgetSnapshot = {
   totalIn: 0,
   totalOut: 0,
   since: 0,
+  build: "",
   down: [],
   up: [],
+  ifaces: [],
 }
 
 function num(value: unknown): number {
@@ -156,6 +138,22 @@ function num(value: unknown): number {
 function numbers(raw: unknown): number[] {
   if (!Array.isArray(raw)) return []
   return raw.map((x) => num(x)).slice(-CURVE_POINTS)
+}
+
+function ifacesOf(raw: unknown): WidgetIface[] {
+  if (!Array.isArray(raw)) return []
+  const out: WidgetIface[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue
+    const row = item as Partial<WidgetIface>
+    const name = String(row.name ?? "").trim()
+    if (!name) continue
+    const inBytes = Math.max(0, num(row.inBytes))
+    const outBytes = Math.max(0, num(row.outBytes))
+    const totalBytes = row.totalBytes == null ? inBytes + outBytes : Math.max(0, num(row.totalBytes))
+    out.push({ name, inBytes, outBytes, totalBytes })
+  }
+  return out.slice(0, 4)
 }
 
 export function loadWidgetSnapshot(): WidgetSnapshot {
@@ -184,8 +182,10 @@ export function loadWidgetSnapshot(): WidgetSnapshot {
     totalIn: num(raw.totalIn),
     totalOut: num(raw.totalOut),
     since: num(raw.since),
+    build: String(raw.build ?? ""),
     down: numbers(raw.down),
     up: numbers(raw.up),
+    ifaces: ifacesOf(raw.ifaces),
   }
 }
 
@@ -231,6 +231,39 @@ function curveOf(history: { inSpeed: number; outSpeed: number }[]): { down: numb
   }
 }
 
+/** 与 totalsOf 同源：逐网卡拆出累计字节，按总量降序 */
+function ifaceListOf(traffic: TrafficSnapshot | null): WidgetIface[] {
+  if (!traffic) return []
+  const iface = traffic.interface ?? {}
+  const table = Object.keys(iface).length > 0 ? iface : traffic.connector ?? {}
+  const rows: WidgetIface[] = []
+  for (const key of Object.keys(table)) {
+    const entry = table[key]
+    if (!entry) continue
+    const name = String(key).trim()
+    if (!name) continue
+    const inBytes = Math.max(0, num(entry.in))
+    const outBytes = Math.max(0, num(entry.out))
+    rows.push({ name, inBytes, outBytes, totalBytes: inBytes + outBytes })
+  }
+  rows.sort((a, b) => b.totalBytes - a.totalBytes)
+  return rows.slice(0, 4)
+}
+
+/** 从 surge_build_info 拼出「Surge 5.102.0 • Build 3813」 */
+function buildLabelOf(samples: MetricSample[]): string {
+  try {
+    const info = buildInfo(samples)
+    if (!info) return ""
+    const version = String(info.version ?? "").trim()
+    const build = String(info.build ?? "").trim()
+    if (!version) return ""
+    return build ? `Surge ${version} • Build ${build}` : `Surge ${version}`
+  } catch {
+    return ""
+  }
+}
+
 export function buildWidgetSnapshot(src: WidgetSourceState): WidgetSnapshot {
   const samples = src.samples ?? []
   const gauge = (name: string): number => {
@@ -264,8 +297,10 @@ export function buildWidgetSnapshot(src: WidgetSourceState): WidgetSnapshot {
     totalIn: totals.totalIn,
     totalOut: totals.totalOut,
     since: totals.since,
+    build: buildLabelOf(samples),
     down: curve.down,
     up: curve.up,
+    ifaces: ifaceListOf(src.traffic),
   }
 }
 

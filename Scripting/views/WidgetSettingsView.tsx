@@ -1,13 +1,11 @@
-// 小组件设置子页：样式、强调色、显示内容、家族预览
-import { Button, HStack, List, Picker, Section, Spacer, Text, Toggle, Widget, useState } from "scripting"
+// 小组件设置子页：显示内容与家族预览
+import { Button, HStack, List, Section, Spacer, Text, Toggle, Widget, useState } from "scripting"
 import { LIST_STYLE, ListRow } from "../components/Kit"
 import {
-  WIDGET_ACCENTS,
   loadWidgetSettings,
   loadWidgetSnapshot,
   reloadWidgetsThrottled,
   saveWidgetSettings,
-  type WidgetAccent,
   type WidgetSettings,
 } from "../lib/widgetCache"
 import { formatClock } from "../lib/metrics"
@@ -40,44 +38,23 @@ export function WidgetSettingsView() {
   return (
     <List {...LIST_STYLE} navigationTitle="小组件" tabBarVisibility="visible">
       <Section
-        header={<Text>外观</Text>}
-        footer={<Text font={13}>紧凑只显示速率；详细会额外显示内存、运行时长、累计流量与速率曲线。改动会立即同步到桌面小组件。</Text>}
+        header={<Text>显示内容</Text>}
+        footer={<Text font={13}>中尺寸最多显示四个状态块；大尺寸还会列出各网卡累计流量。改动会立即同步到桌面小组件。</Text>}
       >
-        <Picker
-          title="显示样式"
-          value={settings.style}
-          onChanged={(v: string) => update({ style: v === "compact" ? "compact" : "detailed" })}
-        >
-          <Text tag="compact">紧凑</Text>
-          <Text tag="detailed">详细</Text>
-        </Picker>
-        <Picker title="强调色" value={settings.accent} onChanged={(v: string) => update({ accent: v as WidgetAccent })}>
-          {WIDGET_ACCENTS.map((a) => (
-            <Text key={a.tag} tag={a.tag}>
-              {a.label}
-            </Text>
-          ))}
-        </Picker>
-      </Section>
-
-      <Section header={<Text>显示内容</Text>}>
-        <Toggle value={settings.showChart} onChanged={(v: boolean) => update({ showChart: v })}>
-          <ListRow icon="chart.bar.fill" tone="teal" title="速率曲线" />
-        </Toggle>
         <Toggle value={settings.showMemory} onChanged={(v: boolean) => update({ showMemory: v })}>
           <ListRow icon="memorychip.fill" tone="purple" title="内存占用" />
-        </Toggle>
-        <Toggle value={settings.showUptime} onChanged={(v: boolean) => update({ showUptime: v })}>
-          <ListRow icon="clock.fill" tone="blue" title="运行时长" />
         </Toggle>
         <Toggle value={settings.showRequests} onChanged={(v: boolean) => update({ showRequests: v })}>
           <ListRow icon="bolt.fill" tone="orange" title="活动请求" />
         </Toggle>
-        <Toggle value={settings.showTotals} onChanged={(v: boolean) => update({ showTotals: v })}>
-          <ListRow icon="arrow.up.arrow.down.circle.fill" tone="green" title="累计流量" />
+        <Toggle value={settings.showDns} onChanged={(v: boolean) => update({ showDns: v })}>
+          <ListRow icon="globe" tone="teal" title="DNS 缓存" />
         </Toggle>
-        <Toggle value={settings.showPeak} onChanged={(v: boolean) => update({ showPeak: v })}>
-          <ListRow icon="gauge.with.dots.needle.67percent" tone="pink" title="峰值速率" />
+        <Toggle value={settings.showUptime} onChanged={(v: boolean) => update({ showUptime: v })}>
+          <ListRow icon="clock.fill" tone="blue" title="运行时长" />
+        </Toggle>
+        <Toggle value={settings.showInterfaces} onChanged={(v: boolean) => update({ showInterfaces: v })}>
+          <ListRow icon="network" tone="green" title="网卡流量明细" />
         </Toggle>
       </Section>
 
