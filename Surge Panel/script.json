@@ -1,0 +1,33 @@
+{
+  "name" : "Surge Panel",
+  "iconImage" : "",
+  "color" : "rgba(28, 140, 255, 1)",
+  "intentInputTypes" : [
+
+  ],
+  "runInApp" : false,
+  "contributors" : [
+
+  ],
+  "version" : "3.1.3",
+  "entry" : "index.tsx",
+  "remoteResource" : {
+    "url" : "https:\/\/github.com\/bluenight91\/Scripting-Scripts\/tree\/main\/Surge Panel",
+    "hash" : "3433fc76d49e9b647b9b67b673da5c80",
+    "autoUpdateInterval" : 86400
+  },
+  "permissions" : null,
+  "author" : {
+    "homepage" : null,
+    "email" : "still.bag7241@fastmail.com",
+    "name" : "Daniel"
+  },
+  "description" : "Surge monitoring panel 3.1: dashboard, routing, activity and settings tabs with secure multi-instance switching, external resource management and GeoIP lookup via Surge HTTP API.",
+  "icon" : "gauge.with.needle.fill",
+  "localizedDescriptions" : {
+    "zh" : "Surge 监控面板 3.1：仪表盘、分流、活动、设置四个标签，安全多实例切换，外部资源管理与 IP 归属查询。"
+  },
+  "localizedNames" : {
+    "zh" : "Surge 面板"
+  }
+}
