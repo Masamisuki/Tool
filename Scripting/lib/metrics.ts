@@ -76,6 +76,16 @@ export function buildInfo(
 
 // ---------- 格式化 ----------
 
+/** 拼出「Surge 5.102.0 • Build 3813」；信息不足时返回空串（交给 UI 兑底） */
+export function formatBuildLabel(version?: string, build?: string): string {
+  const v = String(version ?? "").trim()
+  const b = String(build ?? "").trim()
+  if (v && b) return `Surge ${v} • Build ${b}`
+  if (v) return `Surge ${v}`
+  if (b) return `Surge Build ${b}`
+  return ""
+}
+
 export function formatBytes(bytes: number): string {
   const { value, unit } = formatBytesParts(bytes)
   return unit ? `${value} ${unit}` : value

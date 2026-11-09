@@ -4,6 +4,7 @@ import {
   fetchOverviewSamples,
   getRecentRequests,
   getTraffic,
+  latestEngineBuildLabel,
   surgeApiErrorKind,
   surgeApiErrorMessage,
   type SurgeConfig,
@@ -216,7 +217,7 @@ function patch(partial: Partial<StoreState>) {
   emit()
   // 小组件：状态变化后把精简快照写入 Storage（内部节流，不影响轮询）
   try {
-    publishWidgetSnapshot(state)
+    publishWidgetSnapshot({ ...state, build: latestEngineBuildLabel() })
   } catch {
     // 小组件缓存失败不影响面板本身
   }
@@ -700,7 +701,7 @@ export function stopPolling() {
   flushHistory()
   // 退出前把最后的快照落盘，小组件不会停在旧数据
   try {
-    publishWidgetSnapshot(state, true)
+    publishWidgetSnapshot({ ...state, build: latestEngineBuildLabel() }, true)
   } catch {
     // 忽略
   }

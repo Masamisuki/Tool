@@ -18,9 +18,7 @@ type IfaceTraffic = WidgetSnapshot["ifaces"][number]
 const gauge = (value: number): number | null => (value >= 0 ? value : null)
 
 function labelOf(snapshot: WidgetSnapshot): string {
-  if (snapshot.build) return snapshot.build
-  if (snapshot.endpoint) return snapshot.endpoint
-  return snapshot.instance || "Surge —"
+  return String(snapshot.build ?? "").trim()
 }
 
 function metricBlocks(snapshot: WidgetSnapshot, settings: WidgetSettings) {

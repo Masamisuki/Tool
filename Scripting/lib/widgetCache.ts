@@ -1,7 +1,7 @@
 // 小组件数据桥：面板运行时把精简后的状态写入 Storage，widget.tsx 只读缓存渲染。
 // 注意：这里不引入 lib/ui.ts（它模块加载即读 Device.systemVersion），以保证小组件扩展内可安全加载。
 import { Widget } from "scripting"
-import { buildInfo, displayHostPort, gaugeValue, type MetricSample } from "./metrics"
+import { buildInfo, displayHostPort, formatBuildLabel, gaugeValue, type MetricSample } from "./metrics"
 import type { TrafficSnapshot } from "./surgeApi"
 
 export const WIDGET_CACHE_KEY = "surge_panel_widget_cache_v1"
@@ -205,6 +205,8 @@ export type WidgetSourceState = {
   updatedAt: number | null
   failedRecent: number
   rejectedRecent: number
+  /** 面板从 Surge 响应头拿到的版本标签，优先于指标里的 build_info */
+  build?: string
 }
 
 function totalsOf(traffic: TrafficSnapshot | null): { totalIn: number; totalOut: number; since: number } {
@@ -250,18 +252,16 @@ function ifaceListOf(traffic: TrafficSnapshot | null): WidgetIface[] {
   return rows.slice(0, 4)
 }
 
-/** 从 surge_build_info 拼出「Surge 5.102.0 • Build 3813」 */
-function buildLabelOf(samples: MetricSample[]): string {
+/** 面板已经拼好的版本标签优先，否则从 surge_build_info 拼「Surge 5.102.0 • Build 3813」 */
+function buildLabelOf(preferred: string, samples: MetricSample[] | null): string {
+  const own = String(preferred ?? "").trim()
+  if (own) return own
   try {
-    const info = buildInfo(samples)
-    if (!info) return ""
-    const version = String(info.version ?? "").trim()
-    const build = String(info.build ?? "").trim()
-    if (!version) return ""
-    return build ? `Surge ${version} • Build ${build}` : `Surge ${version}`
-  } catch {
-    return ""
-  }
+    const info = samples && samples.length > 0 ? buildInfo(samples) : null
+    const label = formatBuildLabel(info?.version, info?.build)
+    if (label) return label
+  } catch {}
+  return ""
 }
 
 export function buildWidgetSnapshot(src: WidgetSourceState): WidgetSnapshot {
@@ -297,7 +297,7 @@ export function buildWidgetSnapshot(src: WidgetSourceState): WidgetSnapshot {
     totalIn: totals.totalIn,
     totalOut: totals.totalOut,
     since: totals.since,
-    build: buildLabelOf(samples),
+    build: buildLabelOf(src.build ?? "", src.samples ?? null),
     down: curve.down,
     up: curve.up,
     ifaces: ifaceListOf(src.traffic),

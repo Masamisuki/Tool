@@ -4,6 +4,7 @@ import { hostForUrl } from "./connection"
 import {
   buildPolicyLatencyScript,
   chunk,
+  formatBuildLabel,
   parseEngineInfo,
   parseExternalPolicies,
   parsePolicyLatencyResults,
@@ -140,6 +141,7 @@ async function request<T>(
   }).catch((e) => {
     throw wrapFetchError(e)
   })
+  rememberEngineVersion(res.headers)
   if (!res.ok) {
     const body = await res.text().then((t: string) => t.trim().slice(0, 300)).catch(() => "")
     if (res.status === 400) {
@@ -178,6 +180,7 @@ export async function fetchMetrics(c: SurgeConfig): Promise<MetricSample[] | nul
   }).catch((e) => {
     throw wrapFetchError(e)
   })
+  rememberEngineVersion(res.headers)
   if (res.status === 404 || res.status === 405 || res.status === 501) return null
   if (!res.ok) throw httpStatusError(res.status)
   const text = (await res.text()).trim()
@@ -385,6 +388,25 @@ function headerGet(headers: unknown, name: string): string | undefined {
   return typeof v === "string" ? v : undefined
 }
 
+/** Surge 的每个 API 响应都带 X-Surge-Version / X-Surge-Build，随手记住最近一次 */
+let engineVersion: { version: string; build: string } = { version: "", build: "" }
+
+function rememberEngineVersion(headers: unknown) {
+  const version = (headerGet(headers, "x-surge-version") ?? "").trim()
+  const build = (headerGet(headers, "x-surge-build") ?? "").trim()
+  if (version || build) engineVersion = { version, build }
+}
+
+/** 最近一次响应头里读到的 Surge 版本信息（没有就返回空串） */
+export function latestEngineVersion(): { version: string; build: string } {
+  return engineVersion
+}
+
+/** 最近一次响应头里读到的版本标签，如「Surge 5.102.0 • Build 3813」 */
+export function latestEngineBuildLabel(): string {
+  return formatBuildLabel(engineVersion.version, engineVersion.build)
+}
+
 /** 连通性探针：读 /v1/outbound，尽量带上版本头 */
 export async function probeOutbound(c: SurgeConfig): Promise<ProbeResult> {
   const t0 = Date.now()
@@ -398,6 +420,7 @@ export async function probeOutbound(c: SurgeConfig): Promise<ProbeResult> {
     throw wrapFetchError(e)
   })
   const latencyMs = Date.now() - t0
+  rememberEngineVersion(res.headers)
   if (!res.ok) {
     if (res.status === 404 || res.status === 405 || res.status === 501) {
       throw new SurgeApiError(

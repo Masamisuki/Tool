@@ -1,5 +1,5 @@
 // 小组件排版原语：一套统一的配色与文本层级
-import { HStack, Image, Spacer, Text, VStack } from "scripting"
+import { HStack, Image, Script, Spacer, Text, VStack } from "scripting"
 import type { Color, DynamicShapeStyle, ShapeStyle } from "scripting"
 import { formatFetchedAt } from "./format"
 
@@ -33,10 +33,9 @@ export function Header({
     <HStack alignment="center" frame={{ maxWidth: "infinity" }} padding={{ horizontal: inset }}>
       <HStack spacing={5} alignment="center">
         <Image
-          systemName="speedometer"
+          filePath={`${Script.directory}/assets/surge-metrics-icon.png`}
           resizable
           scaleToFit
-          foregroundStyle={C.accent}
           frame={{ width: 15, height: 15 }}
         />
         <Text font={titleFont} fontWeight="bold" foregroundStyle={C.accent}>
@@ -54,10 +53,25 @@ export function Header({
   )
 }
 
+/** 统一成「Surge 5.102.0 • Build 3813」；兼容旧缓存的「5.102.0 · 3813」等写法 */
+export function normalizedBuildLabel(value: string): string {
+  let text = String(value ?? "").trim()
+  if (!text) return ""
+  text = text.replace(/^(iOS|macOS|Mac)\s*[•·]\s*/i, "").trim()
+  text = text.replace(/^surge\b\s*/i, "")
+  text = text.replace(/^version\b\s*/i, "").trim()
+  const parts = text.split(/\s*[·•]\s*/).map((p) => p.trim()).filter(Boolean)
+  const version = parts.shift() ?? ""
+  let build = parts.shift() ?? ""
+  build = build.replace(/^build\b\s*/i, "").trim()
+  if (!version) return ""
+  return build ? `Surge ${version} • Build ${build}` : `Surge ${version}`
+}
+
 export function VersionLabel({ value, font = 9 }: { value: string; font?: number }) {
   return (
     <Text font={font} fontWeight="medium" foregroundStyle={C.tertiary} lineLimit={1} minScaleFactor={0.7}>
-      {value || "Surge —"}
+      {normalizedBuildLabel(value) || "Surge —"}
     </Text>
   )
 }
