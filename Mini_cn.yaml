@@ -28,26 +28,26 @@ proxies:
   - name: "🇭🇰Panstar-HKS Special"
     type: hysteria2
     server: 195.58.144.204
-    port: 443
-    password: "1588d4bb3385453bf83ddabb"
+    port: 25441
+    password: "aQrg0qm5x5WfrEEm"
     sni: www.bing.com
     skip-cert-verify: true
     udp: true
 
   - name: "🇯🇵NewNB-TYO2"
     type: ss
-    server: "2a14:7586:6109:1:be24:11ff:fe2a:53cf"
+    server: 77.67.18.43
     port: 28641
     cipher: 2022-blake3-aes-128-gcm
-    password: "D06slaI9ZdKhEeicYIAmIg=="
+    password: "FboZyOjEKWRFt/Vxebj+Tg=="
     udp: true
   
   - name: "🇺🇸PPFlight-LIFT S"
     type: ss
     server: 68.164.13.252
-    port: 31027
+    port: 6130
     cipher: 2022-blake3-aes-128-gcm
-    password: "hmpj+d/cxBZ/ddAzeDbZJg=="
+    password: "CRbS2wzSv1ErEEExj4YllA=="
     udp: true
 
 # 基础设置
