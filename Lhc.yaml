@@ -25,29 +25,20 @@ proxy-providers:
 
 # 自定义代理节点
 proxies:
-  - name: "🇭🇰Panstar-HKS Special"
-    type: hysteria2
-    server: 195.58.144.204
-    port: 25441
-    password: "aQrg0qm5x5WfrEEm"
-    sni: www.bing.com
-    skip-cert-verify: true
-    udp: true
-
   - name: "🇯🇵NewNB-TYO2"
     type: ss
     server: 77.67.18.43
-    port: 28641
+    port: 23556
     cipher: 2022-blake3-aes-128-gcm
-    password: "FboZyOjEKWRFt/Vxebj+Tg=="
+    password: "e0K+d5fwDYcPgNZyIM4ZXQ=="
     udp: true
   
   - name: "🇺🇸PPFlight-LIFT S"
     type: ss
     server: 68.164.13.252
-    port: 6130
+    port: 23556
     cipher: 2022-blake3-aes-128-gcm
-    password: "CRbS2wzSv1ErEEExj4YllA=="
+    password: "ULLZS0N8hke/UlQoAJiM2A=="
     udp: true
 
 # 基础设置
