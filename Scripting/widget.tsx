@@ -7,10 +7,11 @@ import { formatBytes } from "./widget/format"
 import { EmptyState } from "./widget/primitives"
 import { LargeView, MediumView, SmallView, type WidgetViewProps } from "./widget/views"
 
-/** 缓存超过这个时长就按「缓存」而不是「更新」展示 */
-const FRESH_WINDOW_MS = 3 * 60_000
-/** 预约下一次刷新：WidgetKit 会在这个时间点重新执行本脚本 */
-const REFRESH_MS = 15 * 60_000
+/** 预约下一次刷新的间隔：与原版 Surge Metrics 一致，5 分钟 */
+const REFRESH_MINUTES = 5
+const REFRESH_MS = REFRESH_MINUTES * 60_000
+/** 缓存超过这个时长才标记为「缓存」：给系统推迟刷新的余量，避免刚刷新就显示成缓存 */
+const FRESH_WINDOW_MS = REFRESH_MS + 7 * 60_000
 
 function propsOf(snapshot: WidgetSnapshot, settings: WidgetSettings): WidgetViewProps {
   const fresh = snapshot.ts > 0 && Date.now() - snapshot.ts < FRESH_WINDOW_MS
@@ -102,9 +103,13 @@ async function run() {
   } catch {}
 
   try {
+    // 必须用嵌套的 reloadPolicy：扁平写法在原生侧取不到 options.reloadPolicy，
+    // 会被当成默认 atEnd（只有一条 timeline，永不请求下一次刷新）。
     Widget.present(<WidgetView snapshot={snapshot} settings={settings} />, {
-      policy: "after",
-      date: new Date(Date.now() + REFRESH_MS),
+      reloadPolicy: {
+        policy: "after",
+        date: new Date(Date.now() + REFRESH_MS),
+      },
     })
   } catch {}
 }
