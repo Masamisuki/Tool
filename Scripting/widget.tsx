@@ -1,6 +1,6 @@
 // Surge Panel 小组件：优先自己取数（小组件进程内直接请求 Surge HTTP API），
 // 取数失败才回退 lib/widgetCache.ts 里的缓存快照；并用 after 策略预约下一次刷新。
-import { Image, Text, VStack, Widget } from "scripting"
+import { Image, Script, Text, VStack, Widget } from "scripting"
 import { loadWidgetSettings, loadWidgetSnapshot, type WidgetSettings, type WidgetSnapshot } from "./lib/widgetCache"
 import { fetchLiveSnapshot } from "./lib/widgetLive"
 import { formatBytes } from "./widget/format"
@@ -103,8 +103,8 @@ async function run() {
   } catch {}
 
   try {
-    // 必须用嵌套的 reloadPolicy：扁平写法在原生侧取不到 options.reloadPolicy，
-    // 会被当成默认 atEnd（只有一条 timeline，永不请求下一次刷新）。
+    // 用 after 策略预约下一次刷新（与原版 Surge Metrics 相同）。
+    // 注意：iOS 只会按自己的预算「尽快」兑现，不能保证准点重跑扩展。
     Widget.present(<WidgetView snapshot={snapshot} settings={settings} />, {
       reloadPolicy: {
         policy: "after",
@@ -115,3 +115,10 @@ async function run() {
 }
 
 run()
+  .catch(() => {})
+  .finally(() => {
+    // Widget API 文档要求：小组件脚本结束前调用 Script.exit()，避免进程滞留被系统判为超时。
+    try {
+      Script.exit()
+    } catch {}
+  })
