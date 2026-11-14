@@ -28,9 +28,9 @@ proxies:
   - name: "🇯🇵NewNB-TYO2"
     type: ss
     server: 77.67.18.43
-    port: 23556
+    port: 44785
     cipher: 2022-blake3-aes-128-gcm
-    password: "e0K+d5fwDYcPgNZyIM4ZXQ=="
+    password: "9sxkiN5u5oo2LTTmJqA7Mw=="
     udp: true
   
   - name: "🇺🇸PPFlight-LIFT S"
