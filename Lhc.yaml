@@ -36,9 +36,9 @@ proxies:
   - name: "🇺🇸PPFlight-LIFT S"
     type: ss
     server: 68.164.13.252
-    port: 23556
+    port: 32968
     cipher: 2022-blake3-aes-128-gcm
-    password: "ULLZS0N8hke/UlQoAJiM2A=="
+    password: "Hlax75oGlhuD2tBvSA4kUQ=="
     udp: true
 
 # 基础设置
