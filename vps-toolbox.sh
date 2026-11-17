@@ -1543,30 +1543,30 @@ banner() {
 }
 
 menu() {
-  printf '   %s1)%s 一键基础初始化   %s依赖 + 时区 + journald 日志限制%s\n' "$MAGENTA" "$NC" "$DIM" "$NC"
+  printf '   %s1)%s 一键基础初始化\n' "$MAGENTA" "$NC"
   echo
-  printf '   %s2)%s BBR v3 优化脚本  %snet-tcp-tune 综合调优（菜单）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '   %s3)%s TCP 调优         %stcpfit 精细调优（实测推导）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '   %s4)%s BBRv3 内核        %s官方主线 + BBRv3 补丁（装内核）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s2)%s BBR v3 优化脚本\n' "$GREEN" "$NC"
+  printf '   %s3)%s TCP 调优\n' "$GREEN" "$NC"
+  printf '   %s4)%s BBRv3 内核\n' "$GREEN" "$NC"
   echo
-  printf '   %s5)%s SSH 安全配置脚本  %skey.sh 密钥登录加固%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s5)%s SSH 安全配置脚本\n' "$GREEN" "$NC"
   echo
-  printf '   %s6)%s WARP (warp-go)   %s给纯 IPv6 机器加 IPv4 出口%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '   %s7)%s NAT64 / DNS64    %s纯 DNS 方案，无需安装%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '   %s8)%s IPv6 管理        %s临时/永久禁用或恢复 IPv6%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s6)%s WARP (warp-go)\n' "$GREEN" "$NC"
+  printf '   %s7)%s NAT64 / DNS64\n' "$GREEN" "$NC"
+  printf '   %s8)%s IPv6 管理\n' "$GREEN" "$NC"
   echo
-  printf '   %s9)%s Docker 安装      %s官方脚本（容器化应用的前置）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '  %s10)%s Emby HTTPS 多路径反向代理  %sCaddy / Nginx%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '  %s11)%s Flyx 面板        %s一键安装脚本（kure29/flyx）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '  %s12)%s Komari 探针安装    %sLite Agent%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s9)%s Docker 安装\n' "$GREEN" "$NC"
+  printf '  %s10)%s Emby HTTPS 多路径反向代理\n' "$GREEN" "$NC"
+  printf '  %s11)%s Flyx 面板\n' "$GREEN" "$NC"
+  printf '  %s12)%s Komari Lite\n' "$GREEN" "$NC"
   echo
-  printf '  %s13)%s NodeQuality  %sIP质量 / 硬件 / 网络 / 回程%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '  %s14)%s TcpQuality   %sTCP 质量测试%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '  %s15)%s iperf3 服务端 %s状态 / 启动 / 停止（用完可关）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s13)%s NodeQuality\n' "$GREEN" "$NC"
+  printf '  %s14)%s TcpQuality\n' "$GREEN" "$NC"
+  printf '  %s15)%s iperf3 服务端\n' "$GREEN" "$NC"
   echo
-  printf '  %s16)%s 查看系统状态汇总 %s(含 IPv4 / IPv6 地址)%s\n' "$CYAN" "$NC" "$DIM" "$NC"
-  printf '  %s17)%s 安装/卸载 %s 快捷命令  %s(之后直接敲 %s 进菜单)%s\n' "$GREEN" "$NC" "$CMD_NAME" "$DIM" "$CMD_NAME" "$NC"
-  printf '  %s18)%s %s重装系统 (DD)%s  %s会清空整台机器%s\n' "$GREEN" "$NC" "$RED" "$NC" "$DIM" "$NC"
+  printf '  %s16)%s 查看系统状态汇总\n' "$CYAN" "$NC"
+  printf '  %s17)%s 安装/卸载 %s 快捷命令\n' "$GREEN" "$NC" "$CMD_NAME"
+  printf '  %s18)%s %s重装系统 (DD)%s\n' "$GREEN" "$NC" "$RED" "$NC"
   printf '   %s0)%s 退出\n' "$RED" "$NC"
   echo
   hr
