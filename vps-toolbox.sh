@@ -1118,52 +1118,47 @@ act_docker() {
   fi
 }
 
-act_psm() {
-  step "PSM —— Proxy Stack Manager（Reality 443 端口复用 / 多协议面板）"
-  info "jinqians/proxy-stack：Nginx stream SNI 分流 + Xray / sing-box / Hysteria2 / 证书 / 备份"
+act_flyx() {
+  step "Flyx 面板 —— 一键安装脚本（kure29/flyx）"
+  info "发布页：https://github.com/kure29/flyx/releases/latest"
   echo
-  dim "  装完命令：psm（之后直接敲 psm 进菜单）"
-  dim "  协议：Reality / Vision / XHTTP / SS2022、Hysteria2、AnyTLS、Snell、realm 中转"
-  dim "  还管：SSL 证书（acme.sh）、Cloudflare DDNS / Tunnel、Docker、SSH 加固、备份恢复"
+  dim "  安装命令："
+  dim "  curl -L https://github.com/kure29/flyx/releases/latest/download/panel_install.sh -o panel_install.sh && chmod +x panel_install.sh && ./panel_install.sh"
   echo
-  warn "会接管公网 TCP 443（Nginx stream）—— 装前先确认 443 现在是谁在监听"
-  dim "  已有 Nginx 站点 / Xray / sing-box 的机器，建议先备份再让 PSM 接管"
+  dim "  要求: Debian/Ubuntu + root；需要能访问 github.com"
+  dim "  访问不了 github 时可在 https://github.com/ 前加加速前缀（如 https://ghfast.top/）"
   echo
+  if ! confirm "确认执行？"; then warn "已取消"; return 0; fi
 
-  # ---------- 检测是否已经装过 ----------
-  local installed=0
-  if command -v psm >/dev/null 2>&1 || [ -x /usr/local/bin/psm ]; then
-    installed=1
+  local dir rc=0
+  dir="$(mktemp -d "${TMPDIR:-/tmp}/vpstool.XXXXXX")"
+
+  step "下载 panel_install.sh"
+  if ! ( cd "$dir" && curl -fL --retry 2 --connect-timeout 15 \
+        -o panel_install.sh https://github.com/kure29/flyx/releases/latest/download/panel_install.sh ); then
+    err "下载失败（网络不通 / 地址失效 / 被墙）"
+    rm -rf "$dir"; return 1
   fi
+  chmod +x "$dir/panel_install.sh"
+  ok "已下载 $(wc -c < "$dir/panel_install.sh") 字节"
 
-  if [ "$installed" = 1 ]; then
-    # ================= 已安装：不询问，直接执行 =================
-    ok "检测到 PSM 已安装 —— 直接执行（升级 / 打开菜单）"
-    dim "  短命令: $(command -v psm 2>/dev/null || echo /usr/local/bin/psm)"
-    echo
+  step "执行 Flyx 面板安装"
+  dim "交互式操作请按提示直接输入；Ctrl+C 可中断"
+  hr
+  if [ "$HAVE_TTY" = 1 ]; then
+    ( cd "$dir" && ./panel_install.sh ) < /dev/tty || rc=$?
   else
-    # ================= 未安装：显示命令 + 确认 =================
-    info "执行作者提供的原始命令（未做任何修改）："
-    echo
-    dim "  bash <(curl -fsSL https://psm.jinqians.com)"
-    echo
-    dim "  要求: Debian/Ubuntu + root；交互式菜单，装完输入 psm 打开"
-    echo
-    if ! confirm "确认执行？"; then warn "已取消"; return 0; fi
-    echo
+    ( cd "$dir" && ./panel_install.sh ) || rc=$?
   fi
-
-  run_remote "PSM" "https://psm.jinqians.com" bash
-
-  echo
-  info "装完之后："
-  dim "  psm             打开 PSM 主菜单"
-  dim "  Nginx 管理      安装 Nginx、初始化 stream SNI 分流、管理站点与伪装后端"
-  dim "  Xray 管理       创建 Reality / Vision / XHTTP 节点，生成分享链接和二维码"
-  dim "  SSL 证书        acme.sh 签发与续期"
-  dim "  备份管理        保存配置、节点状态和相关服务数据"
+  rm -rf "$dir"
+  hr
+  if [ "$rc" = 0 ]; then
+    ok "Flyx 面板安装脚本执行完成"
+    dim "  面板地址 / 端口以安装脚本输出为准"
+  else
+    warn "安装脚本退出码：$rc"
+  fi
 }
-
 
 act_status() {
   step "系统状态汇总"
@@ -1523,7 +1518,7 @@ menu() {
   printf '  %s16)%s IPv6 管理        %s临时/永久禁用或恢复 IPv6%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
   printf '%s\n' "${BOLD}  ── 面板 / 容器 ──────────────────────────────────────────${NC}"
-  printf '  %s17)%s PSM 面板         %sProxy Stack Manager：Reality 443 复用%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s17)%s Flyx 面板        %s一键安装脚本（kure29/flyx）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   printf '  %s18)%s Docker 安装      %s官方脚本（容器化应用的前置）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
   printf '%s\n' "${BOLD}  ── 其他 ─────────────────────────────────────────────────${NC}"
@@ -1560,7 +1555,7 @@ main() {
       14) act_warpgo ;;
       15) act_nat64 ;;
       16) act_ipv6 ;;
-      17) act_psm ;;
+      17) act_flyx ;;
       18) act_docker ;;
       19) act_status ;;
       20) act_qc_menu ;;
@@ -1599,7 +1594,7 @@ VPS 常用工具箱
   warp          WARP (warp-go) —— 给纯 IPv6 机器加 IPv4 出口
   nat64         NAT64 / DNS64 —— 纯 DNS 方案，无需安装
   ipv6          IPv6 管理 —— 临时/永久禁用或恢复
-  psm           PSM 面板 —— Proxy Stack Manager（Reality 443 复用）
+  flyx          Flyx 面板 —— 一键安装脚本（kure29/flyx）
   docker        安装 Docker（官方脚本）
   qc            安装/卸载 qc 快捷命令
   install       安装 qc 快捷命令，装完自动进入菜单
@@ -1628,7 +1623,7 @@ case "${1:-}" in
   warp|warpgo|warp-go)    act_warpgo ;;
   nat64|dns64|dns)        act_nat64 ;;
   ipv6|ipv6mgr)           act_ipv6 ;;
-  psm|proxystack|proxy-stack) act_psm ;;
+  flyx|flyxpanel) act_flyx ;;
   docker|dockerd)         act_docker ;;
   qc|cmd)                 act_qc_menu ;;
   install)
