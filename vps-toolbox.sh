@@ -171,7 +171,7 @@ run_remote() {
 
 # ================================================================ 各项功能
 
-# CA 证书是否存在（缺了它 curl https 全挂，报错却像"被墙"）
+# CA 证书是否存在（本地信任库缺失，跟网络无关：精简镜像 / DD 后的系统常没有）
 _ca_ok() {
   [ -f /etc/ssl/certs/ca-certificates.crt ] \
     || [ -f /etc/pki/tls/certs/ca-bundle.crt ] \
