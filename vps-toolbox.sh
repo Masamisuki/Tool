@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.2"
+VERSION="3.3"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -121,9 +121,10 @@ HAVE_WGET=0; command -v wget >/dev/null 2>&1 && HAVE_WGET=1
 fetch() {   # fetch <url> <outfile>
   local url="$1" out="$2"
   if [ "$HAVE_CURL" = 1 ]; then
-    curl -q -fsSL --connect-timeout 20 --retry 2 --retry-delay 2 "$url" -o "$out"
+    # --max-time 是总超时：连上了但服务器不吐数据时也会退出，不会永远吊着
+    curl -q -fsSL --connect-timeout 20 --max-time 120 --retry 2 --retry-delay 2 "$url" -o "$out"
   elif [ "$HAVE_WGET" = 1 ]; then
-    wget -q -T 20 -t 2 -O "$out" "$url"
+    wget -q -T 30 -t 2 -O "$out" "$url"
   else
     err "curl / wget 都没有，请先执行「1. 安装基础依赖」"
     return 1
@@ -1386,6 +1387,25 @@ act_reinstall() {
   rm -f "$tmp"
 }
 
+# 清掉 rc 文件里历史的 qc 别名（先备份再删）
+#   _clean_qc_alias          → 装的时候用，warn 提醒备份过
+#   _clean_qc_alias quiet    → 卸的时候用，只 info 一句
+_clean_qc_alias() {
+  local quiet="${1:-}" rc
+  for rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.profile"; do
+    [ -f "$rc" ] || continue
+    grep -qE "^[[:space:]]*alias[[:space:]]+${CMD_NAME}=" "$rc" 2>/dev/null || continue
+    cp -a "$rc" "$rc.bak-$(date +%Y%m%d-%H%M%S)" 2>/dev/null || true
+    sed -i -E "/^[[:space:]]*alias[[:space:]]+${CMD_NAME}=/d" "$rc"
+    if [ "$quiet" = "quiet" ]; then
+      info "已清理 $rc 中的别名（备份 .bak-*）"
+    else
+      warn "已从 $rc 中移除旧的 ${CMD_NAME} 别名（备份 .bak-*）"
+    fi
+  done
+  return 0
+}
+
 act_install_self() {
   step "安装 ${CMD_NAME} 快捷命令"
   info "安装位置: $INSTALL_PATH"
@@ -1455,15 +1475,7 @@ act_install_self() {
   fi
 
   # 清掉历史上可能存在的同名 alias，避免和命令冲突
-  local rc
-  for rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.profile"; do
-    [ -f "$rc" ] || continue
-    if grep -qE "^[[:space:]]*alias[[:space:]]+${CMD_NAME}=" "$rc" 2>/dev/null; then
-      cp -a "$rc" "$rc.bak-$(date +%Y%m%d-%H%M)" 2>/dev/null
-      sed -i -E "/^[[:space:]]*alias[[:space:]]+${CMD_NAME}=/d" "$rc"
-      warn "已从 $rc 中移除旧的 ${CMD_NAME} 别名（备份 .bak-*）"
-    fi
-  done
+  _clean_qc_alias
 
   echo
   if command -v "$CMD_NAME" >/dev/null 2>&1; then
@@ -1481,14 +1493,7 @@ act_uninstall_self() {
   else
     info "$INSTALL_PATH 不存在"
   fi
-  local rc
-  for rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.profile"; do
-    [ -f "$rc" ] || continue
-    if grep -qE "^[[:space:]]*alias[[:space:]]+${CMD_NAME}=" "$rc" 2>/dev/null; then
-      sed -i -E "/^[[:space:]]*alias[[:space:]]+${CMD_NAME}=/d" "$rc"
-      info "已清理 $rc 中的别名"
-    fi
-  done
+  _clean_qc_alias quiet
 }
 
 act_qc_menu() {
