@@ -1543,40 +1543,30 @@ banner() {
 }
 
 menu() {
-  printf '%s\n' "${BOLD}  ── 基础环境 ─────────────────────────────────────────────${NC}"
-  printf '   %s1)%s 安装基础依赖 (sudo / curl / wget)\n' "$GREEN" "$NC"
-  printf '   %s2)%s 设置时区为 Asia/Shanghai\n' "$GREEN" "$NC"
-  printf '   %s3)%s 限制 journald 日志为 500M\n' "$GREEN" "$NC"
-  printf '   %s4)%s 一键基础初始化 %s(1+2+3)%s\n' "$MAGENTA" "$NC" "$DIM" "$NC"
+  printf '   %s1)%s 一键基础初始化   %s依赖 + 时区 + journald 日志限制%s\n' "$MAGENTA" "$NC" "$DIM" "$NC"
   echo
-  printf '%s\n' "${BOLD}  ── 网络调优 ─────────────────────────────────────────────${NC}"
-  printf '   %s5)%s BBR v3 优化      %snet-tcp-tune 综合调优（菜单）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '   %s6)%s tcpfit           %sTCP 精细调优（实测推导）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '   %s7)%s BBRv3 内核        %s官方主线 + BBRv3 补丁（装内核）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s2)%s BBR v3 优化      %snet-tcp-tune 综合调优（菜单）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s3)%s tcpfit           %sTCP 精细调优（实测推导）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s4)%s BBRv3 内核        %s官方主线 + BBRv3 补丁（装内核）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
-  printf '%s\n' "${BOLD}  ── 安全 / 代理 / 监控 ───────────────────────────────────${NC}"
-  printf '   %s8)%s key.sh           %sSSH 密钥登录加固%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '   %s9)%s emby-proxy       %sEmby HTTPS 反代（Caddy/Nginx）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '   %s10)%s Komari 探针安装    %sLite Agent%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s5)%s key.sh           %sSSH 密钥登录加固%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
-  printf '%s\n' "${BOLD}  ── 测评 ─────────────────────────────────────────────────${NC}"
-  printf '  %s11)%s NodeQuality  %sIP质量 / 硬件 / 网络 / 回程%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '  %s12)%s TcpQuality   %sTCP 质量测试%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '  %s13)%s iperf3 服务端 %s状态 / 启动 / 停止（用完可关）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s6)%s WARP (warp-go)   %s给纯 IPv6 机器加 IPv4 出口%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s7)%s NAT64 / DNS64    %s纯 DNS 方案，无需安装%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s8)%s IPv6 管理        %s临时/永久禁用或恢复 IPv6%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
-  printf '%s\n' "${BOLD}  ── IPv6 / WARP ──────────────────────────────────────────${NC}"
-  printf '  %s14)%s WARP (warp-go)   %s给纯 IPv6 机器加 IPv4 出口%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '  %s15)%s NAT64 / DNS64    %s纯 DNS 方案，无需安装%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '  %s16)%s IPv6 管理        %s临时/永久禁用或恢复 IPv6%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s9)%s Docker 安装      %s官方脚本（容器化应用的前置）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s10)%s emby-proxy       %sEmby HTTPS 反代（Caddy/Nginx）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s11)%s Flyx 面板        %s一键安装脚本（kure29/flyx）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s12)%s Komari 探针安装    %sLite Agent%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
-  printf '%s\n' "${BOLD}  ── 面板 / 容器 ──────────────────────────────────────────${NC}"
-  printf '  %s17)%s Flyx 面板        %s一键安装脚本（kure29/flyx）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '  %s18)%s Docker 安装      %s官方脚本（容器化应用的前置）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s13)%s NodeQuality  %sIP质量 / 硬件 / 网络 / 回程%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s14)%s TcpQuality   %sTCP 质量测试%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s15)%s iperf3 服务端 %s状态 / 启动 / 停止（用完可关）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
-  printf '%s\n' "${BOLD}  ── 其他 ─────────────────────────────────────────────────${NC}"
-  printf '  %s19)%s 查看系统状态汇总 %s(含 IPv4 / IPv6 地址)%s\n' "$CYAN" "$NC" "$DIM" "$NC"
-  printf '  %s20)%s 安装/卸载 %s 快捷命令  %s(之后直接敲 %s 进菜单)%s\n' "$GREEN" "$NC" "$CMD_NAME" "$DIM" "$CMD_NAME" "$NC"
-  printf '  %s21)%s %s重装系统 (DD)%s  %s会清空整台机器%s\n' "$GREEN" "$NC" "$RED" "$NC" "$DIM" "$NC"
+  printf '  %s16)%s 查看系统状态汇总 %s(含 IPv4 / IPv6 地址)%s\n' "$CYAN" "$NC" "$DIM" "$NC"
+  printf '  %s17)%s 安装/卸载 %s 快捷命令  %s(之后直接敲 %s 进菜单)%s\n' "$GREEN" "$NC" "$CMD_NAME" "$DIM" "$CMD_NAME" "$NC"
+  printf '  %s18)%s %s重装系统 (DD)%s  %s会清空整台机器%s\n' "$GREEN" "$NC" "$RED" "$NC" "$DIM" "$NC"
   printf '   %s0)%s 退出\n' "$RED" "$NC"
   echo
   hr
@@ -1587,31 +1577,28 @@ main() {
   while true; do
     banner
     menu
-    if ! ask "  ${BOLD}请输入选项${NC} [0-21]: " choice; then
+    if ! ask "  ${BOLD}请输入选项${NC} [0-18]: " choice; then
       printf '\n  %s输入结束，退出%s\n\n' "$CYAN" "$NC"; exit 0
     fi
     case "${choice:-}" in
-      1)  act_deps ;;
-      2)  act_timezone ;;
-      3)  act_journal ;;
-      4)  act_bootstrap ;;
-      5)  act_net_tune ;;
-      6)  act_tcpfit ;;
-      7)  act_bbrv3 ;;
-      8)  act_keysh ;;
-      9)  act_embyproxy ;;
-      10) act_lite ;;
-      11) act_nodequality ;;
-      12) act_tcpquality ;;
-      13) act_iperf3 ;;
-      14) act_warpgo ;;
-      15) act_nat64 ;;
-      16) act_ipv6 ;;
-      17) act_flyx ;;
-      18) act_docker ;;
-      19) act_status ;;
-      20) act_qc_menu ;;
-      21) act_reinstall ;;
+      1)  act_bootstrap ;;
+      2)  act_net_tune ;;
+      3)  act_tcpfit ;;
+      4)  act_bbrv3 ;;
+      5)  act_keysh ;;
+      6)  act_warpgo ;;
+      7)  act_nat64 ;;
+      8)  act_ipv6 ;;
+      9)  act_docker ;;
+      10) act_embyproxy ;;
+      11) act_flyx ;;
+      12) act_lite ;;
+      13) act_nodequality ;;
+      14) act_tcpquality ;;
+      15) act_iperf3 ;;
+      16) act_status ;;
+      17) act_qc_menu ;;
+      18) act_reinstall ;;
       0|q|Q|quit|exit) printf '\n  %s再见%s\n\n' "$CYAN" "$NC"; exit 0 ;;
       "") continue ;;
       *)  err "无效选项：$choice" ;;
@@ -1630,10 +1617,7 @@ VPS 常用工具箱
 
 命令:
   status        查看系统状态汇总
-  deps          安装基础依赖
-  tz            设置时区 Asia/Shanghai
-  journal       限制 journald 日志 500M
-  bootstrap     一键基础初始化 (deps + tz + journal)
+  bootstrap     一键基础初始化（依赖 + 时区 + journald 日志）
   tunenet       net-tcp-tune 调优
   tcpfit        tcpfit 调优
   bbrv3         BBRv3 内核（byJoey/Actions-bbr-v3，装内核）
@@ -1659,9 +1643,6 @@ USAGE
 case "${1:-}" in
   ""|-m|--menu|menu)      main ;;
   status)                 act_status ;;
-  deps)                   act_deps ;;
-  tz|timezone)            act_timezone ;;
-  journal|log)            act_journal ;;
   bootstrap|init)         act_bootstrap ;;
   tunenet|bbr)            act_net_tune ;;
   tcpfit)                 act_tcpfit ;;
