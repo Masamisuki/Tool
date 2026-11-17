@@ -54,7 +54,7 @@ HAVE_TTY=0
 if { true < /dev/tty; } 2>/dev/null; then HAVE_TTY=1; fi
 
 # ---------------------------------------------------------------- 颜色
-if [ "$HAVE_TTY" = 1 ] || [ -t 1 ]; then
+if [ -t 1 ]; then   # 只在 stdout 是终端时上色，重定向/管道里不输出转义符
   RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[1;33m'
   BLUE=$'\033[0;34m'; CYAN=$'\033[0;36m'; MAGENTA=$'\033[0;35m'
   BOLD=$'\033[1m'; DIM=$'\033[2m'; NC=$'\033[0m'
@@ -108,6 +108,12 @@ if [ "$(id -u)" -ne 0 ]; then
   fi
 fi
 
+# ---------------------------------------------------------------- 临时文件清理
+# Ctrl+C 时 run_remote 里的 rm -rf 跑不到，这里兜底
+_cleanup_tmp() { rm -rf "${TMPDIR:-/tmp}"/vpstool.* 2>/dev/null || true; }
+trap _cleanup_tmp EXIT
+trap '_cleanup_tmp; exit 130' INT TERM
+
 # ---------------------------------------------------------------- 下载并执行
 HAVE_CURL=0; command -v curl >/dev/null 2>&1 && HAVE_CURL=1
 HAVE_WGET=0; command -v wget >/dev/null 2>&1 && HAVE_WGET=1
@@ -160,10 +166,17 @@ run_remote() {
   elif [ "$rc" -ge 130 ]; then warn "$name 被中断（退出码 $rc）"
   else warn "$name 退出码 $rc，请留意上方输出"; fi
   rm -rf "$dir"
-  return 0
+  return "$rc"
 }
 
 # ================================================================ 各项功能
+
+# CA 证书是否存在（缺了它 curl https 全挂，报错却像"被墙"）
+_ca_ok() {
+  [ -f /etc/ssl/certs/ca-certificates.crt ] \
+    || [ -f /etc/pki/tls/certs/ca-bundle.crt ] \
+    || [ -f /etc/ssl/cert.pem ]
+}
 
 act_deps() {
   local missing="" c
@@ -171,8 +184,9 @@ act_deps() {
   for c in sudo curl wget; do
     command -v "$c" >/dev/null 2>&1 || missing="$missing $c"
   done
-  if [ -z "$missing" ]; then ok "所需命令都已存在"; return 0; fi
-  info "缺少:$missing"
+  if [ -z "$missing" ] && _ca_ok; then ok "所需命令都已存在"; return 0; fi
+  [ -n "$missing" ] && info "缺少:$missing"
+  _ca_ok || info "缺少: ca-certificates（缺了它所有 https 下载都会失败）"
   if   command -v apt-get >/dev/null 2>&1; then apt-get update -y && apt-get install -y $missing ca-certificates
   elif command -v dnf     >/dev/null 2>&1; then dnf install -y $missing ca-certificates
   elif command -v yum     >/dev/null 2>&1; then yum install -y $missing ca-certificates
@@ -940,6 +954,15 @@ act_iperf3() {
     ok "已安装：$(iperf3 --version 2>&1 | head -1)"
   fi
 
+  # ss 属于 iproute2，精简系统可能没装 —— 没有就装，否则下面读不到端口
+  if ! command -v ss >/dev/null 2>&1; then
+    if   command -v apt-get >/dev/null 2>&1; then DEBIAN_FRONTEND=noninteractive apt-get install -y -qq iproute2 >/dev/null 2>&1 || true
+    elif command -v dnf     >/dev/null 2>&1; then dnf install -y -q iproute2 >/dev/null 2>&1 || true
+    elif command -v yum     >/dev/null 2>&1; then yum install -y -q iproute2 >/dev/null 2>&1 || true
+    elif command -v apk     >/dev/null 2>&1; then apk add --no-cache iproute2 >/dev/null 2>&1 || true
+    fi
+  fi
+
   local a running curport port myip unit_state unit_active unit_exists stopped
   while true; do
     # ---------- 刷新状态 ----------
@@ -993,8 +1016,8 @@ act_iperf3() {
           if ! [ "$port" -ge 1 ] 2>/dev/null || [ "$port" -gt 65535 ] 2>/dev/null; then
             err "端口不合法：$port"; continue
           fi
-          if [ "$unit_exists" = 1 ] && [ "$unit_active" = "active" ]; then
-            info "先停掉 systemd 托管的 iperf3.service（否则它会把进程拉回来）"
+          if [ "$unit_exists" = 1 ] && { [ "$unit_active" = "active" ] || [ "$unit_state" = "enabled" ]; }; then
+            info "先关掉 systemd 托管的 iperf3.service（stop + 取消开机自启）"
             systemctl disable --now iperf3 >/dev/null 2>&1 || true
             sleep 1
           fi
@@ -1037,7 +1060,7 @@ act_iperf3() {
         else
           if ! ask "  新端口 [当前 ${curport:-5201}]: " port; then return 0; fi
           port="${port:-5201}"
-          if [ "$unit_exists" = 1 ] && [ "$unit_active" = "active" ]; then
+          if [ "$unit_exists" = 1 ] && { [ "$unit_active" = "active" ] || [ "$unit_state" = "enabled" ]; }; then
             systemctl disable --now iperf3 >/dev/null 2>&1 || true
           fi
           pkill -x iperf3 2>/dev/null || true
@@ -1391,6 +1414,7 @@ act_install_self() {
   mkdir -p /usr/local/bin || { err "无法创建 /usr/local/bin"; return 1; }
 
   if [ -n "$src" ]; then
+    bash -n "$src" 2>/dev/null || { err "脚本语法检查不通过，拒绝安装"; return 1; }
     cp -f "$src" "$INSTALL_PATH" || { err "复制失败"; return 1; }
   else
     # 先下到临时文件，验证通过再原子替换 —— 失败时不会毁掉已存在的安装
@@ -1400,7 +1424,8 @@ act_install_self() {
       dim "  尝试 $u"
       if fetch "$u" "$tmp" 2>/dev/null \
          && [ -s "$tmp" ] \
-         && head -n1 "$tmp" 2>/dev/null | grep -q '^#!'; then
+         && head -n1 "$tmp" 2>/dev/null | grep -q '^#!' \
+         && bash -n "$tmp" 2>/dev/null; then
         ok "  这个源可用"
         got=1
         break
@@ -1420,7 +1445,8 @@ act_install_self() {
   fi
   chmod +x "$INSTALL_PATH"
 
-  if [ -s "$INSTALL_PATH" ] && head -n1 "$INSTALL_PATH" | grep -q '^#!'; then
+  if [ -s "$INSTALL_PATH" ] && head -n1 "$INSTALL_PATH" | grep -q '^#!' \
+     && bash -n "$INSTALL_PATH" 2>/dev/null; then
     ok "已安装：$INSTALL_PATH  ($(wc -c < "$INSTALL_PATH") 字节)"
   else
     err "安装异常：文件内容不是有效脚本"
@@ -1491,7 +1517,7 @@ act_qc_menu() {
 # ================================================================ 菜单
 
 banner() {
-  clear 2>/dev/null || true
+  [ "$HAVE_TTY" = 1 ] && clear 2>/dev/null || true
   printf '%s\n' "${CYAN}${BOLD}"
   printf '   ╔══════════════════════════════════════════════════════════╗\n'
   printf '   ║              VPS 常用工具箱   v%-4s                      ║\n' "$VERSION"
