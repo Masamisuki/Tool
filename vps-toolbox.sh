@@ -1546,17 +1546,17 @@ menu() {
   printf '   %s1)%s 一键基础初始化   %s依赖 + 时区 + journald 日志限制%s\n' "$MAGENTA" "$NC" "$DIM" "$NC"
   echo
   printf '   %s2)%s BBR v3 优化      %snet-tcp-tune 综合调优（菜单）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '   %s3)%s tcpfit           %sTCP 精细调优（实测推导）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s3)%s TCP 调优         %stcpfit 精细调优（实测推导）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   printf '   %s4)%s BBRv3 内核        %s官方主线 + BBRv3 补丁（装内核）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
-  printf '   %s5)%s key.sh           %sSSH 密钥登录加固%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s5)%s SSH 安全配置脚本  %skey.sh 密钥登录加固%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
   printf '   %s6)%s WARP (warp-go)   %s给纯 IPv6 机器加 IPv4 出口%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   printf '   %s7)%s NAT64 / DNS64    %s纯 DNS 方案，无需安装%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   printf '   %s8)%s IPv6 管理        %s临时/永久禁用或恢复 IPv6%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
   printf '   %s9)%s Docker 安装      %s官方脚本（容器化应用的前置）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
-  printf '  %s10)%s emby-proxy       %sEmby HTTPS 反代（Caddy/Nginx）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '  %s10)%s Emby HTTPS 多路径反向代理  %sCaddy / Nginx%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   printf '  %s11)%s Flyx 面板        %s一键安装脚本（kure29/flyx）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   printf '  %s12)%s Komari 探针安装    %sLite Agent%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
