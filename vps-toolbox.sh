@@ -1543,32 +1543,25 @@ banner() {
 }
 
 menu() {
-  printf '   %s1)%s 一键基础初始化\n' "$MAGENTA" "$NC"
-  echo
-  printf '   %s2)%s BBR v3 优化脚本\n' "$GREEN" "$NC"
-  printf '   %s3)%s TCP 调优\n' "$GREEN" "$NC"
-  printf '   %s4)%s BBRv3 内核\n' "$GREEN" "$NC"
-  echo
-  printf '   %s5)%s SSH 安全配置脚本\n' "$GREEN" "$NC"
-  echo
-  printf '   %s6)%s WARP (warp-go)\n' "$GREEN" "$NC"
-  printf '   %s7)%s NAT64 / DNS64\n' "$GREEN" "$NC"
-  printf '   %s8)%s IPv6 管理\n' "$GREEN" "$NC"
-  echo
-  printf '   %s9)%s Docker 安装\n' "$GREEN" "$NC"
-  printf '  %s10)%s Emby HTTPS 多路径反向代理\n' "$GREEN" "$NC"
-  printf '  %s11)%s Flyx 面板\n' "$GREEN" "$NC"
-  printf '  %s12)%s Komari Lite\n' "$GREEN" "$NC"
-  echo
-  printf '  %s13)%s NodeQuality\n' "$GREEN" "$NC"
-  printf '  %s14)%s TcpQuality\n' "$GREEN" "$NC"
-  printf '  %s15)%s iperf3 服务端\n' "$GREEN" "$NC"
-  echo
-  printf '  %s16)%s 查看系统状态汇总\n' "$CYAN" "$NC"
-  printf '  %s17)%s 安装/卸载 %s 快捷命令\n' "$GREEN" "$NC" "$CMD_NAME"
-  printf '  %s18)%s %s重装系统 (DD)%s\n' "$GREEN" "$NC" "$RED" "$NC"
-  printf '   %s0)%s 退出\n' "$RED" "$NC"
-  echo
+  printf '  %s%2s)%s  一键基础初始化\n' "$CYAN$BOLD" "1" "$NC"
+  printf '  %s%2s)%s  BBR v3 优化脚本\n' "$CYAN$BOLD" "2" "$NC"
+  printf '  %s%2s)%s  TCP 调优\n' "$CYAN$BOLD" "3" "$NC"
+  printf '  %s%2s)%s  BBRv3 内核\n' "$CYAN$BOLD" "4" "$NC"
+  printf '  %s%2s)%s  SSH 安全配置脚本\n' "$CYAN$BOLD" "5" "$NC"
+  printf '  %s%2s)%s  WARP (warp-go)\n' "$CYAN$BOLD" "6" "$NC"
+  printf '  %s%2s)%s  NAT64 / DNS64\n' "$CYAN$BOLD" "7" "$NC"
+  printf '  %s%2s)%s  IPv6 管理\n' "$CYAN$BOLD" "8" "$NC"
+  printf '  %s%2s)%s  Docker 安装\n' "$CYAN$BOLD" "9" "$NC"
+  printf '  %s%2s)%s  Emby HTTPS 多路径反向代理\n' "$CYAN$BOLD" "10" "$NC"
+  printf '  %s%2s)%s  Flyx 面板\n' "$CYAN$BOLD" "11" "$NC"
+  printf '  %s%2s)%s  Komari Lite\n' "$CYAN$BOLD" "12" "$NC"
+  printf '  %s%2s)%s  NodeQuality\n' "$CYAN$BOLD" "13" "$NC"
+  printf '  %s%2s)%s  TcpQuality\n' "$CYAN$BOLD" "14" "$NC"
+  printf '  %s%2s)%s  iperf3 服务端\n' "$CYAN$BOLD" "15" "$NC"
+  printf '  %s%2s)%s  查看系统状态汇总\n' "$CYAN$BOLD" "16" "$NC"
+  printf '  %s%2s)%s  安装/卸载 qc 快捷命令\n' "$CYAN$BOLD" "17" "$NC"
+  printf '  %s%2s)%s  %s重装系统 (DD)%s\n' "$CYAN$BOLD" "18" "$NC" "$RED" "$NC"
+  printf '  %s%2s)%s  %s退出%s\n' "$CYAN$BOLD" "0" "$NC" "$DIM" "$NC"
   hr
 }
 
