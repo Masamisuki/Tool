@@ -940,7 +940,7 @@ act_iperf3() {
     ok "已安装：$(iperf3 --version 2>&1 | head -1)"
   fi
 
-  local a running curport port myip unit_state
+  local a running curport port myip unit_state unit_active unit_exists stopped
   while true; do
     # ---------- 刷新状态 ----------
     running=0; curport=""
@@ -948,9 +948,11 @@ act_iperf3() {
       running=1
       curport=$(ss -tlnp 2>/dev/null | grep iperf3 | head -1 | sed -E 's/.*:([0-9]+)[[:space:]].*/\1/')
     fi
-    unit_state=""
+    unit_state=""; unit_active=""; unit_exists=0
     if systemctl list-unit-files 2>/dev/null | grep -q '^iperf3\.service'; then
+      unit_exists=1
       unit_state=$(systemctl is-enabled iperf3.service 2>/dev/null || echo unknown)
+      unit_active=$(systemctl is-active iperf3.service 2>/dev/null || echo unknown)
     fi
 
     echo
@@ -964,9 +966,12 @@ act_iperf3() {
       warn "当前状态：iperf3 【未运行 / 已关闭】"
       dim "    不占端口，也不随开机启动 —— 只有你手动启动时才会跑"
     fi
-    if [ -n "$unit_state" ] && [ "$unit_state" = "enabled" ]; then
-      warn "检测到 iperf3.service 处于 enabled（开机会自动启动）"
-      dim "    永久关闭开机自启: systemctl disable --now iperf3"
+    if [ "$unit_exists" = 1 ] && [ "$unit_active" = "active" ]; then
+      warn "iperf3.service 正由 systemd 托管（Restart=always）—— 直接 kill 会在 15 秒后自动拉起"
+      dim "    选 2 停止会连 systemd 一起 disable，那才是真的关掉"
+    elif [ "$unit_state" = "enabled" ]; then
+      warn "iperf3.service 处于 enabled（开机会自动启动，装包时被自动打开的）"
+      dim "    选 2 停止会一并 systemctl disable"
     fi
     hr
     echo
@@ -988,6 +993,11 @@ act_iperf3() {
           if ! [ "$port" -ge 1 ] 2>/dev/null || [ "$port" -gt 65535 ] 2>/dev/null; then
             err "端口不合法：$port"; continue
           fi
+          if [ "$unit_exists" = 1 ] && [ "$unit_active" = "active" ]; then
+            info "先停掉 systemd 托管的 iperf3.service（否则它会把进程拉回来）"
+            systemctl disable --now iperf3 >/dev/null 2>&1 || true
+            sleep 1
+          fi
           iperf3 -s -D -p "$port" >/dev/null 2>&1 || true
           sleep 1
           if pgrep -x iperf3 >/dev/null 2>&1; then
@@ -1001,14 +1011,22 @@ act_iperf3() {
         fi
         ;;
       2)
-        if [ "$running" = 1 ]; then
+        stopped=0
+        if [ "$unit_exists" = 1 ] && { [ "$unit_active" = "active" ] || [ "$unit_state" = "enabled" ]; }; then
+          info "关闭 systemd 托管的 iperf3.service（stop + 取消开机自启）"
+          systemctl disable --now iperf3 >/dev/null 2>&1 || true
+          stopped=1
+        fi
+        if pgrep -x iperf3 >/dev/null 2>&1; then
           pkill -x iperf3 2>/dev/null || true
-          sleep 1
-          if pgrep -x iperf3 >/dev/null 2>&1; then
-            err "停止失败，进程还在：$(pgrep -x iperf3 | tr '\n' ' ')"
-          else
-            ok "已停止，端口已释放"
-          fi
+          stopped=1
+        fi
+        [ "$stopped" = 1 ] && sleep 2
+        if pgrep -x iperf3 >/dev/null 2>&1; then
+          err "停止失败，进程还在：$(pgrep -x iperf3 | tr '\n' ' ')"
+        elif [ "$stopped" = 1 ]; then
+          ok "已停止，端口已释放"
+          [ "$unit_exists" = 1 ] && dim "  systemd 已 disable —— 重启机器也不会自己起来"
         else
           dim "  本来就没在跑"
         fi
@@ -1019,6 +1037,9 @@ act_iperf3() {
         else
           if ! ask "  新端口 [当前 ${curport:-5201}]: " port; then return 0; fi
           port="${port:-5201}"
+          if [ "$unit_exists" = 1 ] && [ "$unit_active" = "active" ]; then
+            systemctl disable --now iperf3 >/dev/null 2>&1 || true
+          fi
           pkill -x iperf3 2>/dev/null || true
           sleep 1
           iperf3 -s -D -p "$port" >/dev/null 2>&1 || true
