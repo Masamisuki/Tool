@@ -1545,7 +1545,7 @@ banner() {
 menu() {
   printf '   %s1)%s 一键基础初始化   %s依赖 + 时区 + journald 日志限制%s\n' "$MAGENTA" "$NC" "$DIM" "$NC"
   echo
-  printf '   %s2)%s BBR v3 优化      %snet-tcp-tune 综合调优（菜单）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
+  printf '   %s2)%s BBR v3 优化脚本  %snet-tcp-tune 综合调优（菜单）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   printf '   %s3)%s TCP 调优         %stcpfit 精细调优（实测推导）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   printf '   %s4)%s BBRv3 内核        %s官方主线 + BBRv3 补丁（装内核）%s\n' "$GREEN" "$NC" "$DIM" "$NC"
   echo
