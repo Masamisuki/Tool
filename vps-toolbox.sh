@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.4"
+VERSION="3.5"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -390,58 +390,82 @@ act_keysh() {
 }
 
 act_embyproxy() {
-  step "emby-proxy —— Emby HTTPS 反代管理器（Caddy / Nginx）"
-  info "给 Emby 源站快速套一层域名 HTTPS 反代，支持多个入口和同域名多路径"
+  step "emby-rp —— Emby HTTPS 反代管理器（Caddy / Nginx）"
+  info "自研脚本：独立反代 / 前后端分离 / 推流域名改写，多站点并存"
+  echo
+  dim "  仓库      https://github.com/Masamisuki/Emby-rp"
+  dim "  形态      独立反代（整站） / 前后端分离（根路径给前端，前缀回源）"
+  dim "  引擎      caddy（自动签证书） / nginx（certbot + 响应体与 Location 改写）"
+  dim "  命令      emby（短） / emby-rp，装好后直接敲 emby 进菜单"
   echo
 
-  local up="https://raw.githubusercontent.com/wuuduf/emby-proxy/main/setup-emby-proxy.sh"
-  local cmd="bash <(curl -fsSL ${up})"
+  local tmp="/root/emby-rp.sh" ver="" installed=""
 
-  # ---------- 检测是否已经装过 ----------
-  local installed=0
-  if [ -x /usr/local/bin/ep ] || [ -x /usr/bin/ep ] \
-     || command -v ep >/dev/null 2>&1 \
-     || [ -d /opt/emby-proxy ] || [ -d /etc/emby-proxy ]; then
-    installed=1
+  # ---------- 已有安装就先把现状列出来 ----------
+  if command -v emby >/dev/null 2>&1; then
+    installed="$(command -v emby)"
+  elif command -v emby-rp >/dev/null 2>&1; then
+    installed="$(command -v emby-rp)"
+  elif [ -x /usr/local/bin/emby-rp ]; then
+    installed="/usr/local/bin/emby-rp"
   fi
 
-  if [ "$installed" = 1 ]; then
-    # ================= 已安装：不询问，直接执行 =================
-    ok "检测到 emby-proxy 已安装 —— 直接执行（升级 / 重新配置）"
-    dim "  已有站点配置会被保留，脚本只追加它自己托管的部分"
-    command -v ep >/dev/null 2>&1 && dim "  短命令: $(command -v ep)"
+  if [ -n "$installed" ]; then
+    ok "已安装：$installed（$("$installed" --version 2>/dev/null)）"
     echo
-    info "执行："
-    dim "  $cmd"
+    "$installed" list 2>/dev/null || true
     echo
+    dim "  下面会拉最新版覆盖安装（站点与证书都保留）"
   else
-    info "执行作者提供的原始命令（未做任何修改）："
-    echo
-    dim "  $cmd"
-    echo
-    dim "  装完可用短命令: ep"
-    dim "  要求: Debian/Ubuntu + systemd，安全组放行 80/443，域名 A 记录指向本机"
-    dim "  脚本只允许固定源站，不会被当成通用代理"
-    echo
-    if ! confirm "确认执行？"; then warn "已取消"; return 0; fi
-    echo
+    info "未安装，先拉取脚本本体（不会动系统配置）"
   fi
+  echo
 
+  # ---------- 下载（jsDelivr 优先，raw 兜底） ----------
+  local urls=(
+    "https://cdn.jsdelivr.net/gh/Masamisuki/Emby-rp@main/emby-rp.sh"
+    "https://raw.githubusercontent.com/Masamisuki/Emby-rp/main/emby-rp.sh"
+  )
+  local u got=0
+  for u in "${urls[@]}"; do
+    dim "  下载 $u"
+    if curl -fsSL --max-time 30 -o "$tmp" "$u" 2>/dev/null && grep -q '^CMD_NAME="emby-rp"' "$tmp" 2>/dev/null; then
+      got=1
+      break
+    fi
+  done
+  if [ "$got" != 1 ]; then
+    err "下载失败（两个源都不通），请检查网络后重试"
+    rm -f "$tmp"
+    return 1
+  fi
+  ver=$(sed -n 's/^VERSION="\(.*\)"$/\1/p' "$tmp" | head -n1)
+  chmod 644 "$tmp"
+  ok "脚本就绪：$tmp${ver:+（v$ver）}"
+  echo
+
+  # ---------- 进菜单 ----------
+  info "打开 emby-rp 菜单：新建站点 / 列表 / 自检 / 日志 / 删除 / 卸载"
+  dim "  非交互环境可直接用：bash $tmp add -d 域名 -y"
+  echo
   if [ "$HAVE_TTY" = 1 ]; then
-    bash -c "$cmd" < /dev/tty
+    bash "$tmp" menu < /dev/tty || warn "emby-rp 非正常退出"
   else
-    bash -c "$cmd"
+    bash "$tmp" menu || warn "emby-rp 非正常退出"
   fi
 
   echo
-  info "装完之后："
-  dim "  ep            打开菜单"
-  dim "  ep doctor     自检（系统/DNS/端口/源站）"
-  dim "  ep status     查看现有入口"
-  dim "  菜单里选 3    新增反代入口"
+  info "常用命令："
+  dim "  emby                 打开菜单"
+  dim "  emby list            列出站点"
+  dim "  emby check <站点名>  连通性 / 证书自检"
+  dim "  emby logs <站点名> -f 跟踪访问日志"
+  dim "  emby uninstall       彻底卸载（含残留自检）"
   echo
-  dim "  访问验证: https://你的域名/"
-  dim "  ⚠️ /_emby_proxy_health 返回 200 只代表反代链路通，不代表 Emby 能登录/播放"
+  dim "  前后端分离 + 推流域写法的例子："
+  dim "  emby add -d api.你的域名 -e nginx -u https://服务商API域 \\"
+  dim "      --rewrite '服务商推流域=>你的推流域名' -y"
+  dim "  emby add -d 你的推流域名 -e nginx -u https://服务商推流域 -y"
 }
 
 act_warpgo() {
@@ -1552,7 +1576,7 @@ menu() {
   printf '  %s%2s)%s  NAT64 / DNS64\n' "$CYAN$BOLD" "7" "$NC"
   printf '  %s%2s)%s  IPv6 管理\n' "$CYAN$BOLD" "8" "$NC"
   printf '  %s%2s)%s  Docker 安装\n' "$CYAN$BOLD" "9" "$NC"
-  printf '  %s%2s)%s  Emby HTTPS 多路径反向代理\n' "$CYAN$BOLD" "10" "$NC"
+  printf '  %s%2s)%s  Emby 反代（独立 / 前后端分离，emby-rp）\n' "$CYAN$BOLD" "10" "$NC"
   printf '  %s%2s)%s  Flyx 面板\n' "$CYAN$BOLD" "11" "$NC"
   printf '  %s%2s)%s  Komari Lite\n' "$CYAN$BOLD" "12" "$NC"
   printf '  %s%2s)%s  NodeQuality\n' "$CYAN$BOLD" "13" "$NC"
@@ -1615,7 +1639,7 @@ VPS 常用工具箱
   tcpfit        tcpfit 调优
   bbrv3         BBRv3 内核（byJoey/Actions-bbr-v3，装内核）
   key           SSH 加固 (key.sh)
-  emby          emby-proxy —— Emby HTTPS 反代（Caddy/Nginx）
+  emby          emby-rp —— Emby HTTPS 反代（Caddy/Nginx，含前后端分离）
   lite          Komari Lite Agent
   nodequality   NodeQuality 测评
   tcpquality    TcpQuality 测试
