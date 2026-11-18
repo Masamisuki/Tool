@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.7"
+VERSION="3.8"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -472,10 +472,10 @@ act_embyproxy() {
 
   # ---------- 下载 ----------
   # 用 tag 而不是 @main：jsDelivr 对 @main 有 12 小时缓存，曾导致拿到旧版
-  local want="1.1.2" ts
+  local want="1.1.3" ts
   ts="$(date +%s)"
   local urls=(
-    "https://cdn.jsdelivr.net/gh/Masamisuki/Emby-rp@v1.1.2/emby-rp.sh"
+    "https://cdn.jsdelivr.net/gh/Masamisuki/Emby-rp@v1.1.3/emby-rp.sh"
     "https://raw.githubusercontent.com/Masamisuki/Emby-rp/main/emby-rp.sh?$ts"
     "https://cdn.jsdelivr.net/gh/Masamisuki/Emby-rp@main/emby-rp.sh"
   )
@@ -503,7 +503,7 @@ act_embyproxy() {
   if [ "$got" != 1 ]; then
     err "下载失败或无可用版本（镜像可能还在缓存旧版），请稍后重试"
     dim "  手动：curl -fsSL -o /root/emby-rp.sh \\"
-    dim "    https://cdn.jsdelivr.net/gh/Masamisuki/Emby-rp@v1.1.2/emby-rp.sh\""
+    dim "    https://cdn.jsdelivr.net/gh/Masamisuki/Emby-rp@v1.1.3/emby-rp.sh\""
     rm -f "$tmp"
     return 1
   fi
