@@ -37,14 +37,29 @@ NAT64_DNS="2a00:1098:2b::1 2a00:1098:2c::1 2a01:4f8:c2c:123f::1"
 DOCKER_GET_URL="https://get.docker.com"
 
 # 自身在线地址（自安装/自更新时按顺序尝试，第一个成功即止）
+# 只保留官方源和 jsDelivr：第三方加速镜像不受我们控制，内容被换也看不出来，
+# 绝不能作为以 root 身份执行的脚本的下载源。
 # 可用环境变量覆盖，例如：
 #   SELF_URL="https://raw.githubusercontent.com/Masamisuki/Tool/main/vps-toolbox.sh" \
 #     bash vps-toolbox.sh install
 SELF_URLS=(
   "${SELF_URL:-https://raw.githubusercontent.com/Masamisuki/Tool/main/vps-toolbox.sh}"
   "https://cdn.jsdelivr.net/gh/Masamisuki/Tool@main/vps-toolbox.sh"
-  "https://raw.gitmirror.com/Masamisuki/Tool/main/vps-toolbox.sh"
-  "https://ghfast.top/https://raw.githubusercontent.com/Masamisuki/Tool/main/vps-toolbox.sh"
+)
+
+# 远程脚本内容标志（run_remote 用）：下载后必须包含该行才执行。
+# 防的是镜像串货 / CDN 返回错误页 / 地址被换成别的东西；
+# 不能防上游仓库本身被投毒（真要防那一层得 pin commit SHA）。
+# key 是 run_remote 的第一个参数（显示名）；新增远程脚本时记得在这里补一行。
+declare -A REMOTE_MARKERS=(
+  ["net-tcp-tune"]="net-tcp-tune.log"
+  ["tcpfit"]="单机 TCP 调优代理"
+  ["key.sh"]="SSH Security Installer (key.sh)"
+  ["warp-go.sh"]="trap cleanup_resources EXIT INT TERM"
+  ["install-lite.sh"]="POSIX installer for systemd Linux and OpenWrt/procd soft routers."
+  ["NodeQuality"]="LloydAsp/NodeQuality"
+  ["runTcpQuality.sh"]="TcpQuality 默认入口"
+  ["reinstall.sh（用法）"]="### BEGIN reinstall.sh ###"
 )
 
 # ---------------------------------------------------------------- tty 检测
@@ -132,9 +147,10 @@ fetch() {   # fetch <url> <outfile>
 }
 
 # run_remote <显示名> <url> [解释器] [传给脚本的参数...]
+# 下载后会按 REMOTE_MARKERS 校验内容（查不到标志行就不执行），新增脚本记得补标志。
 run_remote() {
   local name="$1" url="$2" interp="${3:-bash}"; shift 3 || true
-  local tmp rc=0 base dir
+  local tmp rc=0 base dir marker
   # 用 URL 里的文件名落盘：部分脚本会读 $0 判断自身名字（例如 warp-go 的自更新）
   base="$(printf '%s' "${url%%\?*}" | sed 's|.*/||; s|[^A-Za-z0-9._-]|_|g')"
   [ -n "$base" ] || base="script.sh"
@@ -149,6 +165,17 @@ run_remote() {
   fi
   if [ ! -s "$tmp" ]; then
     err "下载内容为空"
+    rm -rf "$dir"; return 1
+  fi
+  # 内容校验：先拒掉 HTML 错误页（CDN/镜像返回 200 但内容不对时常见），
+  # 再按 REMOTE_MARKERS 核对这就是要跑的那个脚本。
+  if head -c 512 "$tmp" | grep -qiE '<!DOCTYPE|<html|404: Not Found|AccessDenied'; then
+    err "下载内容是 HTML 错误页，不是脚本，拒绝执行"
+    rm -rf "$dir"; return 1
+  fi
+  marker="${REMOTE_MARKERS[$name]:-}"
+  if [ -n "$marker" ] && ! grep -qF -- "$marker" "$tmp"; then
+    err "内容校验失败：下载到的不是 $name（缺少标志行），拒绝执行"
     rm -rf "$dir"; return 1
   fi
   ok "已下载 $(wc -c < "$tmp") 字节"
@@ -1393,6 +1420,9 @@ act_reinstall() {
   if ! fetch "$url?$(date +%s)" "$tmp"; then
     err "下载失败"; rm -f "$tmp"; return 1
   fi
+  if [ ! -s "$tmp" ] || ! grep -qF -- '### BEGIN reinstall.sh ###' "$tmp"; then
+    err "下载内容不是 reinstall.sh，拒绝执行"; rm -f "$tmp"; return 1
+  fi
   ok "已下载 $(wc -c < "$tmp") 字节"
 
   local -a args=()
@@ -1488,6 +1518,7 @@ act_install_self() {
       if fetch "$u" "$tmp" 2>/dev/null \
          && [ -s "$tmp" ] \
          && head -n1 "$tmp" 2>/dev/null | grep -q '^#!' \
+         && grep -qF -- 'CMD_NAME="qc"' "$tmp" \
          && bash -n "$tmp" 2>/dev/null; then
         ok "  这个源可用"
         got=1
@@ -1509,6 +1540,7 @@ act_install_self() {
   chmod +x "$INSTALL_PATH"
 
   if [ -s "$INSTALL_PATH" ] && head -n1 "$INSTALL_PATH" | grep -q '^#!' \
+     && grep -qF -- 'CMD_NAME="qc"' "$INSTALL_PATH" \
      && bash -n "$INSTALL_PATH" 2>/dev/null; then
     ok "已安装：$INSTALL_PATH  ($(wc -c < "$INSTALL_PATH") 字节)"
   else
@@ -1579,7 +1611,7 @@ banner() {
     printf '  %s✔%s %s 命令已安装，任何地方输入 %s%s%s 即可打开本菜单\n' \
       "$GREEN" "$NC" "$CMD_NAME" "$BOLD" "$CMD_NAME" "$NC"
   else
-    printf '  %s提示：选 20 安装 %s%s%s 命令，以后直接敲 %s%s%s 进菜单%s\n' \
+    printf '  %s提示：选 17 安装 %s%s%s 命令，以后直接敲 %s%s%s 进菜单%s\n' \
       "$DIM" "$BOLD" "$CMD_NAME" "$NC" "$BOLD" "$CMD_NAME" "$NC" "$NC"
   fi
   echo
