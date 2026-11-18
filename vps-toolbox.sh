@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.6"
+VERSION="3.7"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -253,6 +253,12 @@ act_journal() {
   journalctl --vacuum-size="$size" >/dev/null 2>&1 || true
   [ -f "$f" ] && cp -a "$f" "$f.bak-$(date +%Y%m%d-%H%M)" 2>/dev/null
   touch "$f"
+  # 空文件或缺 [Journal] 段时，先补段头，否则追加的配置落在段外会被忽略
+  if ! grep -qE '^\[Journal\]' "$f"; then
+    # 文件非空且末尾缺换行时先补一个，避免段头粘在上一行末尾
+    [ -s "$f" ] && [ -n "$(tail -c 1 "$f" 2>/dev/null)" ] && printf '\n' >> "$f"
+    printf '[Journal]\n' >> "$f"
+  fi
   if grep -qE '^#?\s*SystemMaxUse=' "$f"; then
     sed -i -E "s|^#?\s*SystemMaxUse=.*|SystemMaxUse=$size|" "$f"
   else
@@ -348,8 +354,26 @@ act_bbrv3() {
   info "给 Debian 12+ / Ubuntu 24.04+ 装带 BBRv3 的官方主线内核（apt 装 .deb）"
   echo
 
+  # 只支持 Debian 12+ / Ubuntu 24.04+：先按 /etc/os-release 拦住不支持的系统，
+  # 否则 dpkg 检测为空时仍会放行去跑安装脚本（非 Debian 系上必失败，还可能跑一半）。
+  local osid="" osver=""
+  if [ -f /etc/os-release ]; then
+    osid="$(sed -n 's/^ID=//p' /etc/os-release | tr -d '"' | head -n1)"
+    osver="$(sed -n 's/^VERSION_ID=//p' /etc/os-release | tr -d '"' | head -n1)"
+  fi
+  case "$osid" in
+    debian)
+      if [ "$(printf '%s\n%s\n' "$osver" "12" | sort -V | head -n1)" != "12" ]; then
+        err "BBRv3 需要 Debian 12+，当前是 Debian ${osver:-未知}"; return 1
+      fi ;;
+    ubuntu)
+      if [ "$(printf '%s\n%s\n' "$osver" "24.04" | sort -V | head -n1)" != "24.04" ]; then
+        err "BBRv3 需要 Ubuntu 24.04+，当前是 Ubuntu ${osver:-未知}"; return 1
+      fi ;;
+    *) err "BBRv3 只支持 Debian 12+ / Ubuntu 24.04+，当前系统：${osid:-未知} ${osver:-}"; return 1 ;;
+  esac
+
   local up="https://raw.githubusercontent.com/byJoey/Actions-bbr-v3/main/install.sh"
-  local cmd="bash <(curl -fsSL ${up})"
 
   # ---------- 检测（包名带 -joeyblog-bbrv3） ----------
   local pkgs="" running=0 installed=0
@@ -393,11 +417,9 @@ act_bbrv3() {
     echo
   fi
 
-  if [ "$HAVE_TTY" = 1 ]; then
-    bash -c "$cmd" < /dev/tty
-  else
-    bash -c "$cmd"
-  fi
+  # 走 run_remote：落盘 + 非空 + HTML 检查，不再直接管道执行。
+  # 上游 install.sh 的标志行未对照源码核对，REMOTE_MARKERS 里暂不加 bbrv3。
+  run_remote "bbrv3" "$up" bash
 
   echo
   info "后续："
@@ -450,17 +472,17 @@ act_embyproxy() {
 
   # ---------- 下载 ----------
   # 用 tag 而不是 @main：jsDelivr 对 @main 有 12 小时缓存，曾导致拿到旧版
-  local want="1.1.1" ts
+  local want="1.1.2" ts
   ts="$(date +%s)"
   local urls=(
-    "https://cdn.jsdelivr.net/gh/Masamisuki/Emby-rp@v1.1.1/emby-rp.sh"
+    "https://cdn.jsdelivr.net/gh/Masamisuki/Emby-rp@v1.1.2/emby-rp.sh"
     "https://raw.githubusercontent.com/Masamisuki/Emby-rp/main/emby-rp.sh?$ts"
     "https://cdn.jsdelivr.net/gh/Masamisuki/Emby-rp@main/emby-rp.sh"
   )
   local u got=0
   for u in "${urls[@]}"; do
     dim "  下载 ${u%%\?*}"
-    if ! curl -fsSL --max-time 30 -o "$tmp" "$u" 2>/dev/null; then
+    if ! fetch "$u" "$tmp" 2>/dev/null; then
       dim "    不通，换下一个源"
       continue
     fi
@@ -481,7 +503,7 @@ act_embyproxy() {
   if [ "$got" != 1 ]; then
     err "下载失败或无可用版本（镜像可能还在缓存旧版），请稍后重试"
     dim "  手动：curl -fsSL -o /root/emby-rp.sh \\"
-    dim "    https://cdn.jsdelivr.net/gh/Masamisuki/Emby-rp@v1.1.1/emby-rp.sh\""
+    dim "    https://cdn.jsdelivr.net/gh/Masamisuki/Emby-rp@v1.1.2/emby-rp.sh\""
     rm -f "$tmp"
     return 1
   fi
@@ -594,7 +616,8 @@ act_nat64() {
         cat > /etc/systemd/resolved.conf.d/99-nat64.conf <<RESOLVED_EOF
 [Resolve]
 DNS=$NAT64_DNS
-FallbackDNS=223.5.5.5 119.29.29.29
+# 纯 IPv6 机器连不上 IPv4 DNS，Fallback 必须也是 IPv6（Cloudflare / Google）
+FallbackDNS=2606:4700:4700::1111 2606:4700:4700::1001 2001:4860:4860::8888
 Domains=~.
 RESOLVED_EOF
         if systemctl restart systemd-resolved 2>/dev/null; then
@@ -860,6 +883,9 @@ _ipv6_disable_permanent() {
     dim "  逐个查：sysctl -a | grep 'net.ipv6.conf.*disable_ipv6'"
     rm -f /etc/sysctl.d/99-disable-ipv6.conf
     _ipv6_remove_service
+    # _ipv6_apply 只复位各接口，all/default 也要复位，否则还留在 1
+    sysctl -w net.ipv6.conf.all.disable_ipv6=0 >/dev/null 2>&1
+    sysctl -w net.ipv6.conf.default.disable_ipv6=0 >/dev/null 2>&1
     _ipv6_apply 0 >/dev/null 2>&1 || true
     dim "  已回滚"
     return 1
@@ -916,15 +942,17 @@ _ipv6_restore() {
   # 恢复时同样保证 lo 的 IPv6 是开着的
   sysctl -w net.ipv6.conf.lo.disable_ipv6=0 >/dev/null 2>&1
   sysctl --system >/dev/null 2>&1
-  rm -f "$bak"
 
   echo
   if _ipv6_is_disabled; then
     warn "IPv6 仍处于禁用状态 —— 还有别的配置在起作用"
     dim "  排查: grep -rn disable_ipv6 /etc/sysctl.conf /etc/sysctl.d/ 2>/dev/null"
     dim "  以及: sysctl -a | grep 'net.ipv6.conf.*disable_ipv6'"
+    dim "  备份已保留：$bak"
     return 1
   fi
+  # 恢复确认成功后再删备份（以前先删再查，失败就丢了备份）
+  rm -f "$bak"
   ok "IPv6 已恢复启用"
   _ipv6_restore_hint
 }
@@ -1130,7 +1158,10 @@ act_iperf3() {
           warn "当前没在运行，请选 1 启动"
         else
           if ! ask "  新端口 [当前 ${curport:-5201}]: " port; then return 0; fi
-          port="${port:-5201}"
+          port="${port:-${curport:-5201}}"
+          if ! [ "$port" -ge 1 ] 2>/dev/null || [ "$port" -gt 65535 ] 2>/dev/null; then
+            err "端口不合法：$port"; continue
+          fi
           if [ "$unit_exists" = 1 ] && { [ "$unit_active" = "active" ] || [ "$unit_state" = "enabled" ]; }; then
             systemctl disable --now iperf3 >/dev/null 2>&1 || true
           fi
@@ -1249,9 +1280,12 @@ act_flyx() {
   dir="$(mktemp -d "${TMPDIR:-/tmp}/vpstool.XXXXXX")"
 
   step "下载 panel_install.sh"
-  if ! ( cd "$dir" && curl -fL --retry 2 --connect-timeout 15 \
-        -o panel_install.sh https://github.com/kure29/flyx/releases/latest/download/panel_install.sh ); then
+  if ! fetch "https://github.com/kure29/flyx/releases/latest/download/panel_install.sh" "$dir/panel_install.sh"; then
     err "下载失败（网络不通 / 地址失效 / 被墙）"
+    rm -rf "$dir"; return 1
+  fi
+  if [ ! -s "$dir/panel_install.sh" ]; then
+    err "下载内容为空"
     rm -rf "$dir"; return 1
   fi
   chmod +x "$dir/panel_install.sh"
@@ -1397,6 +1431,11 @@ act_reinstall() {
       warn "请立刻记下，脚本结束时还会再显示一次"
     fi
     ask "  自定义 SSH 端口（回车 = 默认 22）: " sport
+    if [ -n "$sport" ]; then
+      if ! [ "$sport" -ge 1 ] 2>/dev/null || [ "$sport" -gt 65535 ] 2>/dev/null; then
+        err "SSH 端口不合法：$sport（1-65535）"; return 1
+      fi
+    fi
     ask "  SSH 公钥（可留空）: " key
   fi
 
