@@ -1627,7 +1627,7 @@ menu() {
   printf '  %s%2s)%s  NAT64 / DNS64\n' "$CYAN$BOLD" "7" "$NC"
   printf '  %s%2s)%s  IPv6 管理\n' "$CYAN$BOLD" "8" "$NC"
   printf '  %s%2s)%s  Docker 安装\n' "$CYAN$BOLD" "9" "$NC"
-  printf '  %s%2s)%s  Emby 反代（独立 / 前后端分离，emby-rp）\n' "$CYAN$BOLD" "10" "$NC"
+  printf '  %s%2s)%s  Emby 反代\n' "$CYAN$BOLD" "10" "$NC"
   printf '  %s%2s)%s  Flyx 面板\n' "$CYAN$BOLD" "11" "$NC"
   printf '  %s%2s)%s  Komari Lite\n' "$CYAN$BOLD" "12" "$NC"
   printf '  %s%2s)%s  NodeQuality\n' "$CYAN$BOLD" "13" "$NC"
