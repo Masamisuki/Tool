@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.5"
+VERSION="3.6"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -421,21 +421,40 @@ act_embyproxy() {
   fi
   echo
 
-  # ---------- 下载（jsDelivr 优先，raw 兜底） ----------
+  # ---------- 下载 ----------
+  # 用 tag 而不是 @main：jsDelivr 对 @main 有 12 小时缓存，曾导致拿到旧版
+  local want="1.1.1" ts
+  ts="$(date +%s)"
   local urls=(
+    "https://cdn.jsdelivr.net/gh/Masamisuki/Emby-rp@v1.1.1/emby-rp.sh"
+    "https://raw.githubusercontent.com/Masamisuki/Emby-rp/main/emby-rp.sh?$ts"
     "https://cdn.jsdelivr.net/gh/Masamisuki/Emby-rp@main/emby-rp.sh"
-    "https://raw.githubusercontent.com/Masamisuki/Emby-rp/main/emby-rp.sh"
   )
   local u got=0
   for u in "${urls[@]}"; do
-    dim "  下载 $u"
-    if curl -fsSL --max-time 30 -o "$tmp" "$u" 2>/dev/null && grep -q '^CMD_NAME="emby-rp"' "$tmp" 2>/dev/null; then
-      got=1
-      break
+    dim "  下载 ${u%%\?*}"
+    if ! curl -fsSL --max-time 30 -o "$tmp" "$u" 2>/dev/null; then
+      dim "    不通，换下一个源"
+      continue
     fi
+    if ! grep -q '^CMD_NAME="emby-rp"' "$tmp" 2>/dev/null; then
+      dim "    内容不对，换下一个源"
+      continue
+    fi
+    ver=$(sed -n 's/^VERSION="\(.*\)"$/\1/p' "$tmp" | head -n1)
+    # 版本号比预期低（镜像缓存）就继续试下一个源
+    if [ -n "$ver" ] && [ -n "$want" ] && \
+       [ "$(printf '%s\n%s\n' "$ver" "$want" | sort -V | head -n1)" != "$want" ]; then
+      warn "    该源给的是 v$ver，低于 v$want，换下一个源"
+      continue
+    fi
+    got=1
+    break
   done
   if [ "$got" != 1 ]; then
-    err "下载失败（两个源都不通），请检查网络后重试"
+    err "下载失败或无可用版本（镜像可能还在缓存旧版），请稍后重试"
+    dim "  手动：curl -fsSL -o /root/emby-rp.sh \\"
+    dim "    https://cdn.jsdelivr.net/gh/Masamisuki/Emby-rp@v1.1.1/emby-rp.sh\""
     rm -f "$tmp"
     return 1
   fi
