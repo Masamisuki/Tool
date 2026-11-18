@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.8"
+VERSION="3.9"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -58,7 +58,7 @@ declare -A REMOTE_MARKERS=(
   ["warp-go.sh"]="trap cleanup_resources EXIT INT TERM"
   ["install-lite.sh"]="POSIX installer for systemd Linux and OpenWrt/procd soft routers."
   ["NodeQuality"]="LloydAsp/NodeQuality"
-  ["runTcpQuality.sh"]="TcpQuality 默认入口"
+  ["TcpQuality"]="TcpQuality 默认入口"
   ["reinstall.sh（用法）"]="### BEGIN reinstall.sh ###"
 )
 
@@ -306,6 +306,12 @@ else
   exit 1
 fi
 [ -s "$TMP" ] || { echo "下载内容为空" >&2; rm -f "$TMP"; exit 1; }
+if head -c 512 "$TMP" | grep -qiE '<!DOCTYPE|<html|404: Not Found|AccessDenied'; then
+  echo "下载内容是 HTML 错误页，不是脚本，拒绝执行" >&2; rm -f "$TMP"; exit 1
+fi
+if ! grep -qF -- 'net-tcp-tune.log' "$TMP"; then
+  echo "内容校验失败：下载到的不是 net-tcp-tune.sh（缺少标志行），拒绝执行" >&2; rm -f "$TMP"; exit 1
+fi
 bash "$TMP"
 rc=$?
 rm -f "$TMP"
@@ -321,11 +327,17 @@ act_net_tune() {
   info "Eric86777/vps-tcp-tune 主脚本，带完整交互菜单"
   echo
 
-  # 先确保 bbr 命令存在，否则用户装完敲 bbr 会 command not found
-  if command -v bbr >/dev/null 2>&1; then
+  # 先确保 bbr 命令存在，否则用户装完敲 bbr 会 command not found；
+  # 旧版 bbr 没有内容校验，检测到就重装。
+  local bbr_ok=0
+  if command -v bbr >/dev/null 2>&1 && grep -qF -- 'net-tcp-tune.log' "$(command -v bbr)" 2>/dev/null; then
+    bbr_ok=1
+  fi
+  if [ "$bbr_ok" = 1 ]; then
     ok "bbr 命令已就绪：$(command -v bbr)"
   else
-    info "先安装 bbr 快捷命令 ..."
+    if command -v bbr >/dev/null 2>&1; then info "bbr 命令是旧版（无内容校验），正在更新 ..."
+    else info "先安装 bbr 快捷命令 ..."; fi
     if install_bbr_cmd; then
       ok "已安装 /usr/local/bin/bbr"
       dim "任何 shell 直接敲 bbr 即可，不需要 source"
@@ -472,10 +484,10 @@ act_embyproxy() {
 
   # ---------- 下载 ----------
   # 用 tag 而不是 @main：jsDelivr 对 @main 有 12 小时缓存，曾导致拿到旧版
-  local want="1.1.3" ts
+  local want="1.1.4" ts
   ts="$(date +%s)"
   local urls=(
-    "https://cdn.jsdelivr.net/gh/Masamisuki/Emby-rp@v1.1.3/emby-rp.sh"
+    "https://cdn.jsdelivr.net/gh/Masamisuki/Emby-rp@v1.1.4/emby-rp.sh"
     "https://raw.githubusercontent.com/Masamisuki/Emby-rp/main/emby-rp.sh?$ts"
     "https://cdn.jsdelivr.net/gh/Masamisuki/Emby-rp@main/emby-rp.sh"
   )
@@ -503,7 +515,7 @@ act_embyproxy() {
   if [ "$got" != 1 ]; then
     err "下载失败或无可用版本（镜像可能还在缓存旧版），请稍后重试"
     dim "  手动：curl -fsSL -o /root/emby-rp.sh \\"
-    dim "    https://cdn.jsdelivr.net/gh/Masamisuki/Emby-rp@v1.1.3/emby-rp.sh\""
+    dim "    https://cdn.jsdelivr.net/gh/Masamisuki/Emby-rp@v1.1.4/emby-rp.sh\""
     rm -f "$tmp"
     return 1
   fi
@@ -1228,25 +1240,11 @@ act_docker() {
   echo
   if ! confirm "确认安装？"; then warn "已取消"; return 0; fi
 
-  local tmp
-  tmp="$(mktemp "${TMPDIR:-/tmp}/get-docker.XXXXXX.sh")"
-  step "下载安装脚本"
-  if ! fetch "$DOCKER_GET_URL" "$tmp"; then
-    err "下载失败（$DOCKER_GET_URL 不通）"; rm -f "$tmp"; return 1
-  fi
-  [ -s "$tmp" ] || { err "下载内容为空"; rm -f "$tmp"; return 1; }
-  ok "已下载 $(wc -c < "$tmp") 字节"
-
+  # 走 run_remote：落盘 + 非空 + HTML 检查，不再裸下载执行。
+  # 上游 get-docker.sh 的标志行未对照源码核对，REMOTE_MARKERS 里暂不加。
   step "执行安装（约 1-3 分钟）"
-  hr
-  if [ "$HAVE_TTY" = 1 ]; then
-    sh "$tmp" < /dev/tty
-  else
-    sh "$tmp"
-  fi
-  local rc=$?
-  hr
-  rm -f "$tmp"
+  local rc=0
+  run_remote "get-docker.sh" "$DOCKER_GET_URL" sh || rc=$?
 
   echo
   if command -v docker >/dev/null 2>&1; then
@@ -1286,6 +1284,12 @@ act_flyx() {
   fi
   if [ ! -s "$dir/panel_install.sh" ]; then
     err "下载内容为空"
+    rm -rf "$dir"; return 1
+  fi
+  # 内容校验：先拒掉 HTML 错误页（上游 panel_install.sh 的标志行未对照源码核对，暂不加标志检查）。
+  # 这里不走 run_remote：安装脚本要在自己的目录里跑（cd "$dir"），换执行目录可能改行为。
+  if head -c 512 "$dir/panel_install.sh" | grep -qiE '<!DOCTYPE|<html|404: Not Found|AccessDenied'; then
+    err "下载内容是 HTML 错误页，不是脚本，拒绝执行"
     rm -rf "$dir"; return 1
   fi
   chmod +x "$dir/panel_install.sh"
