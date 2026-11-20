@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.9"
+VERSION="3.10"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -59,6 +59,8 @@ declare -A REMOTE_MARKERS=(
   ["install-lite.sh"]="POSIX installer for systemd Linux and OpenWrt/procd soft routers."
   ["NodeQuality"]="LloydAsp/NodeQuality"
   ["TcpQuality"]="TcpQuality 默认入口"
+  ["bbrv3"]="# Managed by Actions-bbr-v3"
+  ["get-docker.sh"]="Docker Engine for Linux installation script."
   ["reinstall.sh（用法）"]="### BEGIN reinstall.sh ###"
 )
 
@@ -430,7 +432,7 @@ act_bbrv3() {
   fi
 
   # 走 run_remote：落盘 + 非空 + HTML 检查，不再直接管道执行。
-  # 上游 install.sh 的标志行未对照源码核对，REMOTE_MARKERS 里暂不加 bbrv3。
+  # 上游 install.sh 标志行已对照源码核对（# Managed by Actions-bbr-v3，2026-11-19），REMOTE_MARKERS 里已加 bbrv3。
   run_remote "bbrv3" "$up" bash
 
   echo
@@ -846,13 +848,69 @@ _ipv6_remove_service() {
   systemctl daemon-reload >/dev/null 2>&1 || true
 }
 
+# 收集 ifupdown 配置文件：主文件 + 它 source 的 interfaces.d/ 下的文件。
+# 只扫被 source 的文件：没被引用的文件里写什么都不生效，报了也是误报。
+_ipv6_iface_files() {
+  [ -f /etc/network/interfaces ] || return 0
+  printf '%s\n' /etc/network/interfaces
+  if grep -qE '^[[:space:]]*source[[:space:]]+/etc/network/interfaces\.d/' /etc/network/interfaces 2>/dev/null; then
+    local f
+    for f in /etc/network/interfaces.d/*; do
+      [ -f "$f" ] && printf '%s\n' "$f"
+    done
+  fi
+}
+
+# 备份并注释掉给定文件里的 inet6 static 段（恢复时把 .bak-ipv6 拷回去）。
+# 只动 static 段：auto/dhcp 段留着不影响禁用，注释了反而丢配置。
+# 写临时文件再 mv，避免原地改写到一半；已有备份时保留不动。
+_ipv6_comment_static() {
+  local f bak n
+  for f in "$@"; do
+    [ -f "$f" ] || continue
+    bak="$f.bak-ipv6"
+    if [ -f "$bak" ]; then
+      dim "  已有备份，保留不动：$bak"
+    else
+      cp -p "$f" "$bak" || { err "备份失败：$f"; return 1; }
+      dim "  已备份：$bak"
+    fi
+    n=$(awk '$1=="iface" && $3=="inet6" && $4=="static" {c++} END{print c+0}' "$f" 2>/dev/null)
+    # 从 iface ... inet6 static 起注释，到空行/下一个段落为止；auto/dhcp 段不动。
+    awk '/^$|^(auto|allow-|source|mapping)/{s=0} /^iface /{s=($3=="inet6" && $4=="static")} s && NF{sub(/^/, "#")} 1' \
+      "$f" > "$f.tmp-ipv6" || { err "改写失败：$f"; rm -f "$f.tmp-ipv6"; return 1; }
+    mv "$f.tmp-ipv6" "$f" || { err "改写失败：$f"; return 1; }
+    ok "已注释 $f 里的 $n 段 inet6 static 配置"
+    dim "  恢复 IPv6 时先拷回去：cp $bak $f && systemctl restart networking"
+  done
+  return 0
+}
+
 _ipv6_disable_permanent() {
-  # 有 ifupdown 的 inet6 配置时，容易和 cloud-init / 静态地址打架
-  if [ -f /etc/network/interfaces ] \
-     && awk '$1=="iface" && $3=="inet6" {f=1} END{exit !f}' /etc/network/interfaces 2>/dev/null; then
-    warn "检测到 /etc/network/interfaces 里有 inet6 配置"
-    dim "  强行禁用可能和 cloud-init / 静态地址配置冲突"
-    confirm "仍要继续？" || { info "已取消"; return 0; }
+  # 只对 inet6 static 才报警：auto/dhcp 是动态配置，sysctl 禁用与之不冲突；
+  # static 段会在开机时让 ifup 尝试加地址（禁了 IPv6 后加不上，会报错），
+  # 所以提供一键备份+注释；不注释也可以继续，只是每次开机都会有报错日志。
+  local files f static_files="" has_dyn=0
+  files="$(_ipv6_iface_files)"
+  for f in $files; do
+    [ -f "$f" ] || continue
+    if awk '$1=="iface" && $3=="inet6" && $4=="static" {f=1} END{exit !f}' "$f" 2>/dev/null; then
+      static_files="$static_files $f"
+    elif awk '$1=="iface" && $3=="inet6" {f=1} END{exit !f}' "$f" 2>/dev/null; then
+      has_dyn=1
+    fi
+  done
+  if [ -n "$static_files" ]; then
+    warn "检测到 inet6 static 配置：${static_files# }"
+    dim "  开机时 ifup 会尝试加这些静态地址（禁了 IPv6 后加不上，会报错）"
+    if confirm "先备份并注释掉这些 static 段，再继续禁用？"; then
+      # shellcheck disable=SC2086
+      _ipv6_comment_static $static_files || { info "已取消"; return 0; }
+    else
+      confirm "不注释直接继续？" || { info "已取消"; return 0; }
+    fi
+  elif [ "$has_dyn" = 1 ]; then
+    dim "  检测到 inet6 auto/dhcp 动态配置，sysctl 禁用与之不冲突，直接继续"
   fi
   if ! confirm "确认永久禁用 IPv6？"; then
     info "已取消"; return 0
@@ -966,6 +1024,13 @@ _ipv6_restore() {
   # 恢复确认成功后再删备份（以前先删再查，失败就丢了备份）
   rm -f "$bak"
   ok "IPv6 已恢复启用"
+  # 之前注释过 static 段的话，只恢复 sysctl 地址回不来，得先把备份拷回去
+  local f
+  for f in /etc/network/interfaces /etc/network/interfaces.d/*; do
+    [ -f "$f.bak-ipv6" ] || continue
+    dim "  注意：$f.bak-ipv6 还在，说明之前注释过 static 段"
+    dim "  地址没回来时先恢复它：cp $f.bak-ipv6 $f"
+  done
   _ipv6_restore_hint
 }
 
@@ -1241,7 +1306,7 @@ act_docker() {
   if ! confirm "确认安装？"; then warn "已取消"; return 0; fi
 
   # 走 run_remote：落盘 + 非空 + HTML 检查，不再裸下载执行。
-  # 上游 get-docker.sh 的标志行未对照源码核对，REMOTE_MARKERS 里暂不加。
+  # 上游 get-docker.sh 标志行已对照源码核对（Docker Engine for Linux installation script.，2026-11-19），REMOTE_MARKERS 里已加。
   step "执行安装（约 1-3 分钟）"
   local rc=0
   run_remote "get-docker.sh" "$DOCKER_GET_URL" sh || rc=$?
@@ -1286,10 +1351,14 @@ act_flyx() {
     err "下载内容为空"
     rm -rf "$dir"; return 1
   fi
-  # 内容校验：先拒掉 HTML 错误页（上游 panel_install.sh 的标志行未对照源码核对，暂不加标志检查）。
+  # 内容校验：先拒掉 HTML 错误页，再核对标志行（上游标志行已对照源码核对，REPO="kure29/flyx"，2026-11-19）。
   # 这里不走 run_remote：安装脚本要在自己的目录里跑（cd "$dir"），换执行目录可能改行为。
   if head -c 512 "$dir/panel_install.sh" | grep -qiE '<!DOCTYPE|<html|404: Not Found|AccessDenied'; then
     err "下载内容是 HTML 错误页，不是脚本，拒绝执行"
+    rm -rf "$dir"; return 1
+  fi
+  if ! grep -qF -- 'REPO="kure29/flyx"' "$dir/panel_install.sh"; then
+    err "下载内容缺少标志行 REPO=\"kure29/flyx\"，不是 Flyx 安装脚本，拒绝执行"
     rm -rf "$dir"; return 1
   fi
   chmod +x "$dir/panel_install.sh"
