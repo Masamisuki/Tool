@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.11"
+VERSION="3.12"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -28,10 +28,6 @@ NET_TUNE_URL="https://raw.githubusercontent.com/Eric86777/vps-tcp-tune/refs/head
 
 # WARP (warp-go) —— fscarmen/warp，纯用户态实现，专治「纯 IPv6 机器没有 IPv4」
 WARPGO_URL="https://gitlab.com/fscarmen/warp/-/raw/main/warp-go.sh"
-
-# NAT64 / DNS64 网关（第三方公共服：Mythic Beasts 英国 / Hetzner 德国）
-# 只换 DNS 就能让纯 IPv6 机器访问 IPv4 域名，但对 IPv4 字面量无效
-NAT64_DNS="2a00:1098:2b::1 2a00:1098:2c::1 2a01:4f8:c2c:123f::1"
 
 # Docker 官方安装脚本
 DOCKER_GET_URL="https://get.docker.com"
@@ -602,68 +598,6 @@ act_warpgo() {
   else
     dim "  没看到 warp-go 命令，重新登录 SSH 或执行 hash -r 再试"
   fi
-}
-
-act_nat64() {
-  local a
-  step "NAT64 / DNS64 —— 纯 IPv6 机器的 IPv4 出口（只换 DNS）"
-  info "由第三方 NAT64 网关把 IPv4 目标合成成 IPv6 地址，不用装任何软件"
-  echo
-  dim "  DNS: $NAT64_DNS"
-  dim "  归属: Mythic Beasts（英国 Cambridge） / Hetzner（德国）"
-  echo
-  warn "只对【域名】生效 —— 直接写 IPv4 字面量（如 1.2.3.4）完全无效"
-  warn "所有 IPv4 流量绕英国/德国（延迟 +200ms），依赖第三方个人项目，随时可能失效"
-  dim "  要稳定可靠的 IPv4 出口，请改用「WARP (warp-go)」"
-  echo
-  info "  1) 应用 NAT64 DNS（自动备份原配置）"
-  info "  2) 恢复 / 移除 NAT64 配置"
-  info "  0) 返回"
-  echo
-  ask "  请选择 [0-2]: " a
-  case "${a:-0}" in
-    1)
-      local ts; ts="$(date +%Y%m%d-%H%M%S)"
-      cp -a /etc/resolv.conf "/root/resolv.conf.bak-$ts" 2>/dev/null || true
-      if systemctl is-active --quiet systemd-resolved 2>/dev/null || [ -L /etc/resolv.conf ]; then
-        info "检测到 systemd-resolved —— 用 drop-in 配置（重启后不会被覆盖）"
-        mkdir -p /etc/systemd/resolved.conf.d
-        cat > /etc/systemd/resolved.conf.d/99-nat64.conf <<RESOLVED_EOF
-[Resolve]
-DNS=$NAT64_DNS
-# 纯 IPv6 机器连不上 IPv4 DNS，Fallback 必须也是 IPv6（Cloudflare / Google）
-FallbackDNS=2606:4700:4700::1111 2606:4700:4700::1001 2001:4860:4860::8888
-Domains=~.
-RESOLVED_EOF
-        if systemctl restart systemd-resolved 2>/dev/null; then
-          ok "已应用 /etc/systemd/resolved.conf.d/99-nat64.conf"
-        else
-          err "systemd-resolved 重启失败"; return 1
-        fi
-      else
-        { for n in $NAT64_DNS; do echo "nameserver $n"; done; } > /etc/resolv.conf
-        ok "已写入 /etc/resolv.conf"
-      fi
-      echo
-      info "验证（应该看到 2a00:1098: / 2a01:4f8: 开头的合成地址）："
-      getent ahostsv6 ipv4.google.com 2>/dev/null | awk '{print $1}' | sort -u | head -3 | sed 's/^/    /' \
-        || warn "解析失败 —— 检查这台机器到 IPv6 DNS 的连通性"
-      ;;
-    2)
-      rm -f /etc/systemd/resolved.conf.d/99-nat64.conf
-      systemctl restart systemd-resolved 2>/dev/null || true
-      local f
-      f="$(ls -1t /root/resolv.conf.bak-* 2>/dev/null | head -1)"
-      if [ -n "$f" ] && [ ! -L "$f" ]; then
-        cp -a "$f" /etc/resolv.conf
-        ok "已恢复 /etc/resolv.conf（来自 $f）"
-      else
-        ok "已移除 NAT64 的 resolved 配置"
-      fi
-      resolvectl status 2>/dev/null | head -8 | sed 's/^/    /'
-      ;;
-    *) return 0 ;;
-  esac
 }
 
 # ---------------------------------------------------------------- IPv6 管理
@@ -1752,11 +1686,11 @@ menu() {
   printf '  %s%2s)%s  BBRv3 内核\n' "$CYAN$BOLD" "4" "$NC"
   printf '  %s%2s)%s  SSH 安全配置脚本\n' "$CYAN$BOLD" "5" "$NC"
   printf '  %s%2s)%s  WARP (warp-go)\n' "$CYAN$BOLD" "6" "$NC"
-  printf '  %s%2s)%s  NAT64 / DNS64\n' "$CYAN$BOLD" "7" "$NC"
-  printf '  %s%2s)%s  IPv6 管理\n' "$CYAN$BOLD" "8" "$NC"
-  printf '  %s%2s)%s  Docker 安装\n' "$CYAN$BOLD" "9" "$NC"
-  printf '  %s%2s)%s  Emby 反代\n' "$CYAN$BOLD" "10" "$NC"
-  printf '  %s%2s)%s  Flyx 面板\n' "$CYAN$BOLD" "11" "$NC"
+  printf '  %s%2s)%s  IPv6 管理\n' "$CYAN$BOLD" "7" "$NC"
+  printf '  %s%2s)%s  Docker 安装\n' "$CYAN$BOLD" "8" "$NC"
+  printf '  %s%2s)%s  Emby 反代\n' "$CYAN$BOLD" "9" "$NC"
+  printf '  %s%2s)%s  Flyx 面板\n' "$CYAN$BOLD" "10" "$NC"
+  printf '  %s%2s)%s  妙妙屋X 安装\n' "$CYAN$BOLD" "11" "$NC"
   printf '  %s%2s)%s  Komari Lite\n' "$CYAN$BOLD" "12" "$NC"
   printf '  %s%2s)%s  NodeQuality\n' "$CYAN$BOLD" "13" "$NC"
   printf '  %s%2s)%s  TcpQuality\n' "$CYAN$BOLD" "14" "$NC"
@@ -1764,7 +1698,6 @@ menu() {
   printf '  %s%2s)%s  查看系统状态汇总\n' "$CYAN$BOLD" "16" "$NC"
   printf '  %s%2s)%s  安装/卸载 qc 快捷命令\n' "$CYAN$BOLD" "17" "$NC"
   printf '  %s%2s)%s  %s重装系统 (DD)%s\n' "$CYAN$BOLD" "18" "$NC" "$RED" "$NC"
-  printf '  %s%2s)%s  妙妙屋X 安装\n' "$CYAN$BOLD" "19" "$NC"
   printf '  %s%2s)%s  %s退出%s\n' "$CYAN$BOLD" "0" "$NC" "$DIM" "$NC"
   hr
 }
@@ -1774,7 +1707,7 @@ main() {
   while true; do
     banner
     menu
-    if ! ask "  ${BOLD}请输入选项${NC} [0-19]: " choice; then
+    if ! ask "  ${BOLD}请输入选项${NC} [0-18]: " choice; then
       printf '\n  %s输入结束，退出%s\n\n' "$CYAN" "$NC"; exit 0
     fi
     case "${choice:-}" in
@@ -1784,11 +1717,11 @@ main() {
       4)  act_bbrv3 ;;
       5)  act_keysh ;;
       6)  act_warpgo ;;
-      7)  act_nat64 ;;
-      8)  act_ipv6 ;;
-      9)  act_docker ;;
-      10) act_embyproxy ;;
-      11) act_flyx ;;
+      7)  act_ipv6 ;;
+      8)  act_docker ;;
+      9)  act_embyproxy ;;
+      10) act_flyx ;;
+      11) act_miaomiaowux ;;
       12) act_lite ;;
       13) act_nodequality ;;
       14) act_tcpquality ;;
@@ -1796,7 +1729,6 @@ main() {
       16) act_status ;;
       17) act_qc_menu ;;
       18) act_reinstall ;;
-      19) act_miaomiaowux ;;
       0|q|Q|quit|exit) printf '\n  %s再见%s\n\n' "$CYAN" "$NC"; exit 0 ;;
       "") continue ;;
       *)  err "无效选项：$choice" ;;
@@ -1826,7 +1758,6 @@ VPS 常用工具箱
   tcpquality    TcpQuality 测试
   iperf3        iperf3 服务端（状态 / 启动 / 停止，用完可关）
   warp          WARP (warp-go) —— 给纯 IPv6 机器加 IPv4 出口
-  nat64         NAT64 / DNS64 —— 纯 DNS 方案，无需安装
   ipv6          IPv6 管理 —— 临时/永久禁用或恢复
   flyx          Flyx 面板 —— 一键安装脚本（kure29/flyx）
   mmwx          妙妙屋X 主控安装（一键安装脚本）
@@ -1853,7 +1784,6 @@ case "${1:-}" in
   tcpquality|tq)          act_tcpquality ;;
   iperf3|iperf)           act_iperf3 ;;
   warp|warpgo|warp-go)    act_warpgo ;;
-  nat64|dns64|dns)        act_nat64 ;;
   ipv6|ipv6mgr)           act_ipv6 ;;
   flyx|flyxpanel) act_flyx ;;
   mmwx|miaomiaowux) act_miaomiaowux ;;
