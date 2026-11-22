@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.12"
+VERSION="3.13"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -273,11 +273,46 @@ act_journal() {
   info "清理后：$(journalctl --disk-usage 2>/dev/null | sed 's/^/  /')"
 }
 
+act_bbrfq() {
+  step "开启 BBR + FQ（系统自带内核，不换内核）"
+  # 内核必须有 tcp_bbr，否则写了配置也生效不了（容器 / 精简内核常见）。
+  # modprobe 失败时再查可用算法列表：编译进内核（=y）时没有 .ko 文件，modprobe 也会失败。
+  if ! modprobe tcp_bbr 2>/dev/null && ! grep -qw bbr /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null; then
+    warn "内核没有 tcp_bbr 模块，跳过 BBR 开启"
+    return 1
+  fi
+  # 写 /etc/sysctl.conf（最后加载，不会被 sysctl.d 里的配置覆盖）；
+  # 已有该项就改值，没有才追加，重复跑也不会多出重复行。
+  local f=/etc/sysctl.conf
+  touch "$f" 2>/dev/null || { err "无法写入 $f"; return 1; }
+  if grep -qE '^#?[[:space:]]*net\.core\.default_qdisc[[:space:]]*=' "$f"; then
+    sed -i -E 's|^#?[[:space:]]*net\.core\.default_qdisc[[:space:]]*=.*|net.core.default_qdisc=fq|' "$f"
+  else
+    printf 'net.core.default_qdisc=fq\n' >> "$f"
+  fi
+  if grep -qE '^#?[[:space:]]*net\.ipv4\.tcp_congestion_control[[:space:]]*=' "$f"; then
+    sed -i -E 's|^#?[[:space:]]*net\.ipv4\.tcp_congestion_control[[:space:]]*=.*|net.ipv4.tcp_congestion_control=bbr|' "$f"
+  else
+    printf 'net.ipv4.tcp_congestion_control=bbr\n' >> "$f"
+  fi
+  sysctl -p >/dev/null 2>&1 || true
+  local cc qd
+  cc="$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)"
+  qd="$(sysctl -n net.core.default_qdisc 2>/dev/null)"
+  if [ "$cc" = "bbr" ] && [ "$qd" = "fq" ]; then
+    ok "已开启：tcp_congestion_control=bbr，default_qdisc=fq（开机保持）"
+  else
+    warn "未完全生效：当前拥塞算法=${cc:-未知}，队列=${qd:-未知}"
+    return 1
+  fi
+}
+
 act_bootstrap() {
-  step "一键基础初始化（依赖 + 时区 + 日志限制）"
+  step "一键基础初始化（依赖 + 时区 + 日志限制 + BBR/FQ）"
   act_deps; echo
   act_timezone; echo
-  act_journal
+  act_journal; echo
+  act_bbrfq
   echo
   ok "基础初始化完成"
 }
@@ -1747,7 +1782,7 @@ VPS 常用工具箱
 
 命令:
   status        查看系统状态汇总
-  bootstrap     一键基础初始化（依赖 + 时区 + journald 日志）
+  bootstrap     一键基础初始化（依赖 + 时区 + journald 日志 + BBR/FQ）
   tunenet       net-tcp-tune 调优
   tcpfit        tcpfit 调优
   bbrv3         BBRv3 内核（byJoey/Actions-bbr-v3，装内核）
