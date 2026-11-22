@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.10"
+VERSION="3.11"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -61,6 +61,7 @@ declare -A REMOTE_MARKERS=(
   ["TcpQuality"]="TcpQuality 默认入口"
   ["bbrv3"]="# Managed by Actions-bbr-v3"
   ["get-docker.sh"]="Docker Engine for Linux installation script."
+  ["mmwx-install"]="# 妙妙屋X - Xray 服务器管理与订阅拼车系统 安装脚本"
   ["reinstall.sh（用法）"]="### BEGIN reinstall.sh ###"
 )
 
@@ -1382,6 +1383,21 @@ act_flyx() {
   fi
 }
 
+act_miaomiaowux() {
+  step "妙妙屋X 主控安装 —— 一键安装脚本"
+  info "仓库：https://github.com/iluobei/miaomiaowuX"
+  echo
+  dim "  安装主控（Master），默认端口 12889；装完按脚本输出访问面板"
+  dim "  要求: Debian/Ubuntu、RHEL 系或 Alpine + root；需要能访问 github.com"
+  echo
+  if ! confirm "确认执行？"; then warn "已取消"; return 0; fi
+
+  # 上游 install.sh 标志行已对照源码核对（# 妙妙屋X - Xray 服务器管理与订阅拼车系统 安装脚本，2026-11-22），REMOTE_MARKERS 里已加 mmwx-install。
+  run_remote "mmwx-install" \
+    "https://raw.githubusercontent.com/iluobei/miaomiaowuX/main/install.sh" \
+    bash
+}
+
 act_status() {
   step "系统状态汇总"
   local cc qd
@@ -1748,6 +1764,7 @@ menu() {
   printf '  %s%2s)%s  查看系统状态汇总\n' "$CYAN$BOLD" "16" "$NC"
   printf '  %s%2s)%s  安装/卸载 qc 快捷命令\n' "$CYAN$BOLD" "17" "$NC"
   printf '  %s%2s)%s  %s重装系统 (DD)%s\n' "$CYAN$BOLD" "18" "$NC" "$RED" "$NC"
+  printf '  %s%2s)%s  妙妙屋X 安装\n' "$CYAN$BOLD" "19" "$NC"
   printf '  %s%2s)%s  %s退出%s\n' "$CYAN$BOLD" "0" "$NC" "$DIM" "$NC"
   hr
 }
@@ -1757,7 +1774,7 @@ main() {
   while true; do
     banner
     menu
-    if ! ask "  ${BOLD}请输入选项${NC} [0-18]: " choice; then
+    if ! ask "  ${BOLD}请输入选项${NC} [0-19]: " choice; then
       printf '\n  %s输入结束，退出%s\n\n' "$CYAN" "$NC"; exit 0
     fi
     case "${choice:-}" in
@@ -1779,6 +1796,7 @@ main() {
       16) act_status ;;
       17) act_qc_menu ;;
       18) act_reinstall ;;
+      19) act_miaomiaowux ;;
       0|q|Q|quit|exit) printf '\n  %s再见%s\n\n' "$CYAN" "$NC"; exit 0 ;;
       "") continue ;;
       *)  err "无效选项：$choice" ;;
@@ -1811,6 +1829,7 @@ VPS 常用工具箱
   nat64         NAT64 / DNS64 —— 纯 DNS 方案，无需安装
   ipv6          IPv6 管理 —— 临时/永久禁用或恢复
   flyx          Flyx 面板 —— 一键安装脚本（kure29/flyx）
+  mmwx          妙妙屋X 主控安装（一键安装脚本）
   docker        安装 Docker（官方脚本）
   qc            安装/卸载 qc 快捷命令
   install       安装 qc 快捷命令，装完自动进入菜单
@@ -1837,6 +1856,7 @@ case "${1:-}" in
   nat64|dns64|dns)        act_nat64 ;;
   ipv6|ipv6mgr)           act_ipv6 ;;
   flyx|flyxpanel) act_flyx ;;
+  mmwx|miaomiaowux) act_miaomiaowux ;;
   docker|dockerd)         act_docker ;;
   qc|cmd)                 act_qc_menu ;;
   install)
