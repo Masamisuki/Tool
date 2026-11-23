@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.13"
+VERSION="3.14"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -25,6 +25,9 @@ INSTALL_PATH="/usr/local/bin/${CMD_NAME}"
 
 # BBR / TCP 调优（Eric86777/vps-tcp-tune）
 NET_TUNE_URL="https://raw.githubusercontent.com/Eric86777/vps-tcp-tune/refs/heads/main/net-tcp-tune.sh"
+
+# aria2 磁力下载用的公共 tracker（比纯 DHT 找节点快得多）
+ARIA2_TRACKERS="udp://tracker.opentrackr.org:1337/announce,udp://open.stealth.si:80/announce,udp://tracker.torrent.eu.org:451/announce,udp://exodus.desync.com:6969/announce,udp://tracker.moeking.me:6969/announce,udp://explodie.org:6969/announce"
 
 # WARP (warp-go) —— fscarmen/warp，纯用户态实现，专治「纯 IPv6 机器没有 IPv4」
 WARPGO_URL="https://gitlab.com/fscarmen/warp/-/raw/main/warp-go.sh"
@@ -1247,6 +1250,181 @@ act_iperf3() {
   done
 }
 
+# 确保 aria2 已安装，未装则安装；成功返回 0
+_aria2_ensure_installed() {
+  if command -v aria2c >/dev/null 2>&1; then
+    ok "aria2 已安装：$(aria2c --version 2>&1 | head -1)"
+    return 0
+  fi
+  info "aria2 未安装，正在安装 ..."
+  if command -v apt-get >/dev/null 2>&1; then
+    apt-get update >/dev/null 2>&1 && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq aria2 >/dev/null 2>&1
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf install -y -q aria2 >/dev/null 2>&1
+  elif command -v yum >/dev/null 2>&1; then
+    yum install -y -q aria2 >/dev/null 2>&1
+  elif command -v apk >/dev/null 2>&1; then
+    apk add --no-cache aria2 >/dev/null 2>&1
+  else
+    err "找不到支持的包管理器，请手动安装 aria2"
+    return 1
+  fi
+  if ! command -v aria2c >/dev/null 2>&1; then
+    err "自动安装失败，请手动装：apt install -y aria2"
+    return 1
+  fi
+  ok "已安装：$(aria2c --version 2>&1 | head -1)"
+}
+
+act_aria2() {
+  step "aria2 下载工具"
+  local choice url id log free_gb lastprog lastfile port myip srvport
+  while true; do
+    echo
+    info "  1) 安装 aria2"
+    info "  2) 下载（输入磁力链接或直链）"
+    info "  3) 查看下载进度"
+    info "  4) 清除下载文件"
+    info "  5) 网页下载服务（开端口，浏览器里下）"
+    info "  0) 返回"
+    if ! ask "  请选择 [0-5]: " choice; then return 0; fi
+    case "$choice" in
+      1)
+        _aria2_ensure_installed || continue
+        mkdir -p /opt/downloads
+        ok "下载目录：/opt/downloads"
+        echo
+        df -h /opt
+        ;;
+      2)
+        _aria2_ensure_installed || continue
+        mkdir -p /opt/downloads
+        if ! ask "  输入下载地址（磁力链接或 http(s) 直链）: " url; then continue; fi
+        url="$(printf '%s' "$url" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+        if [ -z "$url" ]; then warn "地址为空，已取消"; continue; fi
+        case "$url" in
+          magnet:\?*|http://*|https://*) ;;
+          *) err "地址格式不对：只支持 magnet:? 开头的磁力链接或 http(s) 直链"; continue ;;
+        esac
+        if pgrep -a aria2c 2>/dev/null | grep -Fq "$url"; then
+          warn "这个地址正在下载中，重复添加已跳过"
+          continue
+        fi
+        free_gb=$(df --output=avail -BG /opt 2>/dev/null | tail -1 | tr -dc '0-9')
+        if [ -n "$free_gb" ] && [ "$free_gb" -lt 2 ] 2>/dev/null; then
+          warn "/opt 可用空间不足 2G（剩余约 ${free_gb}G），大文件可能下到一半失败"
+          confirm "仍要继续吗？" || continue
+        fi
+        id="$(date +%Y%m%d-%H%M%S)-$RANDOM"
+        log="/tmp/aria2-$id.log"
+        # 直接后台启动，不包子 shell：( ... & ) 会留一个 bash 父进程攥着终端不退出
+        setsid aria2c --dir=/opt/downloads --seed-time=0 --bt-tracker="$ARIA2_TRACKERS" "$url" >"$log" 2>&1 < /dev/null &
+        sleep 2
+        if pgrep -a aria2c 2>/dev/null | grep -Fq "$url"; then
+          ok "已开始下载，日志：$log"
+          dim "  选 3 可以查看进度；退出菜单、断开 SSH 都不会停"
+        else
+          err "启动失败，看日志找原因：$log"
+          tail -5 "$log" 2>/dev/null | sed 's/^/  /'
+        fi
+        ;;
+      3)
+        echo
+        if pgrep -x aria2c >/dev/null 2>&1; then
+          info "运行中的下载："
+          pgrep -a aria2c 2>/dev/null | grep -o 'magnet:?[^ ]*\|https\?://[^ ]*' | sed 's/^/  /'
+        else
+          dim "  当前没有正在进行的下载"
+        fi
+        echo
+        info "各任务最新进度："
+        for log in /tmp/aria2-*.log /tmp/aria2.log; do
+          [ -f "$log" ] || continue
+          lastprog=$(grep '^\[#' "$log" 2>/dev/null | tail -1)
+          lastfile=$(grep '^FILE:' "$log" 2>/dev/null | tail -1)
+          [ -n "$lastprog" ] || [ -n "$lastfile" ] || continue
+          printf '  %s\n' "$(basename "$log")"
+          [ -n "$lastprog" ] && printf '    %s\n' "$lastprog"
+          [ -n "$lastfile" ] && printf '    %s\n' "$lastfile"
+        done
+        echo
+        info "已下载文件（/opt/downloads）："
+        if [ -d /opt/downloads ] && [ -n "$(ls -A /opt/downloads 2>/dev/null)" ]; then
+          ls -lh /opt/downloads | sed 's/^/  /'
+          du -sh /opt/downloads 2>/dev/null | sed 's/^/  合计：/'
+        else
+          dim "  下载目录为空"
+        fi
+        ;;
+      4)
+        if [ ! -d /opt/downloads ] || [ -z "$(ls -A /opt/downloads 2>/dev/null)" ]; then
+          dim "下载目录已经是空的，没什么可清"
+          continue
+        fi
+        echo
+        ls -lh /opt/downloads | sed 's/^/  /'
+        du -sh /opt/downloads 2>/dev/null | sed 's/^/  合计：/'
+        if pgrep -x aria2c >/dev/null 2>&1; then
+          warn "有下载正在进行，清除会先停止它们"
+        fi
+        if ! confirm "确定删除 /opt/downloads 下的全部文件吗？"; then warn "已取消"; continue; fi
+        pkill -x aria2c 2>/dev/null || true
+        sleep 1
+        rm -rf /opt/downloads/*
+        rm -f /tmp/aria2*.log
+        ok "已清除"
+        ;;
+      5)
+        if ! command -v python3 >/dev/null 2>&1; then
+          err "没找到 python3，装一下再用：apt install -y python3"
+          continue
+        fi
+        mkdir -p /opt/downloads
+        srvport=$(pgrep -a -f "python3 -m http\.server" 2>/dev/null | grep -o 'http.server [0-9]*' | awk '{print $2}' | head -1)
+        if [ -n "$srvport" ]; then
+          myip=""
+          if [ "$HAVE_CURL" = 1 ]; then
+            myip=$(curl -4 -s --max-time 5 https://ifconfig.me 2>/dev/null)
+          fi
+          [ -n "$myip" ] || myip=$(hostname -I 2>/dev/null | awk '{print $1}')
+          ok "网页下载服务运行中：http://${myip:-服务器IP}:$srvport"
+          dim "  无密码，任何人打开链接都能下载，用完记得关"
+          if confirm "是否关闭它？"; then
+            pkill -f "python3 -m http\.server" 2>/dev/null || true
+            sleep 1
+            ok "已关闭"
+          fi
+          continue
+        fi
+        if ! ask "  端口 [默认 8000]: " port; then continue; fi
+        port="${port:-8000}"
+        if ! [ "$port" -ge 1 ] 2>/dev/null || [ "$port" -gt 65535 ] 2>/dev/null; then
+          err "端口不合法：$port"; continue
+        fi
+        if ss -tln 2>/dev/null | grep -q ":$port "; then
+          err "端口 $port 已被占用，换一个"; continue
+        fi
+        # 直接后台启动，不包子 shell：( ... & ) 会留一个 bash 父进程攥着终端不退出
+        setsid python3 -m http.server "$port" --directory /opt/downloads >/tmp/http-"$port".log 2>&1 < /dev/null &
+        sleep 1
+        if ss -tln 2>/dev/null | grep -q ":$port "; then
+          myip=""
+          if [ "$HAVE_CURL" = 1 ]; then
+            myip=$(curl -4 -s --max-time 5 https://ifconfig.me 2>/dev/null)
+          fi
+          [ -n "$myip" ] || myip=$(hostname -I 2>/dev/null | awk '{print $1}')
+          ok "已开启：http://${myip:-服务器IP}:$port"
+          dim "  无密码，任何人打开链接都能下载，用完记得回来选 5 关闭"
+        else
+          err "启动失败，看日志：/tmp/http-$port.log"
+        fi
+        ;;
+      0) return 0 ;;
+      *) err "无效选项：$choice" ;;
+    esac
+  done
+}
+
 act_docker() {
   step "Docker 安装 —— 容器化应用的前置依赖"
   if command -v docker >/dev/null 2>&1; then
@@ -1708,7 +1886,7 @@ banner() {
     printf '  %s✔%s %s 命令已安装，任何地方输入 %s%s%s 即可打开本菜单\n' \
       "$GREEN" "$NC" "$CMD_NAME" "$BOLD" "$CMD_NAME" "$NC"
   else
-    printf '  %s提示：选 17 安装 %s%s%s 命令，以后直接敲 %s%s%s 进菜单%s\n' \
+    printf '  %s提示：选 18 安装 %s%s%s 命令，以后直接敲 %s%s%s 进菜单%s\n' \
       "$DIM" "$BOLD" "$CMD_NAME" "$NC" "$BOLD" "$CMD_NAME" "$NC" "$NC"
   fi
   echo
@@ -1730,9 +1908,10 @@ menu() {
   printf '  %s%2s)%s  NodeQuality\n' "$CYAN$BOLD" "13" "$NC"
   printf '  %s%2s)%s  TcpQuality\n' "$CYAN$BOLD" "14" "$NC"
   printf '  %s%2s)%s  iperf3 服务端\n' "$CYAN$BOLD" "15" "$NC"
-  printf '  %s%2s)%s  查看系统状态汇总\n' "$CYAN$BOLD" "16" "$NC"
-  printf '  %s%2s)%s  安装/卸载 qc 快捷命令\n' "$CYAN$BOLD" "17" "$NC"
-  printf '  %s%2s)%s  %s重装系统 (DD)%s\n' "$CYAN$BOLD" "18" "$NC" "$RED" "$NC"
+  printf '  %s%2s)%s  aria2 下载工具\n' "$CYAN$BOLD" "16" "$NC"
+  printf '  %s%2s)%s  查看系统状态汇总\n' "$CYAN$BOLD" "17" "$NC"
+  printf '  %s%2s)%s  安装/卸载 qc 快捷命令\n' "$CYAN$BOLD" "18" "$NC"
+  printf '  %s%2s)%s  %s重装系统 (DD)%s\n' "$CYAN$BOLD" "19" "$NC" "$RED" "$NC"
   printf '  %s%2s)%s  %s退出%s\n' "$CYAN$BOLD" "0" "$NC" "$DIM" "$NC"
   hr
 }
@@ -1742,7 +1921,7 @@ main() {
   while true; do
     banner
     menu
-    if ! ask "  ${BOLD}请输入选项${NC} [0-18]: " choice; then
+    if ! ask "  ${BOLD}请输入选项${NC} [0-19]: " choice; then
       printf '\n  %s输入结束，退出%s\n\n' "$CYAN" "$NC"; exit 0
     fi
     case "${choice:-}" in
@@ -1761,9 +1940,10 @@ main() {
       13) act_nodequality ;;
       14) act_tcpquality ;;
       15) act_iperf3 ;;
-      16) act_status ;;
-      17) act_qc_menu ;;
-      18) act_reinstall ;;
+      16) act_aria2 ;;
+      17) act_status ;;
+      18) act_qc_menu ;;
+      19) act_reinstall ;;
       0|q|Q|quit|exit) printf '\n  %s再见%s\n\n' "$CYAN" "$NC"; exit 0 ;;
       "") continue ;;
       *)  err "无效选项：$choice" ;;
@@ -1792,6 +1972,7 @@ VPS 常用工具箱
   nodequality   NodeQuality 测评
   tcpquality    TcpQuality 测试
   iperf3        iperf3 服务端（状态 / 启动 / 停止，用完可关）
+  aria2         aria2 下载工具（安装 / 下载 / 进度 / 清除 / 网页下载）
   warp          WARP (warp-go) —— 给纯 IPv6 机器加 IPv4 出口
   ipv6          IPv6 管理 —— 临时/永久禁用或恢复
   flyx          Flyx 面板 —— 一键安装脚本（kure29/flyx）
@@ -1818,6 +1999,7 @@ case "${1:-}" in
   nodequality|nq)         act_nodequality ;;
   tcpquality|tq)          act_tcpquality ;;
   iperf3|iperf)           act_iperf3 ;;
+  aria2)                  act_aria2 ;;
   warp|warpgo|warp-go)    act_warpgo ;;
   ipv6|ipv6mgr)           act_ipv6 ;;
   flyx|flyxpanel) act_flyx ;;
