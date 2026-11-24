@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.15"
+VERSION="3.16"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -1614,6 +1614,69 @@ act_miaomiaowux() {
     bash
 }
 
+# 加 swap：小内存机跑代理时 TCP 缓冲区一涨就可能 OOM 杀进程，swap 是缓冲。
+# 思路照 tcpfit 的 harden --swap：fallocate 建文件（失败回退 dd）、chmod 600、
+# mkswap + swapon、写 fstab、swappiness 设 10。不同点：已有 swap 时 tcpfit 直接
+# 跳过，这里允许再追加一个文件（比如已有 582Mi，想再加 2G）；另外多了磁盘
+# 空间检查，tcpfit 没有这一步。
+act_swap() {
+  step "加 swap（小内存机防止进程被 OOM 杀掉）"
+  local swapfile="/swapfile" n size gb free_mb need_mb f
+  info "当前内存: $(free -m | awk '/^Mem:/{printf "%dMB 总 / %dMB 可用", $2, $7}')"
+  info "当前 Swap: $(free -m | awk '/^Swap:/{printf "%dMB 总 / %dMB 已用", $2, $3}')"
+  echo
+  if [ -n "$(swapon --show 2>/dev/null)" ]; then
+    info "检测到已有 swap 在用"
+    if ! confirm "要再加一个 swap 文件吗？"; then info "已取消"; return 0; fi
+    # 找下一个空闲文件名：/swapfile 被占就用 /swapfile2，再被占就 /swapfile3……
+    n=2
+    while [ -e "$swapfile" ]; do swapfile="/swapfile$n"; n=$((n + 1)); done
+  elif [ -e /swapfile ]; then
+    # 已存在但没启用的 /swapfile 不能盖 —— 那可能是用户自己准备的
+    err "/swapfile 已存在但未启用。先确认它的用途，需要的话手动删除后再跑"
+    return 1
+  fi
+  if ! ask "  swap 大小（GB，1-20，默认 2）: " size; then return 0; fi
+  size="${size:-2}"
+  size="$(printf '%s' "$size" | tr -d '[:space:]')"
+  # "2" 和 "2G" 都收；不收 "2M"（fallocate 建 2MB，dd 回退建 2GB，差 1000 倍）
+  gb="${size%[Gg]}"
+  case "$gb" in
+    ''|*[!0-9]*) err "大小请填 1-20 之间的整数（例如 2 或 2G）"; return 1 ;;
+  esac
+  if [ "$gb" -lt 1 ] || [ "$gb" -gt 20 ]; then
+    err "大小请填 1-20 之间的整数（例如 2 或 2G）"
+    return 1
+  fi
+  # / 上要留够空间：swap 本身 + 512M 余量，不够就直接取消，不写一半文件
+  free_mb=$(df --output=avail -BM / 2>/dev/null | tail -1 | tr -dc '0-9')
+  need_mb=$(( gb * 1024 + 512 ))
+  if [ -n "$free_mb" ] && [ "$free_mb" -lt "$need_mb" ] 2>/dev/null; then
+    err "/ 可用空间不足（剩余约 ${free_mb}M，需要约 ${need_mb}M），已取消"
+    return 1
+  fi
+  info "创建 ${gb}G swap：$swapfile …"
+  if ! fallocate -l "${gb}G" "$swapfile" 2>/dev/null; then
+    dd if=/dev/zero of="$swapfile" bs=1M count=$(( gb * 1024 )) status=none \
+      || { err "swap 文件创建失败"; rm -f "$swapfile"; return 1; }
+  fi
+  chmod 600 "$swapfile" && mkswap "$swapfile" >/dev/null && swapon "$swapfile" \
+    || { err "swap 启用失败"; rm -f "$swapfile"; return 1; }
+  grep -q "^$swapfile " /etc/fstab 2>/dev/null || echo "$swapfile none swap sw 0 0" >> /etc/fstab
+  # 只在内存真的紧张时才用 swap，避免平时把热数据换出去拖慢代理。
+  # 文件里已有该项就改值，没有才追加（tcpfit 只追加不改值，重启后会和实时值不一致）。
+  f=/etc/sysctl.conf
+  touch "$f" 2>/dev/null || { err "无法写入 $f"; return 1; }
+  if grep -qE '^#?[[:space:]]*vm\.swappiness[[:space:]]*=' "$f"; then
+    sed -i -E 's|^#?[[:space:]]*vm\.swappiness[[:space:]]*=.*|vm.swappiness = 10|' "$f"
+  else
+    printf 'vm.swappiness = 10\n' >> "$f"
+  fi
+  sysctl -qw vm.swappiness=10 2>/dev/null || true
+  ok "swap 已启用：$swapfile（${gb}G），当前 Swap 总量 $(free -h | awk '/^Swap/{print $2}')"
+  info "vm.swappiness = $(sysctl -n vm.swappiness 2>/dev/null)"
+}
+
 act_status() {
   step "系统状态汇总"
   local cc qd
@@ -1986,6 +2049,7 @@ menu() {
   printf '  %s%2s)%s  查看系统状态汇总\n' "$CYAN$BOLD" "17" "$NC"
   printf '  %s%2s)%s  安装/卸载 qc 快捷命令\n' "$CYAN$BOLD" "18" "$NC"
   printf '  %s%2s)%s  %s重装系统 (DD)%s\n' "$CYAN$BOLD" "19" "$NC" "$RED" "$NC"
+  printf '  %s%2s)%s  加 swap\n' "$CYAN$BOLD" "20" "$NC"
   printf '  %s%2s)%s  %s退出%s\n' "$CYAN$BOLD" "0" "$NC" "$DIM" "$NC"
   hr
 }
@@ -1995,7 +2059,7 @@ main() {
   while true; do
     banner
     menu
-    if ! ask "  ${BOLD}请输入选项${NC} [0-19]: " choice; then
+    if ! ask "  ${BOLD}请输入选项${NC} [0-20]: " choice; then
       printf '\n  %s输入结束，退出%s\n\n' "$CYAN" "$NC"; exit 0
     fi
     case "${choice:-}" in
@@ -2018,6 +2082,7 @@ main() {
       17) act_status ;;
       18) act_qc_menu ;;
       19) act_reinstall ;;
+      20) act_swap ;;
       0|q|Q|quit|exit) printf '\n  %s再见%s\n\n' "$CYAN" "$NC"; exit 0 ;;
       "") continue ;;
       *)  err "无效选项：$choice" ;;
@@ -2053,6 +2118,7 @@ VPS 常用工具箱
   mmwx          妙妙屋X 主控安装（一键安装脚本）
   docker        安装 Docker（官方脚本）
   qc            安装/卸载 qc 快捷命令
+  swap          加 swap（小内存机防 OOM，默认 2G；已有 swap 时可追加第二个）
   install       安装 qc 快捷命令，装完自动进入菜单
   uninstall     卸载 qc 快捷命令
   reinstall     重装系统 (会清空机器)
@@ -2080,6 +2146,7 @@ case "${1:-}" in
   mmwx|miaomiaowux) act_miaomiaowux ;;
   docker|dockerd)         act_docker ;;
   qc|cmd)                 act_qc_menu ;;
+  swap)                   act_swap ;;
   install)
     # 装完直接进入菜单，省得再敲一次 qc
     if act_install_self; then
