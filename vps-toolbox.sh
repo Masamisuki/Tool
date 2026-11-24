@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.16"
+VERSION="3.17"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -1616,21 +1616,23 @@ act_miaomiaowux() {
 
 # 加 swap：小内存机跑代理时 TCP 缓冲区一涨就可能 OOM 杀进程，swap 是缓冲。
 # 思路照 tcpfit 的 harden --swap：fallocate 建文件（失败回退 dd）、chmod 600、
-# mkswap + swapon、写 fstab、swappiness 设 10。不同点：已有 swap 时 tcpfit 直接
-# 跳过，这里允许再追加一个文件（比如已有 582Mi，想再加 2G）；另外多了磁盘
+# mkswap + swapon、写 fstab、swappiness 设 10。不同点：已有 swap 文件时直接改
+# 它的大小（swapoff 后删掉重建，不另建 /swapfile2 冗余文件）；另外多了磁盘
 # 空间检查，tcpfit 没有这一步。
 act_swap() {
   step "加 swap（小内存机防止进程被 OOM 杀掉）"
-  local swapfile="/swapfile" n size gb free_mb need_mb f
+  local swapfile="/swapfile" existing_file="" size gb free_mb need_mb old_mb f swapdir
   info "当前内存: $(free -m | awk '/^Mem:/{printf "%dMB 总 / %dMB 可用", $2, $7}')"
   info "当前 Swap: $(free -m | awk '/^Swap:/{printf "%dMB 总 / %dMB 已用", $2, $3}')"
   echo
-  if [ -n "$(swapon --show 2>/dev/null)" ]; then
-    info "检测到已有 swap 在用"
-    if ! confirm "要再加一个 swap 文件吗？"; then info "已取消"; return 0; fi
-    # 找下一个空闲文件名：/swapfile 被占就用 /swapfile2，再被占就 /swapfile3……
-    n=2
-    while [ -e "$swapfile" ]; do swapfile="/swapfile$n"; n=$((n + 1)); done
+  # 已有 swap 文件就直接改它的大小；只有分区 swap 时才新建文件
+  existing_file="$(swapon --show --noheadings 2>/dev/null | awk '$2 == "file" {print $1; exit}')"
+  if [ -n "$existing_file" ]; then
+    swapfile="$existing_file"
+    info "检测到已有 swap 文件：$swapfile"
+    if ! confirm "要直接改它的大小吗？"; then info "已取消"; return 0; fi
+  elif [ -n "$(swapon --show 2>/dev/null)" ]; then
+    info "检测到已有分区 swap，将新建 $swapfile"
   elif [ -e /swapfile ]; then
     # 已存在但没启用的 /swapfile 不能盖 —— 那可能是用户自己准备的
     err "/swapfile 已存在但未启用。先确认它的用途，需要的话手动删除后再跑"
@@ -1648,12 +1650,33 @@ act_swap() {
     err "大小请填 1-20 之间的整数（例如 2 或 2G）"
     return 1
   fi
-  # / 上要留够空间：swap 本身 + 512M 余量，不够就直接取消，不写一半文件
-  free_mb=$(df --output=avail -BM / 2>/dev/null | tail -1 | tr -dc '0-9')
+  # 改大小时先算旧文件多大：已经是目标大小就不用动；磁盘检查时旧文件占的空间算回来
+  if [ -n "$existing_file" ]; then
+    old_mb=$(( $(stat -c %s "$swapfile" 2>/dev/null || echo 0) / 1024 / 1024 ))
+    if [ "$old_mb" = "$(( gb * 1024 ))" ]; then
+      info "$swapfile 已经是 ${gb}G，不用改"
+      return 0
+    fi
+  fi
+  # 文件所在目录要留够空间：swap 本身 + 512M 余量，不够就直接取消，不写一半文件
+  swapdir="$(dirname "$swapfile")"
+  free_mb=$(df --output=avail -BM "$swapdir" 2>/dev/null | tail -1 | tr -dc '0-9')
+  if [ -n "$existing_file" ] && [ -n "$free_mb" ]; then
+    free_mb=$(( free_mb + old_mb ))
+  fi
   need_mb=$(( gb * 1024 + 512 ))
   if [ -n "$free_mb" ] && [ "$free_mb" -lt "$need_mb" ] 2>/dev/null; then
-    err "/ 可用空间不足（剩余约 ${free_mb}M，需要约 ${need_mb}M），已取消"
+    err "$swapdir 可用空间不足（剩余约 ${free_mb}M，需要约 ${need_mb}M），已取消"
     return 1
+  fi
+  # 改大小：先停用旧的；swapoff 失败（内存不够把页换回来）就停手，不动文件
+  if [ -n "$existing_file" ]; then
+    info "停用旧 swap 再重建：$swapfile …"
+    if ! swapoff "$swapfile" 2>/dev/null; then
+      err "swapoff 失败：内存可能不足以把 swap 里的页换回来，未做任何改动。释放内存后重试"
+      return 1
+    fi
+    rm -f "$swapfile"
   fi
   info "创建 ${gb}G swap：$swapfile …"
   if ! fallocate -l "${gb}G" "$swapfile" 2>/dev/null; then
@@ -2118,7 +2141,7 @@ VPS 常用工具箱
   mmwx          妙妙屋X 主控安装（一键安装脚本）
   docker        安装 Docker（官方脚本）
   qc            安装/卸载 qc 快捷命令
-  swap          加 swap（小内存机防 OOM，默认 2G；已有 swap 时可追加第二个）
+  swap          加 swap（小内存机防 OOM，默认 2G；已有 swap 文件时直接改大小）
   install       安装 qc 快捷命令，装完自动进入菜单
   uninstall     卸载 qc 快捷命令
   reinstall     重装系统 (会清空机器)
