@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.14"
+VERSION="3.15"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -34,6 +34,9 @@ WARPGO_URL="https://gitlab.com/fscarmen/warp/-/raw/main/warp-go.sh"
 
 # Docker 官方安装脚本
 DOCKER_GET_URL="https://get.docker.com"
+
+# emby-rp 期望版本（Emby-rp 发新版时同步更新；act_embyproxy 用它做最低版本校验）
+EMBY_RP_VERSION="1.1.4"
 
 # 自身在线地址（自安装/自更新时按顺序尝试，第一个成功即止）
 # 只保留官方源和 jsDelivr：第三方加速镜像不受我们控制，内容被换也看不出来，
@@ -127,7 +130,8 @@ fi
 
 # ---------------------------------------------------------------- 临时文件清理
 # Ctrl+C 时 run_remote 里的 rm -rf 跑不到，这里兜底
-_cleanup_tmp() { rm -rf "${TMPDIR:-/tmp}"/vpstool.* 2>/dev/null || true; }
+# 临时目录名带本进程 PID（见 run_remote / act_flyx），trap 只清自己的，多实例并发不互删
+_cleanup_tmp() { rm -rf "${TMPDIR:-/tmp}"/vpstool.$$.* 2>/dev/null || true; }
 trap _cleanup_tmp EXIT
 trap '_cleanup_tmp; exit 130' INT TERM
 
@@ -156,7 +160,8 @@ run_remote() {
   # 用 URL 里的文件名落盘：部分脚本会读 $0 判断自身名字（例如 warp-go 的自更新）
   base="$(printf '%s' "${url%%\?*}" | sed 's|.*/||; s|[^A-Za-z0-9._-]|_|g')"
   [ -n "$base" ] || base="script.sh"
-  dir="$(mktemp -d "${TMPDIR:-/tmp}/vpstool.XXXXXX")"
+  # 临时目录名带上本进程 PID：多实例并发时 trap 只清自己的，不会删掉另一个实例的下载目录
+  dir="$(mktemp -d "${TMPDIR:-/tmp}/vpstool.$$.XXXXXX")"
   tmp="$dir/$base"
 
   step "下载 $name"
@@ -176,6 +181,9 @@ run_remote() {
     rm -rf "$dir"; return 1
   fi
   marker="${REMOTE_MARKERS[$name]:-}"
+  if [ -z "$marker" ]; then
+    warn "$name 未在 REMOTE_MARKERS 登记标志行，跳过内容校验（仅剩 HTML 检查）"
+  fi
   if [ -n "$marker" ] && ! grep -qF -- "$marker" "$tmp"; then
     err "内容校验失败：下载到的不是 $name（缺少标志行），拒绝执行"
     rm -rf "$dir"; return 1
@@ -253,7 +261,7 @@ act_journal() {
   if ! command -v journalctl >/dev/null 2>&1; then err "没有 systemd-journald，跳过"; return 1; fi
   info "清理前：$(journalctl --disk-usage 2>/dev/null | sed 's/^/  /')"
   journalctl --vacuum-size="$size" >/dev/null 2>&1 || true
-  [ -f "$f" ] && cp -a "$f" "$f.bak-$(date +%Y%m%d-%H%M)" 2>/dev/null
+  [ -f "$f" ] && cp -a "$f" "$f.bak-$(date +%Y%m%d-%H%M%S)" 2>/dev/null
   touch "$f"
   # 空文件或缺 [Journal] 段时，先补段头，否则追加的配置落在段外会被忽略
   if ! grep -qE '^\[Journal\]' "$f"; then
@@ -312,12 +320,20 @@ act_bbrfq() {
 
 act_bootstrap() {
   step "一键基础初始化（依赖 + 时区 + 日志限制 + BBR/FQ）"
-  act_deps; echo
-  act_timezone; echo
-  act_journal; echo
-  act_bbrfq
+  local failed=""
+  act_deps || failed="$failed 依赖"
   echo
-  ok "基础初始化完成"
+  act_timezone || failed="$failed 时区"
+  echo
+  act_journal || failed="$failed 日志限制"
+  echo
+  act_bbrfq || failed="$failed BBR/FQ"
+  echo
+  if [ -n "$failed" ]; then
+    warn "基础初始化部分完成，未完成：${failed# }"
+  else
+    ok "基础初始化完成"
+  fi
 }
 
 # 把 bbr 装成 /usr/local/bin/bbr 真实命令。
@@ -497,7 +513,9 @@ act_embyproxy() {
   dim "  命令      emby（短） / emby-rp，装好后直接敲 emby 进菜单"
   echo
 
-  local tmp="/root/emby-rp.sh" ver="" installed=""
+  local tmp ver="" installed=""
+  # 临时文件用 mktemp：固定路径 /root/emby-rp.sh 在两实例并发时会互相覆盖
+  tmp="$(mktemp "${TMPDIR:-/tmp}/emby-rp.XXXXXX.sh")" || { err "无法创建临时文件"; return 1; }
 
   # ---------- 已有安装就先把现状列出来 ----------
   if command -v emby >/dev/null 2>&1; then
@@ -513,7 +531,7 @@ act_embyproxy() {
     echo
     "$installed" list 2>/dev/null || true
     echo
-    dim "  下面会拉最新版覆盖安装（站点与证书都保留）"
+    dim "  下面会拉 v${EMBY_RP_VERSION} 覆盖安装（站点与证书都保留）"
   else
     info "未安装，先拉取脚本本体（不会动系统配置）"
   fi
@@ -521,10 +539,10 @@ act_embyproxy() {
 
   # ---------- 下载 ----------
   # 用 tag 而不是 @main：jsDelivr 对 @main 有 12 小时缓存，曾导致拿到旧版
-  local want="1.1.4" ts
+  local want="$EMBY_RP_VERSION" ts
   ts="$(date +%s)"
   local urls=(
-    "https://cdn.jsdelivr.net/gh/Masamisuki/Emby-rp@v1.1.4/emby-rp.sh"
+    "https://cdn.jsdelivr.net/gh/Masamisuki/Emby-rp@v${want}/emby-rp.sh"
     "https://raw.githubusercontent.com/Masamisuki/Emby-rp/main/emby-rp.sh?$ts"
     "https://cdn.jsdelivr.net/gh/Masamisuki/Emby-rp@main/emby-rp.sh"
   )
@@ -551,8 +569,8 @@ act_embyproxy() {
   done
   if [ "$got" != 1 ]; then
     err "下载失败或无可用版本（镜像可能还在缓存旧版），请稍后重试"
-    dim "  手动：curl -fsSL -o /root/emby-rp.sh \\"
-    dim "    https://cdn.jsdelivr.net/gh/Masamisuki/Emby-rp@v1.1.4/emby-rp.sh\""
+    dim "  手动：curl -fsSL -o $tmp \\"
+    dim "    https://cdn.jsdelivr.net/gh/Masamisuki/Emby-rp@v${want}/emby-rp.sh"
     rm -f "$tmp"
     return 1
   fi
@@ -847,6 +865,8 @@ _ipv6_comment_static() {
     else
       cp -p "$f" "$bak" || { err "备份失败：$f"; return 1; }
       dim "  已备份：$bak"
+      # 本次新建的备份记下来：禁用失败/取消时只恢复这些（已有备份是旧状态，恢复会回退）
+      IPV6_NEW_BAK_FILES="${IPV6_NEW_BAK_FILES:+$IPV6_NEW_BAK_FILES }$f"
     fi
     n=$(awk '$1=="iface" && $3=="inet6" && $4=="static" {c++} END{print c+0}' "$f" 2>/dev/null)
     # 从 iface ... inet6 static 起注释，到空行/下一个段落为止；auto/dhcp 段不动。
@@ -859,11 +879,27 @@ _ipv6_comment_static() {
   return 0
 }
 
+# 把本次新注释的 static 段恢复原样（只恢复本次新建备份的文件）
+_ipv6_restore_new_commented() {
+  local f
+  [ -n "${IPV6_NEW_BAK_FILES:-}" ] || return 0
+  # shellcheck disable=SC2086
+  for f in $IPV6_NEW_BAK_FILES; do
+    if [ -f "$f.bak-ipv6" ]; then
+      cp -p "$f.bak-ipv6" "$f" 2>/dev/null \
+        && dim "  已恢复 $f（从 $f.bak-ipv6）" \
+        || warn "  恢复失败：$f，手动执行：cp $f.bak-ipv6 $f"
+    fi
+  done
+  IPV6_NEW_BAK_FILES=""
+}
+
 _ipv6_disable_permanent() {
   # 只对 inet6 static 才报警：auto/dhcp 是动态配置，sysctl 禁用与之不冲突；
   # static 段会在开机时让 ifup 尝试加地址（禁了 IPv6 后加不上，会报错），
   # 所以提供一键备份+注释；不注释也可以继续，只是每次开机都会有报错日志。
   local files f static_files="" has_dyn=0
+  IPV6_NEW_BAK_FILES=""
   files="$(_ipv6_iface_files)"
   for f in $files; do
     [ -f "$f" ] || continue
@@ -886,6 +922,7 @@ _ipv6_disable_permanent() {
     dim "  检测到 inet6 auto/dhcp 动态配置，sysctl 禁用与之不冲突，直接继续"
   fi
   if ! confirm "确认永久禁用 IPv6？"; then
+    _ipv6_restore_new_commented
     info "已取消"; return 0
   fi
 
@@ -930,6 +967,7 @@ _ipv6_disable_permanent() {
     sysctl -w net.ipv6.conf.all.disable_ipv6=0 >/dev/null 2>&1
     sysctl -w net.ipv6.conf.default.disable_ipv6=0 >/dev/null 2>&1
     _ipv6_apply 0 >/dev/null 2>&1 || true
+    _ipv6_restore_new_commented
     dim "  已回滚"
     return 1
   fi
@@ -1017,11 +1055,17 @@ act_ipv6() {
   if _ipv6_is_disabled; then
     printf '  当前状态: %s已禁用%s\n' "$RED" "$NC"
   else
-    local badif="" i
+    local badif="" anyoff=0 i
     for i in $(_ipv6_ifs); do
-      [ "$(sysctl -n "net.ipv6.conf.${i}.disable_ipv6" 2>/dev/null)" = "1" ] || badif="$badif $i"
+      if [ "$(sysctl -n "net.ipv6.conf.${i}.disable_ipv6" 2>/dev/null)" = "1" ]; then
+        anyoff=1
+      else
+        badif="$badif $i"
+      fi
     done
-    if [ -n "$badif" ] && [ "$(sysctl -n net.ipv6.conf.all.disable_ipv6 2>/dev/null)" = "1" ]; then
+    # 只有「至少一个接口已禁用、至少一个仍启用」才算部分禁用；
+    # 一个都没禁用时（all=1 但内核没传播的场景）就是完全启用，不能误标
+    if [ -n "$badif" ] && [ "$anyoff" = 1 ]; then
       printf '  当前状态: %s部分禁用%s（%s 仍是启用，IPv6 实际在工作）\n' "$YELLOW" "$NC" "${badif# }"
     else
       printf '  当前状态: %s已启用%s\n' "$GREEN" "$NC"
@@ -1278,7 +1322,7 @@ _aria2_ensure_installed() {
 
 act_aria2() {
   step "aria2 下载工具"
-  local choice url id log free_gb lastprog lastfile port myip srvport
+  local choice url id log free_mb lastprog lastfile port myip srvport
   while true; do
     echo
     info "  1) 安装 aria2"
@@ -1301,18 +1345,23 @@ act_aria2() {
         mkdir -p /opt/downloads
         if ! ask "  输入下载地址（磁力链接或 http(s) 直链）: " url; then continue; fi
         url="$(printf '%s' "$url" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+        # 粘贴时可能带上首尾引号，先剥掉
+        url="${url#\"}"; url="${url%\"}"
+        url="${url#"'"}"; url="${url%"'"}"
         if [ -z "$url" ]; then warn "地址为空，已取消"; continue; fi
         case "$url" in
           magnet:\?*|http://*|https://*) ;;
           *) err "地址格式不对：只支持 magnet:? 开头的磁力链接或 http(s) 直链"; continue ;;
         esac
-        if pgrep -a aria2c 2>/dev/null | grep -Fq "$url"; then
+        # 按完整参数匹配：子串匹配会把「同一文件不同参数的直链」误判为重复
+        if pgrep -a aria2c 2>/dev/null | awk -v u="$url" '{for(i=1;i<=NF;i++) if($i==u) f=1} END{exit f?0:1}'; then
           warn "这个地址正在下载中，重复添加已跳过"
           continue
         fi
-        free_gb=$(df --output=avail -BG /opt 2>/dev/null | tail -1 | tr -dc '0-9')
-        if [ -n "$free_gb" ] && [ "$free_gb" -lt 2 ] 2>/dev/null; then
-          warn "/opt 可用空间不足 2G（剩余约 ${free_gb}G），大文件可能下到一半失败"
+        # 用 -BM 取兆数比较：-BG 向上取整，1.5G 会显示成 2G，跳过「不足 2G」警告
+        free_mb=$(df --output=avail -BM /opt 2>/dev/null | tail -1 | tr -dc '0-9')
+        if [ -n "$free_mb" ] && [ "$free_mb" -lt 2048 ] 2>/dev/null; then
+          warn "/opt 可用空间不足 2G（剩余约 ${free_mb}M），大文件可能下到一半失败"
           confirm "仍要继续吗？" || continue
         fi
         id="$(date +%Y%m%d-%H%M%S)-$RANDOM"
@@ -1320,7 +1369,7 @@ act_aria2() {
         # 直接后台启动，不包子 shell：( ... & ) 会留一个 bash 父进程攥着终端不退出
         setsid aria2c --dir=/opt/downloads --seed-time=0 --bt-tracker="$ARIA2_TRACKERS" "$url" >"$log" 2>&1 < /dev/null &
         sleep 2
-        if pgrep -a aria2c 2>/dev/null | grep -Fq "$url"; then
+        if pgrep -a aria2c 2>/dev/null | awk -v u="$url" '{for(i=1;i<=NF;i++) if($i==u) f=1} END{exit f?0:1}'; then
           ok "已开始下载，日志：$log"
           dim "  选 3 可以查看进度；退出菜单、断开 SSH 都不会停"
         else
@@ -1370,17 +1419,30 @@ act_aria2() {
         if ! confirm "确定删除 /opt/downloads 下的全部文件吗？"; then warn "已取消"; continue; fi
         pkill -x aria2c 2>/dev/null || true
         sleep 1
-        rm -rf /opt/downloads/*
+        # find -delete 连隐藏文件一起清（glob 的 * 匹配不到点文件）
+        find /opt/downloads -mindepth 1 -delete 2>/dev/null
         rm -f /tmp/aria2*.log
-        ok "已清除"
+        if [ -z "$(ls -A /opt/downloads 2>/dev/null)" ]; then
+          ok "已清除"
+        else
+          err "清除不完全，/opt/downloads 里还有文件残留"
+        fi
         ;;
       5)
         if ! command -v python3 >/dev/null 2>&1; then
           err "没找到 python3，装一下再用：apt install -y python3"
           continue
         fi
+        # ss 属于 iproute2，精简系统可能没装 —— 没有就装，否则下面端口检查和启动验证都读不到
+        if ! command -v ss >/dev/null 2>&1; then
+          if   command -v apt-get >/dev/null 2>&1; then DEBIAN_FRONTEND=noninteractive apt-get install -y -qq iproute2 >/dev/null 2>&1 || true
+          elif command -v dnf     >/dev/null 2>&1; then dnf install -y -q iproute2 >/dev/null 2>&1 || true
+          elif command -v yum     >/dev/null 2>&1; then yum install -y -q iproute2 >/dev/null 2>&1 || true
+          elif command -v apk     >/dev/null 2>&1; then apk add --no-cache iproute2 >/dev/null 2>&1 || true
+          fi
+        fi
         mkdir -p /opt/downloads
-        srvport=$(pgrep -a -f "python3 -m http\.server" 2>/dev/null | grep -o 'http.server [0-9]*' | awk '{print $2}' | head -1)
+        srvport=$(pgrep -a -f "python3 -m http\.server.*--directory /opt/downloads" 2>/dev/null | grep -o 'http.server [0-9]*' | awk '{print $2}' | head -1)
         if [ -n "$srvport" ]; then
           myip=""
           if [ "$HAVE_CURL" = 1 ]; then
@@ -1390,9 +1452,14 @@ act_aria2() {
           ok "网页下载服务运行中：http://${myip:-服务器IP}:$srvport"
           dim "  无密码，任何人打开链接都能下载，用完记得关"
           if confirm "是否关闭它？"; then
-            pkill -f "python3 -m http\.server" 2>/dev/null || true
+            # 只关本工具启动的那个（端口 + /opt/downloads 目录都对上才杀），不碰别的 http.server
+            pkill -f "python3 -m http\.server $srvport --directory /opt/downloads" 2>/dev/null || true
             sleep 1
-            ok "已关闭"
+            if pgrep -f "python3 -m http\.server $srvport --directory /opt/downloads" >/dev/null 2>&1; then
+              warn "关闭失败，请手动处理"
+            else
+              ok "已关闭"
+            fi
           fi
           continue
         fi
@@ -1437,7 +1504,8 @@ act_docker() {
     printf '    运行中容器: %s 个\n' "${cnt:-0}"
     echo
     dim "  已安装，跳过安装（重装会重启 docker 守护进程，把所有容器停掉）"
-    dim "  真要重装：curl -fsSL $DOCKER_GET_URL | sh"
+    dim "  真要重装：先下载到本地检查再执行，不要直接管道给 sh"
+    dim "    curl -fsSL -o /tmp/get-docker.sh $DOCKER_GET_URL && sh /tmp/get-docker.sh"
     echo
     info "常用命令："
     dim "  docker ps                看运行中的容器"
@@ -1469,8 +1537,8 @@ act_docker() {
     fi
   else
     err "安装失败（退出码 $rc）"
-    dim "  排查：确认能访问 download.docker.com，或手动执行"
-    dim "  curl -fsSL $DOCKER_GET_URL | sh"
+    dim "  排查：确认能访问 download.docker.com，或手动下载检查后执行"
+    dim "    curl -fsSL -o /tmp/get-docker.sh $DOCKER_GET_URL && sh /tmp/get-docker.sh"
     return 1
   fi
 }
@@ -1488,7 +1556,8 @@ act_flyx() {
   if ! confirm "确认执行？"; then warn "已取消"; return 0; fi
 
   local dir rc=0
-  dir="$(mktemp -d "${TMPDIR:-/tmp}/vpstool.XXXXXX")"
+  # 临时目录名带上本进程 PID：多实例并发时 trap 只清自己的
+  dir="$(mktemp -d "${TMPDIR:-/tmp}/vpstool.$$.XXXXXX")"
 
   step "下载 panel_install.sh"
   if ! fetch "https://github.com/kure29/flyx/releases/latest/download/panel_install.sh" "$dir/panel_install.sh"; then
@@ -1554,7 +1623,7 @@ act_status() {
   info "CPU     : $(nproc) 核   负载: $(cut -d' ' -f1-3 /proc/loadavg)"
   info "内存    : $(free -m | awk '/^Mem:/{printf "%dMB 总 / %dMB 可用", $2, $7}')"
   info "Swap    : $(free -m | awk '/^Swap:/{printf "%dMB 总 / %dMB 已用", $2, $3}')"
-  info "磁盘 /  : $(df -h / | awk 'NR==2{printf "%s 总 / %s 已用 (%s)", $2, $3, $5}')"
+  info "磁盘 /  : $(df -hP / | awk 'NR==2{printf "%s 总 / %s 已用 (%s)", $2, $3, $5}')"
   info "时区    : $(timedatectl show -p Timezone --value 2>/dev/null || cat /etc/timezone 2>/dev/null || echo 未知)"
   info "当前时间: $(date '+%Y-%m-%d %H:%M:%S %Z')"
   info "运行时长: $(uptime -p 2>/dev/null || uptime)"
@@ -1783,7 +1852,12 @@ act_install_self() {
 
   if [ -n "$src" ]; then
     bash -n "$src" 2>/dev/null || { err "脚本语法检查不通过，拒绝安装"; return 1; }
-    cp -f "$src" "$INSTALL_PATH" || { err "复制失败"; return 1; }
+    # 先拷到临时文件再原子替换 —— 复制中途失败不会毁掉已存在的安装（与网络路径一致）
+    local tmp
+    tmp="$(mktemp "${TMPDIR:-/tmp}/vps-toolbox.XXXXXX")" || { err "无法创建临时文件"; return 1; }
+    cp -f "$src" "$tmp" || { err "复制失败"; rm -f "$tmp"; return 1; }
+    chmod +x "$tmp"
+    mv -f "$tmp" "$INSTALL_PATH" || { err "写入 $INSTALL_PATH 失败"; rm -f "$tmp"; return 1; }
   else
     # 先下到临时文件，验证通过再原子替换 —— 失败时不会毁掉已存在的安装
     local u got=0 tmp
