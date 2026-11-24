@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.17"
+VERSION="3.18"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -1616,29 +1616,39 @@ act_miaomiaowux() {
 
 # 加 swap：小内存机跑代理时 TCP 缓冲区一涨就可能 OOM 杀进程，swap 是缓冲。
 # 思路照 tcpfit 的 harden --swap：fallocate 建文件（失败回退 dd）、chmod 600、
-# mkswap + swapon、写 fstab、swappiness 设 10。不同点：已有 swap 文件时直接改
-# 它的大小（swapoff 后删掉重建，不另建 /swapfile2 冗余文件）；另外多了磁盘
-# 空间检查，tcpfit 没有这一步。
+# mkswap + swapon、写 fstab、swappiness 设 10。
+# 语义：输入的数字是 Swap 总量目标（GB），不是追加量。文件只补差额：
+# 总量目标 - 已有分区 swap = 文件大小；已有文件时直接改它的大小，不另建文件。
 act_swap() {
   step "加 swap（小内存机防止进程被 OOM 杀掉）"
-  local swapfile="/swapfile" existing_file="" size gb free_mb need_mb old_mb f swapdir
+  local swapfile="/swapfile" existing_file="" size gb f swapdir fsize
+  local total_kb=0 file_kb=0 other_kb=0 target_kb=0 want_kb=0 file_kb_new=0 file_mb=0 free_mb=0 need_mb=0 diff_kb=0
   info "当前内存: $(free -m | awk '/^Mem:/{printf "%dMB 总 / %dMB 可用", $2, $7}')"
   info "当前 Swap: $(free -m | awk '/^Swap:/{printf "%dMB 总 / %dMB 已用", $2, $3}')"
   echo
-  # 已有 swap 文件就直接改它的大小；只有分区 swap 时才新建文件
-  existing_file="$(swapon --show --noheadings 2>/dev/null | awk '$2 == "file" {print $1; exit}')"
+  # 从 /proc/swaps 取精确 KB 数：总量、已有文件及大小；读不到时退回 free -m
+  if [ -r /proc/swaps ]; then
+    existing_file="$(awk 'NR>1 && $2=="file" {print $1; exit}' /proc/swaps)"
+    total_kb=$(awk 'NR>1 {s+=$3} END {print s+0}' /proc/swaps)
+    if [ -n "$existing_file" ]; then
+      file_kb=$(awk -v f="$existing_file" 'NR>1 && $1==f {print $3; exit}' /proc/swaps)
+      file_kb=${file_kb:-0}
+    fi
+  else
+    total_kb=$(( $(free -m 2>/dev/null | awk '/^Swap:/{print $2}') * 1024 ))
+  fi
+  other_kb=$(( total_kb - file_kb ))
   if [ -n "$existing_file" ]; then
     swapfile="$existing_file"
     info "检测到已有 swap 文件：$swapfile"
-    if ! confirm "要直接改它的大小吗？"; then info "已取消"; return 0; fi
-  elif [ -n "$(swapon --show 2>/dev/null)" ]; then
-    info "检测到已有分区 swap，将新建 $swapfile"
+  elif [ "$total_kb" -gt 0 ]; then
+    info "检测到已有分区 swap：约 $(( total_kb / 1024 ))MB"
   elif [ -e /swapfile ]; then
     # 已存在但没启用的 /swapfile 不能盖 —— 那可能是用户自己准备的
     err "/swapfile 已存在但未启用。先确认它的用途，需要的话手动删除后再跑"
     return 1
   fi
-  if ! ask "  swap 大小（GB，1-20，默认 2）: " size; then return 0; fi
+  if ! ask "  swap 总量目标（GB，1-20，默认 2）: " size; then return 0; fi
   size="${size:-2}"
   size="$(printf '%s' "$size" | tr -d '[:space:]')"
   # "2" 和 "2G" 都收；不收 "2M"（fallocate 建 2MB，dd 回退建 2GB，差 1000 倍）
@@ -1650,21 +1660,57 @@ act_swap() {
     err "大小请填 1-20 之间的整数（例如 2 或 2G）"
     return 1
   fi
-  # 改大小时先算旧文件多大：已经是目标大小就不用动；磁盘检查时旧文件占的空间算回来
+  target_kb=$(( gb * 1024 * 1024 ))
+  want_kb=$(( target_kb - other_kb ))
+  # ±2MB 算达标：文件比差额多留 1MB 余量（见下），dd 回退 rounding 也可能多 1MB
   if [ -n "$existing_file" ]; then
-    old_mb=$(( $(stat -c %s "$swapfile" 2>/dev/null || echo 0) / 1024 / 1024 ))
-    if [ "$old_mb" = "$(( gb * 1024 ))" ]; then
-      info "$swapfile 已经是 ${gb}G，不用改"
+    diff_kb=$(( file_kb - want_kb ))
+    if [ "${diff_kb#-}" -le 2048 ]; then
+      info "Swap 总量已经是 ${gb}G，不用改"
+      return 0
+    fi
+    if [ "$want_kb" -le 2048 ]; then
+      # 其它 swap 已够目标，文件不需要了：确认后停用并删掉
+      if ! confirm "其它 swap 已有 $(( other_kb / 1024 ))MB，达到 ${gb}G 目标，要移除 swap 文件 $swapfile 吗？"; then
+        info "已取消"
+        return 0
+      fi
+      if ! swapoff "$swapfile" 2>/dev/null; then
+        err "swapoff 失败：内存可能不足以把 swap 里的页换回来，未做任何改动。释放内存后重试"
+        return 1
+      fi
+      rm -f "$swapfile"
+      sed -i "\#^$swapfile #d" /etc/fstab 2>/dev/null || true
+      ok "已移除 $swapfile，当前 Swap 总量 $(free -h | awk '/^Swap/{print $2}')"
+      return 0
+    fi
+  else
+    diff_kb=$(( total_kb - target_kb ))
+    if [ "${diff_kb#-}" -le 2048 ]; then
+      info "Swap 总量已经是 ${gb}G，不用改"
+      return 0
+    fi
+    if [ "$want_kb" -le 0 ]; then
+      info "已有 swap 总量约 $(( total_kb / 1024 ))MB，已达到目标，不用加"
       return 0
     fi
   fi
-  # 文件所在目录要留够空间：swap 本身 + 512M 余量，不够就直接取消，不写一半文件
+  # 文件比差额多留 1MB：swap 头占一页（x86 上 4KB，ARM 上可能 16/64KB），
+  # 不留余量的话 free -m 看到的总量会比目标少 1MB
+  file_kb_new=$(( want_kb + 1024 ))
+  file_mb=$(( (file_kb_new + 1023) / 1024 ))
+  if [ $(( want_kb % 1048576 )) = 0 ]; then
+    fsize="$(( want_kb / 1048576 ))G"
+  else
+    fsize="$(( (want_kb + 1023) / 1024 ))M"
+  fi
+  # 文件所在目录要留够空间：新文件 + 512M 余量；改大小时旧文件占的空间算回来
   swapdir="$(dirname "$swapfile")"
   free_mb=$(df --output=avail -BM "$swapdir" 2>/dev/null | tail -1 | tr -dc '0-9')
   if [ -n "$existing_file" ] && [ -n "$free_mb" ]; then
-    free_mb=$(( free_mb + old_mb ))
+    free_mb=$(( free_mb + file_kb / 1024 ))
   fi
-  need_mb=$(( gb * 1024 + 512 ))
+  need_mb=$(( file_mb + 512 ))
   if [ -n "$free_mb" ] && [ "$free_mb" -lt "$need_mb" ] 2>/dev/null; then
     err "$swapdir 可用空间不足（剩余约 ${free_mb}M，需要约 ${need_mb}M），已取消"
     return 1
@@ -1678,9 +1724,13 @@ act_swap() {
     fi
     rm -f "$swapfile"
   fi
-  info "创建 ${gb}G swap：$swapfile …"
-  if ! fallocate -l "${gb}G" "$swapfile" 2>/dev/null; then
-    dd if=/dev/zero of="$swapfile" bs=1M count=$(( gb * 1024 )) status=none \
+  if [ "$other_kb" -gt 0 ]; then
+    info "目标总量 ${gb}G，现有分区 swap $(( other_kb / 1024 ))M，补文件 $fsize：$swapfile …"
+  else
+    info "创建 ${fsize} swap：$swapfile …"
+  fi
+  if ! fallocate -l "${file_kb_new}K" "$swapfile" 2>/dev/null; then
+    dd if=/dev/zero of="$swapfile" bs=1M count="$file_mb" status=none \
       || { err "swap 文件创建失败"; rm -f "$swapfile"; return 1; }
   fi
   chmod 600 "$swapfile" && mkswap "$swapfile" >/dev/null && swapon "$swapfile" \
@@ -1696,7 +1746,7 @@ act_swap() {
     printf 'vm.swappiness = 10\n' >> "$f"
   fi
   sysctl -qw vm.swappiness=10 2>/dev/null || true
-  ok "swap 已启用：$swapfile（${gb}G），当前 Swap 总量 $(free -h | awk '/^Swap/{print $2}')"
+  ok "swap 已启用：$swapfile（$fsize），当前 Swap 总量 $(free -h | awk '/^Swap/{print $2}')"
   info "vm.swappiness = $(sysctl -n vm.swappiness 2>/dev/null)"
 }
 
@@ -2046,7 +2096,7 @@ banner() {
     printf '  %s✔%s %s 命令已安装，任何地方输入 %s%s%s 即可打开本菜单\n' \
       "$GREEN" "$NC" "$CMD_NAME" "$BOLD" "$CMD_NAME" "$NC"
   else
-    printf '  %s提示：选 18 安装 %s%s%s 命令，以后直接敲 %s%s%s 进菜单%s\n' \
+    printf '  %s提示：选 19 安装 %s%s%s 命令，以后直接敲 %s%s%s 进菜单%s\n' \
       "$DIM" "$BOLD" "$CMD_NAME" "$NC" "$BOLD" "$CMD_NAME" "$NC" "$NC"
   fi
   echo
@@ -2056,23 +2106,23 @@ menu() {
   printf '  %s%2s)%s  一键基础初始化\n' "$CYAN$BOLD" "1" "$NC"
   printf '  %s%2s)%s  BBR v3 优化脚本\n' "$CYAN$BOLD" "2" "$NC"
   printf '  %s%2s)%s  TCP 调优\n' "$CYAN$BOLD" "3" "$NC"
-  printf '  %s%2s)%s  BBRv3 内核\n' "$CYAN$BOLD" "4" "$NC"
-  printf '  %s%2s)%s  SSH 安全配置脚本\n' "$CYAN$BOLD" "5" "$NC"
-  printf '  %s%2s)%s  WARP (warp-go)\n' "$CYAN$BOLD" "6" "$NC"
-  printf '  %s%2s)%s  IPv6 管理\n' "$CYAN$BOLD" "7" "$NC"
-  printf '  %s%2s)%s  Docker 安装\n' "$CYAN$BOLD" "8" "$NC"
-  printf '  %s%2s)%s  Emby 反代\n' "$CYAN$BOLD" "9" "$NC"
-  printf '  %s%2s)%s  Flyx 面板\n' "$CYAN$BOLD" "10" "$NC"
-  printf '  %s%2s)%s  妙妙屋X 安装\n' "$CYAN$BOLD" "11" "$NC"
-  printf '  %s%2s)%s  Komari Lite\n' "$CYAN$BOLD" "12" "$NC"
-  printf '  %s%2s)%s  NodeQuality\n' "$CYAN$BOLD" "13" "$NC"
-  printf '  %s%2s)%s  TcpQuality\n' "$CYAN$BOLD" "14" "$NC"
-  printf '  %s%2s)%s  iperf3 服务端\n' "$CYAN$BOLD" "15" "$NC"
-  printf '  %s%2s)%s  aria2 下载工具\n' "$CYAN$BOLD" "16" "$NC"
-  printf '  %s%2s)%s  查看系统状态汇总\n' "$CYAN$BOLD" "17" "$NC"
-  printf '  %s%2s)%s  安装/卸载 qc 快捷命令\n' "$CYAN$BOLD" "18" "$NC"
-  printf '  %s%2s)%s  %s重装系统 (DD)%s\n' "$CYAN$BOLD" "19" "$NC" "$RED" "$NC"
-  printf '  %s%2s)%s  加 swap\n' "$CYAN$BOLD" "20" "$NC"
+  printf '  %s%2s)%s  加 swap\n' "$CYAN$BOLD" "4" "$NC"
+  printf '  %s%2s)%s  BBRv3 内核\n' "$CYAN$BOLD" "5" "$NC"
+  printf '  %s%2s)%s  SSH 安全配置脚本\n' "$CYAN$BOLD" "6" "$NC"
+  printf '  %s%2s)%s  WARP (warp-go)\n' "$CYAN$BOLD" "7" "$NC"
+  printf '  %s%2s)%s  IPv6 管理\n' "$CYAN$BOLD" "8" "$NC"
+  printf '  %s%2s)%s  Docker 安装\n' "$CYAN$BOLD" "9" "$NC"
+  printf '  %s%2s)%s  Emby 反代\n' "$CYAN$BOLD" "10" "$NC"
+  printf '  %s%2s)%s  Flyx 面板\n' "$CYAN$BOLD" "11" "$NC"
+  printf '  %s%2s)%s  妙妙屋X 安装\n' "$CYAN$BOLD" "12" "$NC"
+  printf '  %s%2s)%s  Komari Lite\n' "$CYAN$BOLD" "13" "$NC"
+  printf '  %s%2s)%s  NodeQuality\n' "$CYAN$BOLD" "14" "$NC"
+  printf '  %s%2s)%s  TcpQuality\n' "$CYAN$BOLD" "15" "$NC"
+  printf '  %s%2s)%s  iperf3 服务端\n' "$CYAN$BOLD" "16" "$NC"
+  printf '  %s%2s)%s  aria2 下载工具\n' "$CYAN$BOLD" "17" "$NC"
+  printf '  %s%2s)%s  查看系统状态汇总\n' "$CYAN$BOLD" "18" "$NC"
+  printf '  %s%2s)%s  安装/卸载 qc 快捷命令\n' "$CYAN$BOLD" "19" "$NC"
+  printf '  %s%2s)%s  %s重装系统 (DD)%s\n' "$CYAN$BOLD" "20" "$NC" "$RED" "$NC"
   printf '  %s%2s)%s  %s退出%s\n' "$CYAN$BOLD" "0" "$NC" "$DIM" "$NC"
   hr
 }
@@ -2089,23 +2139,23 @@ main() {
       1)  act_bootstrap ;;
       2)  act_net_tune ;;
       3)  act_tcpfit ;;
-      4)  act_bbrv3 ;;
-      5)  act_keysh ;;
-      6)  act_warpgo ;;
-      7)  act_ipv6 ;;
-      8)  act_docker ;;
-      9)  act_embyproxy ;;
-      10) act_flyx ;;
-      11) act_miaomiaowux ;;
-      12) act_lite ;;
-      13) act_nodequality ;;
-      14) act_tcpquality ;;
-      15) act_iperf3 ;;
-      16) act_aria2 ;;
-      17) act_status ;;
-      18) act_qc_menu ;;
-      19) act_reinstall ;;
-      20) act_swap ;;
+      4)  act_swap ;;
+      5)  act_bbrv3 ;;
+      6)  act_keysh ;;
+      7)  act_warpgo ;;
+      8)  act_ipv6 ;;
+      9)  act_docker ;;
+      10) act_embyproxy ;;
+      11) act_flyx ;;
+      12) act_miaomiaowux ;;
+      13) act_lite ;;
+      14) act_nodequality ;;
+      15) act_tcpquality ;;
+      16) act_iperf3 ;;
+      17) act_aria2 ;;
+      18) act_status ;;
+      19) act_qc_menu ;;
+      20) act_reinstall ;;
       0|q|Q|quit|exit) printf '\n  %s再见%s\n\n' "$CYAN" "$NC"; exit 0 ;;
       "") continue ;;
       *)  err "无效选项：$choice" ;;
@@ -2127,6 +2177,7 @@ VPS 常用工具箱
   bootstrap     一键基础初始化（依赖 + 时区 + journald 日志 + BBR/FQ）
   tunenet       net-tcp-tune 调优
   tcpfit        tcpfit 调优
+  swap          加 swap（小内存机防 OOM；输入的是总量目标，默认 2G）
   bbrv3         BBRv3 内核（byJoey/Actions-bbr-v3，装内核）
   key           SSH 加固 (key.sh)
   emby          emby-rp —— Emby HTTPS 反代（Caddy/Nginx，含前后端分离）
@@ -2141,7 +2192,6 @@ VPS 常用工具箱
   mmwx          妙妙屋X 主控安装（一键安装脚本）
   docker        安装 Docker（官方脚本）
   qc            安装/卸载 qc 快捷命令
-  swap          加 swap（小内存机防 OOM，默认 2G；已有 swap 文件时直接改大小）
   install       安装 qc 快捷命令，装完自动进入菜单
   uninstall     卸载 qc 快捷命令
   reinstall     重装系统 (会清空机器)
