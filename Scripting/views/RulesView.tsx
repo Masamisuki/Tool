@@ -25,6 +25,15 @@ type ParsedRule = {
   module: string | null
 }
 
+/** 规则尾部修饰符：它们不是策略名，展示前要从尾部剥掉 */
+const RULE_MODIFIERS = new Set([
+  "no-resolve",
+  "extended-matching",
+  "pre-matching",
+  "src",
+  "force-remote-dns",
+])
+
 function parseRule(raw: string): ParsedRule {
   let module: string | null = null
   let body = raw
@@ -33,16 +42,15 @@ function parseRule(raw: string): ParsedRule {
     module = raw.slice(idx + "#!FROM-MODULE:".length).trim()
     body = raw.slice(0, idx).trim()
   }
-  const parts = body.split(",")
+  // 不能裸 split：值里可能出现逗号（逻辑规则 AND,((a),(b)),策略），
+  // 尾部还可能有 no-resolve / extended-matching 这类修饰符，直接取 parts[2] 会取到修饰符当策略名
+  const parts = body.split(",").map((part) => part.trim())
+  while (parts.length > 2 && RULE_MODIFIERS.has(parts[parts.length - 1].toLowerCase())) parts.pop()
   const type = parts[0] ?? ""
-  const hasValue = parts.length >= 3
-  return {
-    raw,
-    type,
-    value: hasValue ? parts[1] : "",
-    policy: hasValue ? parts[2] : (parts[1] ?? ""),
-    module,
-  }
+  // FINAL,策略 只有两段
+  const policy = parts.length >= 2 ? parts[parts.length - 1] : ""
+  const value = parts.length >= 3 ? parts.slice(1, -1).join(",") : ""
+  return { raw, type, value, policy, module }
 }
 
 const TYPE_TONES: Record<string, Tone> = {

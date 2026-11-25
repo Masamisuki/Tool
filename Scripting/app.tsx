@@ -16,7 +16,7 @@ import {
   useObservable,
   VStack,
 } from "scripting"
-import { startPolling, stopPolling, registerTabJump, setVisibleTab, TAB_ORDER, type TabId } from "./lib/store"
+import { acquirePolling, releasePolling, registerTabJump, setVisibleTab, TAB_ORDER, type TabId } from "./lib/store"
 import { TONES } from "./lib/ui"
 import { useMarkdownReleaseNotesSheet } from "./components/ReleaseNotesSheet"
 import { ConnectionPill } from "./components/ConnectionStatus"
@@ -59,9 +59,12 @@ export function SurgePanelApp() {
   })
 
   useEffect(() => {
-    startPolling()
-    return () => stopPolling()
-  }, [])
+    // 首页 Tab 环境下由 home_screen_default_ui.tsx 按 Tab 显隐启停轮询，
+    // 这里再用一个 owner 会造成「一个 stop 把另一个的定时器也掐掉」
+    if (isHome) return
+    void acquirePolling("app")
+    return () => releasePolling("app")
+  }, [isHome])
 
   useEffect(() => registerTabJump((tab) => selection.setValue(TAB_ORDER.indexOf(tab))), [])
 

@@ -627,7 +627,10 @@ export type MemoryPoint = { t: number; mem: number }
 
 const RECENT_MEM_MS = 20 * 60 * 1000
 
-/** 对 mem(MB) ~ 时间(分钟) 做最小二乘斜率 */
+/**
+ * 对 mem ~ 时间做最小二乘斜率，返回 MB/分钟。
+ * 注意：MemoryPoint.mem 单位是字节（取自 /metrics 的原始值），这里除 1024² 才是 MB。
+ */
 export function memorySlopeMBPerMin(pts: MemoryPoint[]): number {
   if (pts.length < 2) return 0
   const t0 = pts[0].t

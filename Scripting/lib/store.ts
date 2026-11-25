@@ -176,10 +176,17 @@ let state: StoreState = {
 const listeners = new Set<() => void>()
 let pollTimer: ReturnType<typeof setTimeout> | null = null
 let speedTimer: ReturnType<typeof setTimeout> | null = null
+// 定时器是否真的排上了：started 只表示「希望轮询」，鉴权失败或异常时定时器会消失而 started 仍是 true
+let pollArmed = false
+let speedArmed = false
 let tickCount = 0
 let started = false
+// 谁在要求轮询：面板弹窗与首页 Tab 都会启停，按 owner 计数，谁先退出都不该把另一方掐掉
+const pollingOwners = new Set<string>()
 let trafficInFlight = false
 let authSuspended = false
+// tickTraffic 自己报出来的错误要自己清，否则一次抖动会让错误状态永久粘住
+let trafficErrorShown = false
 let connectionGeneration = 0
 let schedulerGeneration = 0
 // 连续失败次数：失败越多下一次拉取越晚，避免断网时每秒一次白打请求把电量吃光
@@ -188,6 +195,8 @@ let overviewFailStreak = 0
 
 const TRAFFIC_BACKOFF_MAX_MS = 30_000
 const OVERVIEW_BACKOFF_MAX_MS = 60_000
+// 速率轮询连续失败这么多次才对外报错（单次抖动不改连接状态）
+const TRAFFIC_ERROR_STREAK = 3
 
 /** 连续失败 streak 次的等待时长：成功（streak=0）时就是基础间隔 */
 function backoffDelay(streak: number, baseMs: number, maxMs: number): number {
@@ -547,7 +556,7 @@ async function tickTraffic(): Promise<{ elapsed: number; ok: boolean } | undefin
     const nextHistory = state.speedHistory.slice()
     nextHistory.push({ t: now, inSpeed, outSpeed })
     while (nextHistory.length > SPEED_HISTORY_SIZE) nextHistory.shift()
-    patch({
+    const recovered: Partial<StoreState> = {
       traffic,
       speeds: { inSpeed, outSpeed },
       speedHistory: nextHistory,
@@ -557,12 +566,22 @@ async function tickTraffic(): Promise<{ elapsed: number; ok: boolean } | undefin
       },
       running: true,
       updatedAt: now,
-    })
+    }
+    // 上一轮是自己报的错：恢复后立刻清掉，别让面板停在错误横幅上
+    if (trafficErrorShown) {
+      trafficErrorShown = false
+      recovered.error = null
+      recovered.errorKind = null
+    }
+    patch(recovered)
     ok = true
   } catch (e) {
     if (!connectionIsCurrent(generation, activeId)) return
     const kind = surgeApiErrorKind(e)
-    if (!state.samples || kind === "auth") {
+    // 只靠「有没有旧 samples」判断会漏报：指标可用时一次断连后 error 一直是 null，
+    // 面板和小组件会继续显示「已连接」直到下次成功，所以连续失败达阈值也报
+    if (!state.samples || kind === "auth" || trafficFailStreak + 1 >= TRAFFIC_ERROR_STREAK) {
+      trafficErrorShown = true
       patch(connectionErrorState(e))
     }
   } finally {
@@ -578,7 +597,9 @@ function armTraffic(delay: number) {
   const generation = connectionGeneration
   const scheduler = schedulerGeneration
   const activeId = state.activeId
+  speedArmed = true
   speedTimer = setTimeout(async () => {
+    speedArmed = false
     if (
       !started ||
       !state.prefs.autoRefresh ||
@@ -610,30 +631,36 @@ async function tick(): Promise<boolean> {
     })
     if (!connectionIsCurrent(generation, activeId)) return false
     const mem = fromMetrics ? gaugeValue(samples, "surge_memory_bytes") : null
-    let newHistory = history
+    // 速率曲线不依赖 /metrics：没有该端点时也要继续画点，缺内存值就沿用上一个采样点
+    const lastMem = history.length > 0 ? history[history.length - 1].mem : 0
+    const newHistory = [
+      ...history,
+      { t: now, mem: mem ?? lastMem, inSpeed: speeds.inSpeed, outSpeed: speeds.outSpeed },
+    ]
+    while (newHistory.length > prefs.maxPoints) newHistory.shift()
     let newMemLong = state.memLong
-    if (mem !== null) {
-      const point: HistoryPoint = { t: now, mem, inSpeed: speeds.inSpeed, outSpeed: speeds.outSpeed }
-      newHistory = [...history, point]
-      while (newHistory.length > prefs.maxPoints) newHistory.shift()
-      newMemLong = appendMinuteSample(state.memLong, { t: now, mem })
-      if (now - lastPersistAt >= PERSIST_INTERVAL_MS) {
-        writeHistory(activeId, newHistory)
-        writeMemLong(activeId, newMemLong)
-        lastPersistAt = now
-      }
+    if (mem !== null) newMemLong = appendMinuteSample(state.memLong, { t: now, mem })
+    if (now - lastPersistAt >= PERSIST_INTERVAL_MS) {
+      writeHistory(activeId, newHistory)
+      if (newMemLong !== state.memLong) writeMemLong(activeId, newMemLong)
+      lastPersistAt = now
     }
-    patch({
+    const next: Partial<StoreState> = {
       samples,
       prevSamples: prev ?? null,
       updatedAt: now,
-      error: null,
-      errorKind: null,
       running: true,
       history: newHistory,
       memLong: newMemLong,
       metricsAvailable: fromMetrics,
-    })
+    }
+    // 速率通道自己报的错得由它自己清（见 tickTraffic 的成功分支）；
+    // 否则概览每秒成功一次，刚报出的速率错误一秒就被抹掉，等于永远不报
+    if (!trafficErrorShown) {
+      next.error = null
+      next.errorKind = null
+    }
+    patch(next)
     ok = true
   } catch (e) {
     if (!connectionIsCurrent(generation, activeId)) return false
@@ -666,7 +693,9 @@ function scheduleNext() {
   const generation = connectionGeneration
   const scheduler = schedulerGeneration
   const activeId = state.activeId
+  pollArmed = true
   pollTimer = setTimeout(async () => {
+    pollArmed = false
     if (
       !started ||
       !schedulerIsCurrent(scheduler) ||
@@ -683,6 +712,8 @@ function scheduleNext() {
 }
 
 function clearTimers() {
+  pollArmed = false
+  speedArmed = false
   if (pollTimer) {
     clearTimeout(pollTimer)
     pollTimer = null
@@ -701,8 +732,13 @@ function restartPolling() {
 }
 
 export async function startPolling() {
-  if (started) return
   if (needsSetup()) return
+  if (started) {
+    // 已经在跑：可能只是重复调用，也可能是鉴权失败或异常把定时器弄丢了（started 仍为 true）
+    // ——补齐排程，别让面板永久停摆到用户手动下拉刷新
+    if (!authSuspended && (!pollArmed || !speedArmed)) restartPolling()
+    return
+  }
   authSuspended = false
   trafficFailStreak = 0
   overviewFailStreak = 0
@@ -719,6 +755,21 @@ export async function startPolling() {
   ) return
   scheduleNext()
   armTraffic(SPEED_REFRESH_MS)
+}
+
+/**
+ * 按 owner 申请轮询：面板弹窗（app.tsx）和首页 Tab（home_screen_default_ui.tsx）都会要轮询，
+ * 用引用计数避免一方 stop 把另一方的定时器也掐掉。
+ */
+export async function acquirePolling(owner: string) {
+  pollingOwners.add(owner)
+  await startPolling()
+}
+
+/** 释放 owner；没有任何 owner 时才真正停止轮询 */
+export function releasePolling(owner: string) {
+  pollingOwners.delete(owner)
+  if (pollingOwners.size === 0) stopPolling()
 }
 
 export function stopPolling() {

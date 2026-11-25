@@ -9,8 +9,10 @@ export const WIDGET_SETTINGS_KEY = "surge_panel_widget_settings_v1"
 
 /** 状态每秒都在变，写盘节流，避免频繁序列化 */
 const CACHE_WRITE_INTERVAL_MS = 5000
-/** 主动刷新桌面小组件的节流 */
-const WIDGET_RELOAD_INTERVAL_MS = 60_000
+/** 主动刷新桌面小组件的节流：WidgetKit 预算有限，面板常驻时不必每分钟刷一次 */
+const WIDGET_RELOAD_INTERVAL_MS = 5 * 60_000
+/** 刷新失败后的重试间隔（原来是单向闩锁，一次失败就永久不刷） */
+const WIDGET_RELOAD_RETRY_MS = 10 * 60_000
 /** 迷你速率曲线保留的采样点数 */
 const CURVE_POINTS = 24
 
@@ -97,6 +99,8 @@ export type WidgetSnapshot = {
   /** 最近的下行 / 上行速率序列（字节每秒） */
   down: number[]
   up: number[]
+  /** down/up 每点的采样时间戳（毫秒），与数组一一对应；用于区分采样间隔 */
+  curveAt: number[]
   /** 各网卡累计流量，按 totalBytes 降序，最多 4 条 */
   ifaces: WidgetIface[]
 }
@@ -127,6 +131,7 @@ export const EMPTY_WIDGET_SNAPSHOT: WidgetSnapshot = {
   build: "",
   down: [],
   up: [],
+  curveAt: [],
   ifaces: [],
 }
 
@@ -185,6 +190,7 @@ export function loadWidgetSnapshot(): WidgetSnapshot {
     build: String(raw.build ?? ""),
     down: numbers(raw.down),
     up: numbers(raw.up),
+    curveAt: numbers(raw.curveAt),
     ifaces: ifacesOf(raw.ifaces),
   }
 }
@@ -199,7 +205,7 @@ export type WidgetSourceState = {
   traffic: TrafficSnapshot | null
   speeds: { inSpeed: number; outSpeed: number }
   peakSpeeds: { inSpeed: number; outSpeed: number }
-  speedHistory: { inSpeed: number; outSpeed: number }[]
+  speedHistory: { t?: number; inSpeed: number; outSpeed: number }[]
   running: boolean
   error: string | null
   updatedAt: number | null
@@ -225,11 +231,16 @@ function totalsOf(traffic: TrafficSnapshot | null): { totalIn: number; totalOut:
   return { totalIn, totalOut, since: start > 1e12 ? start : start * 1000 }
 }
 
-function curveOf(history: { inSpeed: number; outSpeed: number }[]): { down: number[]; up: number[] } {
+function curveOf(history: { t?: number; inSpeed: number; outSpeed: number }[]): {
+  down: number[]
+  up: number[]
+  at: number[]
+} {
   const tail = Array.isArray(history) ? history.slice(-CURVE_POINTS) : []
   return {
     down: tail.map((p) => num(p?.inSpeed)),
     up: tail.map((p) => num(p?.outSpeed)),
+    at: tail.map((p) => num(p?.t)),
   }
 }
 
@@ -300,6 +311,7 @@ export function buildWidgetSnapshot(src: WidgetSourceState): WidgetSnapshot {
     build: buildLabelOf(src.build ?? "", src.samples ?? null),
     down: curve.down,
     up: curve.up,
+    curveAt: curve.at,
     ifaces: ifaceListOf(src.traffic),
   }
 }
@@ -309,21 +321,61 @@ export function buildWidgetSnapshot(src: WidgetSourceState): WidgetSnapshot {
 let lastWriteAt = 0
 let lastConnected: boolean | null = null
 let lastReloadAt = 0
-let reloadBroken = false
+// 上次刷新的失败截止时间（到点自动重试，不再永久停用）
+let reloadRetryAt = 0
+let lastSnapshot: WidgetSnapshot | null = null
+
+/** 上一份快照：模块内缓存，首次用时从 Storage 读一次 */
+function previousSnapshot(): WidgetSnapshot {
+  if (!lastSnapshot) {
+    try {
+      lastSnapshot = loadWidgetSnapshot()
+    } catch {
+      lastSnapshot = EMPTY_WIDGET_SNAPSHOT
+    }
+  }
+  return lastSnapshot
+}
+
+/**
+ * 沿用上一轮的指标：某一轮没拿到 gauge（例如商店版没有 /metrics）时不该让小组件突然掉成「--」。
+ * 只有「本轮缺失且上轮有值」才沿用，真实变成 0 仍然会显示 0。
+ */
+export function carryGauges(next: WidgetSnapshot, prev: WidgetSnapshot | null): WidgetSnapshot {
+  if (!prev) return next
+  const keep = (value: number, before: number): number => (value < 0 && before >= 0 ? before : value)
+  const out: WidgetSnapshot = {
+    ...next,
+    memory: keep(next.memory, prev.memory),
+    uptime: keep(next.uptime, prev.uptime),
+    activeRequests: keep(next.activeRequests, prev.activeRequests),
+    dnsCache: keep(next.dnsCache, prev.dnsCache),
+    bans: keep(next.bans, prev.bans),
+  }
+  // 速率为空时也别把曲线抹成空数组，保留上一轮的点
+  if (out.down.length === 0 && prev.down.length > 0) {
+    out.down = prev.down
+    out.up = prev.up
+    out.curveAt = prev.curveAt
+  }
+  return out
+}
 
 /** 面板状态变化时调用；默认节流 5s，连接状态变化或 force 时立即写入 */
 export function publishWidgetSnapshot(src: WidgetSourceState, force = false) {
   let snap: WidgetSnapshot
   try {
-    snap = buildWidgetSnapshot(src)
+    snap = carryGauges(buildWidgetSnapshot(src), previousSnapshot())
   } catch {
     return
   }
   const now = Date.now()
-  const flipped = lastConnected === null || snap.connected !== lastConnected
+  // 首次写入不算「状态翻转」，否则每次冷启动都会白刷一次桌面小组件
+  const flipped = lastConnected !== null && snap.connected !== lastConnected
   if (!force && !flipped && now - lastWriteAt < CACHE_WRITE_INTERVAL_MS) return
   try {
     Storage.set(WIDGET_CACHE_KEY, snap)
+    lastSnapshot = snap
     lastWriteAt = now
     lastConnected = snap.connected
   } catch {
@@ -332,15 +384,15 @@ export function publishWidgetSnapshot(src: WidgetSourceState, force = false) {
   reloadWidgetsThrottled(force || flipped)
 }
 
-/** 刷新桌面小组件；节流 60s，扩展环境内失败后自动停用 */
+/** 刷新桌面小组件；节流 5 分钟，失败后 10 分钟再试 */
 export function reloadWidgetsThrottled(force = false) {
-  if (reloadBroken) return
   const now = Date.now()
+  if (now < reloadRetryAt) return
   if (!force && now - lastReloadAt < WIDGET_RELOAD_INTERVAL_MS) return
   lastReloadAt = now
   try {
     Widget.reloadUserWidgets()
   } catch {
-    reloadBroken = true
+    reloadRetryAt = now + WIDGET_RELOAD_RETRY_MS
   }
 }

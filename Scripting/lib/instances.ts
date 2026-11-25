@@ -42,13 +42,25 @@ function credentialKey(id: string): string {
   return `${CREDENTIAL_PREFIX}${id}`
 }
 
-function keychainGet(id: string): string | null {
+const MIGRATE_WARNING = "旧版 API Key 暂未迁入系统钥匙串，请更新 Scripting 后重试"
+export const KEYCHAIN_UNAVAILABLE_WARNING =
+  "系统钥匙串不可用：API Key 只能以明文保存在本地配置里，请升级 Scripting 后重新保存"
+
+/** 钥匙串读结果三态：不可用（ok=false）与「不存在」（value=null）不是一回事 */
+type KeychainRead = { ok: true; value: string | null } | { ok: false }
+
+function keychainRead(id: string): KeychainRead {
   try {
-    if (typeof Keychain === "undefined") return null
-    return Keychain.get(credentialKey(id))
+    if (typeof Keychain === "undefined") return { ok: false }
+    return { ok: true, value: Keychain.get(credentialKey(id)) }
   } catch {
-    return null
+    return { ok: false }
   }
+}
+
+function keychainGet(id: string): string | null {
+  const read = keychainRead(id)
+  return read.ok ? read.value : null
 }
 
 function legacyStoredKey(id: string): string {
@@ -106,31 +118,74 @@ export function instanceSubtitle(i: SurgeInstance): string {
   return addr
 }
 
-function isInstance(v: unknown): v is SurgeInstance {
-  if (!v || typeof v !== "object") return false
-  const o = v as SurgeInstance
-  return typeof o.id === "string" && typeof o.host === "string"
+function sanitizeInstance(v: unknown): SurgeInstance | null {
+  if (!v || typeof v !== "object") return null
+  const o = v as Record<string, unknown>
+  const str = (x: unknown): string => (typeof x === "string" ? x : "")
+  const numOr = (x: unknown): number | undefined =>
+    typeof x === "number" && isFinite(x) ? x : undefined
+  const id = str(o.id).trim()
+  const host = str(o.host).trim()
+  if (!id || !host) return null
+  const portText = str(o.port).trim()
+  const inst: SurgeInstance = {
+    id,
+    name: str(o.name).trim() || host,
+    protocol: str(o.protocol) === "https" ? "https" : "http",
+    host,
+    port: portText || (typeof o.port === "number" ? String(o.port) : DEFAULT_CONFIG.port),
+  }
+  const deviceName = str(o.deviceName)
+  if (deviceName) inst.deviceName = deviceName
+  const version = str(o.version)
+  if (version) inst.version = version
+  const build = str(o.build)
+  if (build) inst.build = build
+  const lastSeenAt = numOr(o.lastSeenAt)
+  if (lastSeenAt !== undefined) inst.lastSeenAt = lastSeenAt
+  const lastLatencyMs = numOr(o.lastLatencyMs)
+  if (lastLatencyMs !== undefined) inst.lastLatencyMs = lastLatencyMs
+  const lastError = str(o.lastError)
+  if (lastError) inst.lastError = lastError
+  const lastErrorAt = numOr(o.lastErrorAt)
+  if (lastErrorAt !== undefined) inst.lastErrorAt = lastErrorAt
+  return inst
 }
 
 export function loadInstanceState(): { instances: SurgeInstance[]; activeId: string } {
   const raw = Storage.get(INSTANCES_KEY)
-  if (Array.isArray(raw) && raw.every(isInstance)) {
-    credentialWarning = null
-    const instances = (raw as StoredSurgeInstance[]).map(({ key: _key, ...instance }) => instance)
+  // 钥匙串根本不可用时一直提示，别让用户以为 Key 已经安全存进去了
+  const keychainOk = keychainRead("__probe__").ok
+  credentialWarning = keychainOk ? null : KEYCHAIN_UNAVAILABLE_WARNING
+  if (Array.isArray(raw)) {
+    // 单条脏数据不该把整份配置丢掉：逐条修复，能救的都留下，按 id 去重
+    const seen = new Set<string>()
+    const instances: SurgeInstance[] = []
+    const salvage: StoredSurgeInstance[] = []
+    for (const item of raw as unknown[]) {
+      const clean = sanitizeInstance(item)
+      if (!clean || seen.has(clean.id)) continue
+      seen.add(clean.id)
+      instances.push(clean)
+      const key = (item as StoredSurgeInstance).key
+      if (typeof key === "string" && key) salvage.push({ ...clean, key })
+    }
     if (instances.length === 0) {
       Storage.remove(LEGACY_CONFIG_KEY)
       Storage.remove(LEGACY_HISTORY_KEY)
       return { instances: [], activeId: "" }
     }
     let migrated = false
-    for (const stored of raw as StoredSurgeInstance[]) {
-      if (!stored.key || keychainGet(stored.id)) continue
-      if (setInstanceKey(stored.id, stored.key)) migrated = true
-      else credentialWarning = "旧版 API Key 暂未迁入系统钥匙串，请更新 Scripting 后重试"
+    for (const stored of salvage) {
+      const read = keychainRead(stored.id)
+      if (!read.ok || read.value) continue
+      if (setInstanceKey(stored.id, stored.key as string)) migrated = true
+      else if (keychainOk) credentialWarning = MIGRATE_WARNING
     }
     const savedId = Storage.get(ACTIVE_ID_KEY) as string | null
     const activeId = savedId && instances.some((i) => i.id === savedId) ? savedId : instances[0].id
-    if (migrated) persistInstanceState(instances, activeId)
+    // 迁移过或修复过就回写一次，以后不必重复修
+    if (migrated || instances.length !== raw.length) persistInstanceState(instances, activeId)
     Storage.remove(LEGACY_CONFIG_KEY)
     Storage.remove(LEGACY_HISTORY_KEY)
     return { instances, activeId }
@@ -150,7 +205,8 @@ export function loadInstanceState(): { instances: SurgeInstance[]; activeId: str
   }
   const legacyKey = legacy.key ?? DEFAULT_CONFIG.key
   const secured = !legacyKey || setInstanceKey(inst.id, legacyKey)
-  credentialWarning = secured ? null : "旧版 API Key 暂未迁入系统钥匙串，请更新 Scripting 后重试"
+  // 失败只可能是钥匙串不可用，此时提示要指向真实原因
+  credentialWarning = secured ? (keychainOk ? null : KEYCHAIN_UNAVAILABLE_WARNING) : KEYCHAIN_UNAVAILABLE_WARNING
   const legacyHist = Storage.get(LEGACY_HISTORY_KEY)
   if (Array.isArray(legacyHist)) {
     Storage.set(historyKey(inst.id), legacyHist)
@@ -181,8 +237,12 @@ export function persistInstanceState(instances: SurgeInstance[], activeId: strin
   const old = Storage.get(INSTANCES_KEY)
   const oldItems = Array.isArray(old) ? (old as StoredSurgeInstance[]) : []
   const stored = instances.map((instance): StoredSurgeInstance => {
-    if (keychainGet(instance.id) !== null) return instance
-    const fallback = oldItems.find((item) => item?.id === instance.id)?.key
+    // 三态：只有「钥匙串可用且确实存了值」才不落明文；不可用时保留旧明文，否则重启就连不上
+    const read = keychainRead(instance.id)
+    if (read.ok && read.value) return instance
+    const fallback = oldItems.find(
+      (item) => item?.id === instance.id && typeof item.key === "string" && item.key
+    )?.key
     return fallback ? { ...instance, key: fallback } : instance
   })
   Storage.set(INSTANCES_KEY, stored)

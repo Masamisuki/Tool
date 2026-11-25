@@ -12,7 +12,13 @@ import {
   type TrafficEntry,
   type TrafficSnapshot,
 } from "./surgeApi"
-import { WIDGET_CACHE_KEY, buildWidgetSnapshot, loadWidgetSnapshot, type WidgetSnapshot } from "./widgetCache"
+import {
+  WIDGET_CACHE_KEY,
+  buildWidgetSnapshot,
+  carryGauges,
+  loadWidgetSnapshot,
+  type WidgetSnapshot,
+} from "./widgetCache"
 
 /** 面板的设置键，与 lib/store.ts 的 PREFS_KEY 一致，这里只读 */
 const PREFS_KEY = "surge_panel_prefs"
@@ -87,15 +93,31 @@ function aggregateSpeeds(traffic: TrafficSnapshot): { inSpeed: number; outSpeed:
   return { inSpeed, outSpeed }
 }
 
-/** 在旧曲线的尾巴上追加本次采样；时间跨度随刷新间隔变粗，但趋势仍然成立 */
+/** 同一时间窗口内的重复刷新只改末点，避免曲线被刷成假毛刺 */
+const CURVE_MIN_GAP_MS = 60_000
+
+/**
+ * 在旧曲线的尾巴上追加本次采样。
+ * 面板曲线 = 24 个点 × 1 秒；小组件曲线 = 24 个点 × 刷新间隔（默认 5 分钟），
+ * 所以每个点必须带时间戳，否则两组数据的横轴含义完全不同。
+ */
 function nextCurve(
   prev: WidgetSnapshot,
-  speeds: { inSpeed: number; outSpeed: number }
-): { inSpeed: number; outSpeed: number }[] {
-  const points: { inSpeed: number; outSpeed: number }[] = []
+  speeds: { inSpeed: number; outSpeed: number },
+  now: number
+): { t: number; inSpeed: number; outSpeed: number }[] {
+  const points: { t: number; inSpeed: number; outSpeed: number }[] = []
   const size = Math.min(prev.down.length, prev.up.length)
-  for (let i = 0; i < size; i++) points.push({ inSpeed: prev.down[i], outSpeed: prev.up[i] })
-  points.push({ inSpeed: speeds.inSpeed, outSpeed: speeds.outSpeed })
+  for (let i = 0; i < size; i++) {
+    points.push({ t: prev.curveAt[i] ?? 0, inSpeed: prev.down[i], outSpeed: prev.up[i] })
+  }
+  const last = points.length > 0 ? points[points.length - 1] : null
+  if (last && last.t > 0 && now - last.t < CURVE_MIN_GAP_MS) {
+    last.inSpeed = speeds.inSpeed
+    last.outSpeed = speeds.outSpeed
+  } else {
+    points.push({ t: now, inSpeed: speeds.inSpeed, outSpeed: speeds.outSpeed })
+  }
   return points.slice(-CURVE_POINTS)
 }
 
@@ -129,26 +151,30 @@ export async function fetchLiveSnapshot(): Promise<LiveSnapshotResult> {
     const prev = loadWidgetSnapshot()
     const speeds = aggregateSpeeds(traffic)
     const now = Date.now()
-    const snapshot = buildWidgetSnapshot({
-      instances: instances.map((item) => ({ id: item.id, name: item.name })),
-      activeId: active.id,
-      config: { host: active.host, port: active.port },
-      prefs: { hideAddresses: readHideAddresses() },
-      samples,
-      traffic,
-      speeds,
-      peakSpeeds: {
-        inSpeed: Math.max(prev.peakIn, speeds.inSpeed),
-        outSpeed: Math.max(prev.peakOut, speeds.outSpeed),
-      },
-      speedHistory: nextCurve(prev, speeds),
-      running: true,
-      error: null,
-      updatedAt: now,
-      // 失败 / 拒绝计数只有 /v1/requests 才有，沿用面板上次算好的值
-      failedRecent: prev.failed,
-      rejectedRecent: prev.rejected,
-    })
+    const snapshot = carryGauges(
+      buildWidgetSnapshot({
+        instances: instances.map((item) => ({ id: item.id, name: item.name })),
+        activeId: active.id,
+        config: { host: active.host, port: active.port },
+        prefs: { hideAddresses: readHideAddresses() },
+        samples,
+        traffic,
+        speeds,
+        peakSpeeds: {
+          inSpeed: Math.max(prev.peakIn, speeds.inSpeed),
+          outSpeed: Math.max(prev.peakOut, speeds.outSpeed),
+        },
+        speedHistory: nextCurve(prev, speeds, now),
+        running: true,
+        error: null,
+        updatedAt: now,
+        // 失败 / 拒绝计数只有 /v1/requests 才有，沿用面板上次算好的值
+        failedRecent: prev.failed,
+        rejectedRecent: prev.rejected,
+      }),
+      // 拉不到 /metrics 时沿用上轮指标，别让小组件整块掉成「--」
+      prev
+    )
 
     try {
       Storage.set(WIDGET_CACHE_KEY, snapshot)
