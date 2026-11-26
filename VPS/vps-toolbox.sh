@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.24"
+VERSION="3.25"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -120,12 +120,26 @@ confirm() {
   esac
 }
 
+# 断网 / 不可逆操作专用：不受默认 Y 影响，必须完整输入 yes 才确认；EOF 仍取消。
+confirm_explicit() {
+  local a
+  ask "  ${YELLOW}$1（请输入 yes 确认）: ${NC}" a || return 1
+  [ "$a" = "yes" ] && return 0
+  return 1
+}
+
 # ---------------------------------------------------------------- root 检查
 if [ "$(id -u)" -ne 0 ]; then
   printf '%s\n' "${YELLOW}本工具多数功能需要 root 权限。${NC}"
   if [ -f "$0" ] && [ -r "$0" ]; then
     printf '%s\n' "正在尝试用 sudo 重新运行 ..."
-    exec sudo -E bash "$0" "$@"
+    # 不用 sudo -E：默认 sudoers 下普通用户没有 SETENV 权限，-E 会直接失败；
+    # 同时 -E 会把调用者的 BASH_ENV / TMPDIR 等带进 root shell。
+    # 自定义源只在确实设置过时单独透传。
+    if [ -n "${SELF_URL:-}" ]; then
+      exec sudo SELF_URL="$SELF_URL" bash "$0" "$@"
+    fi
+    exec sudo bash "$0" "$@"
   else
     printf '%s\n' "${RED}请用 root 运行，例如： sudo bash vps-toolbox.sh${NC}"
     exit 1
@@ -133,9 +147,17 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 # ---------------------------------------------------------------- 临时文件清理
-# Ctrl+C 时 run_remote 里的 rm -rf 跑不到，这里兜底
+# Ctrl+C 时各函数里的 rm 跑不到，这里兜底
 # 临时目录名带本进程 PID（见 run_remote / act_flyx），trap 只清自己的，多实例并发不互删
-_cleanup_tmp() { rm -rf "${TMPDIR:-/tmp}"/vpstool.$$.* 2>/dev/null || true; }
+_CLEANUP_FILES=()
+_register_tmp() { _CLEANUP_FILES+=("$1"); }
+_cleanup_tmp() {
+  local f
+  if [ "${#_CLEANUP_FILES[@]}" -gt 0 ]; then
+    for f in "${_CLEANUP_FILES[@]}"; do rm -f "$f" 2>/dev/null || true; done
+  fi
+  rm -rf "${TMPDIR:-/tmp}"/vpstool.$$.* 2>/dev/null || true
+}
 trap _cleanup_tmp EXIT
 trap '_cleanup_tmp; exit 130' INT TERM
 
@@ -318,6 +340,9 @@ install_bbr_cmd() {
 set -uo pipefail
 URL="https://raw.githubusercontent.com/Eric86777/vps-tcp-tune/refs/heads/main/net-tcp-tune.sh?$(date +%s)"
 TMP="$(mktemp "${TMPDIR:-/tmp}/net-tcp-tune.XXXXXX.sh")"
+# Ctrl+C / 中断时也要删掉临时脚本，不在 /tmp 留残留
+trap 'rm -f "$TMP"' EXIT
+trap 'rm -f "$TMP"; exit 130' INT TERM
 if command -v curl >/dev/null 2>&1; then
   curl -q -fsSL --connect-timeout 20 --retry 2 "$URL" -o "$TMP" || { echo "下载 net-tcp-tune.sh 失败" >&2; rm -f "$TMP"; exit 1; }
 elif command -v wget >/dev/null 2>&1; then
@@ -434,7 +459,7 @@ act_bbrv3() {
   echo
 
   warn "上游菜单只用 1（安装/更新）和 9（卸载）"
-  dim "  4-8、10、12 都别用 —— 参数一律交给 tcpfit（qc → 6）"
+  dim "  2-8、10-14 都别用 —— 参数一律交给 tcpfit（qc → 3）"
   dim "  原因：qdisc 会打架 / sysctl.d 文件互相覆盖 / 疯批模式与整形相反"
   echo
   dim "  装完算法名仍然是 bbr（补丁替换的是实现，没改名）"
@@ -482,8 +507,9 @@ act_embyproxy() {
   echo
 
   local tmp ver="" installed=""
-  # 临时文件用 mktemp：固定路径 /root/emby-rp.sh 在两实例并发时会互相覆盖
-  tmp="$(mktemp "${TMPDIR:-/tmp}/emby-rp.XXXXXX.sh")" || { err "无法创建临时文件"; return 1; }
+  # 临时文件用 mktemp 且带 PID：固定路径 /root/emby-rp.sh 在两实例并发时会互相覆盖
+  tmp="$(mktemp "${TMPDIR:-/tmp}/emby-rp.$$.XXXXXX.sh")" || { err "无法创建临时文件"; return 1; }
+  _register_tmp "$tmp"   # Ctrl+C 也由 EXIT/INT trap 清掉；函数正常返回时下面显式清
 
   # ---------- 已有安装就先把现状列出来 ----------
   if command -v emby >/dev/null 2>&1; then
@@ -538,25 +564,25 @@ act_embyproxy() {
   done
   if [ "$got" != 1 ]; then
     err "下载失败或无可用版本（镜像可能还在缓存旧版），请稍后重试"
-    dim "  手动：curl -fsSL -o $tmp \\"
-    dim "    https://raw.githubusercontent.com/Masamisuki/Tool/main/VPS/emby-rp.sh"
+    dim "  手动下载：https://raw.githubusercontent.com/Masamisuki/Tool/main/VPS/emby-rp.sh"
     rm -f "$tmp"
     return 1
   fi
   ver=$(sed -n 's/^VERSION="\(.*\)"$/\1/p' "$tmp" | head -n1)
-  chmod 644 "$tmp"
-  ok "脚本就绪：$tmp${ver:+（v$ver）}"
+  # 不再 chmod 644：这是 root 下载的脚本，没必要让所有用户可读
+  ok "脚本就绪${ver:+（v$ver）}"
   echo
 
   # ---------- 进菜单 ----------
   info "打开 emby-rp 菜单：新建站点 / 列表 / 自检 / 日志 / 删除 / 卸载"
-  dim "  非交互环境可直接用：bash $tmp add -d 域名 -y"
+  dim "  非交互环境可直接用：emby add -d 域名 -y"
   echo
   if [ "$HAVE_TTY" = 1 ]; then
     bash "$tmp" menu < /dev/tty || warn "emby-rp 非正常退出"
   else
     bash "$tmp" menu || warn "emby-rp 非正常退出"
   fi
+  rm -f "$tmp"
 
   echo
   info "常用命令："
@@ -717,7 +743,7 @@ _ipv6_restore_hint() {
 
   [ -n "$tool" ] || return 0
   echo
-  if ! confirm "要现在立刻重启网络让地址回来吗？（SSH 可能卡顿几秒）"; then
+  if ! confirm_explicit "要现在立刻重启网络让地址回来吗？（SSH 可能断连）"; then
     info "已跳过 —— 你也可以之后手动执行上面那条命令"
     return 0
   fi
@@ -1841,30 +1867,42 @@ act_reinstall() {
   esac
 
   if [ "$os" = "windows" ]; then
-    ask "  Windows 镜像名（例：windows 11 professional）: " winname
+    if ! ask "  Windows 镜像名（例：windows 11 professional）: " winname; then
+      err "输入结束，已取消"; return 1
+    fi
     [ -z "$winname" ] && { err "必须填写镜像名"; return 1; }
-    ask "  语言 [回车默认 zh-cn]: " wlang
+    if ! ask "  语言 [回车默认 zh-cn]: " wlang; then
+      err "输入结束，已取消"; return 1
+    fi
     wlang="${wlang:-zh-cn}"
   elif [ "$os" = "dd" ]; then
-    ask "  镜像直链（raw/vhd/tar/gz/xz/zst）: " img
+    if ! ask "  镜像直链（raw/vhd/tar/gz/xz/zst）: " img; then
+      err "输入结束，已取消"; return 1
+    fi
     [ -z "$img" ] && { err "必须填写镜像地址"; return 1; }
   fi
 
   if [ "$os" != "dd" ]; then
-    ask "  登录密码（回车 = 自动生成随机强密码）: " pw
+    if ! ask "  登录密码（回车 = 自动生成随机强密码）: " pw; then
+      err "输入结束，已取消"; return 1
+    fi
     if [ -z "$pw" ]; then
       pw="$(head -c 18 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 16)"
       echo
       ok "已生成随机密码：${BOLD}${YELLOW}$pw${NC}"
-      warn "请立刻记下，脚本结束时还会再显示一次"
+      warn "请立刻记下；执行重装前会写入 /root/reinstall-credentials.txt"
     fi
-    ask "  自定义 SSH 端口（回车 = 默认 22）: " sport
+    if ! ask "  自定义 SSH 端口（回车 = 默认 22）: " sport; then
+      err "输入结束，已取消"; return 1
+    fi
     if [ -n "$sport" ]; then
       if ! [ "$sport" -ge 1 ] 2>/dev/null || [ "$sport" -gt 65535 ] 2>/dev/null; then
         err "SSH 端口不合法：$sport（1-65535）"; return 1
       fi
     fi
-    ask "  SSH 公钥（可留空）: " key
+    if ! ask "  SSH 公钥（可留空）: " key; then
+      err "输入结束，已取消"; return 1
+    fi
   fi
 
   echo
@@ -1879,10 +1917,37 @@ act_reinstall() {
   printf '  %s%s机器上所有数据将被清空，且不可恢复%s\n' "$RED" "$BOLD" "$NC"
   printf '  %s要放弃，现在就按 Ctrl+C%s\n' "$DIM" "$NC"
   echo
-  ask "  确认继续请输入 ${BOLD}REINSTALL${NC} 并回车：" ans
+  if ! ask "  确认继续请输入 ${BOLD}REINSTALL${NC} 并回车：" ans; then
+    err "输入结束，已取消"; return 1
+  fi
   if [ "$ans" != "REINSTALL" ]; then warn "已取消（输入不匹配）"; return 0; fi
 
-  tmp="$(mktemp /tmp/vpstool-reinstall.XXXXXX.sh)"
+  # 重装脚本通常会中途重启，退出码非 0 甚至根本回不到这里；
+  # 所以在执行前无条件再显示一次凭据，并落到仅 root 可读的文件里。
+  if [ -n "$pw" ]; then
+    local cred="/root/reinstall-credentials.txt" old_umask
+    old_umask="$(umask)"
+    umask 077
+    {
+      printf '# reinstall credentials -- %s\n' "$(date '+%F %T %z')"
+      printf 'os=%s %s\n' "$os" "$ver"
+      printf 'password=%s\n' "$pw"
+      [ -n "$sport" ] && printf 'ssh_port=%s\n' "$sport"
+      printf '\n'
+    } > "$cred" 2>/dev/null || warn "凭据文件写入失败：$cred（请立刻记下上方密码）"
+    chmod 600 "$cred" 2>/dev/null || true
+    umask "$old_umask"
+    echo
+    printf '  %s登录信息（执行后不会再显示，务必现在保存）%s\n' "$BOLD" "$NC"
+    info "  密码: $pw"
+    [ -n "$sport" ] && info "  端口: $sport"
+    [ -n "$key" ]   && info "  已配置 SSH 公钥"
+    dim "  同时已写入 $cred（仅 root 可读；重装会清空该文件）"
+    echo
+  fi
+
+  tmp="$(mktemp "${TMPDIR:-/tmp}/vpstool-reinstall.$$.XXXXXX.sh")" || { err "无法创建临时文件"; return 1; }
+  _register_tmp "$tmp"
   step "下载 reinstall.sh"
   if ! fetch "$url?$(date +%s)" "$tmp"; then
     err "下载失败"; rm -f "$tmp"; return 1
