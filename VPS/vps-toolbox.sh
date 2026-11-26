@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.20"
+VERSION="3.21"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -112,8 +112,12 @@ pause() {
 
 confirm() {
   local a
-  ask "  ${YELLOW}$1 [y/N]: ${NC}" a
-  case "$a" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
+  # 默认 Y：直接回车即确认；读到 EOF（非交互/Ctrl+D）仍按取消处理。
+  ask "  ${YELLOW}$1 [Y/n]: ${NC}" a || return 1
+  case "$a" in
+    ''|[yY]|[yY][eE][sS]) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 # ---------------------------------------------------------------- root 检查
