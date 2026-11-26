@@ -15,7 +15,7 @@
 set -uo pipefail
 
 CMD_NAME="emby-rp"
-VERSION="1.1.4"
+VERSION="1.1.5"
 
 CONF_DIR="/etc/emby-rp"
 SITES_DIR="$CONF_DIR/sites"
@@ -57,6 +57,11 @@ need_root() {	[[ "${EUID}" -eq 0 ]] || die "需要 root 权限：sudo ${CMD_NAME
 }
 
 have() { command -v "$1" >/dev/null 2>&1; }
+
+# 站点名会直接拼进路径，必须拒绝 .. 和路径分隔符
+valid_site_name() {
+	[[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ && "$1" != *".."* ]]
+}
 
 version_ge() { [[ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n1)" == "$2" ]]; }
 
@@ -125,6 +130,7 @@ reset_site_vars
 load_site() {
 	local name="${1:-}" f
 	[[ -n "$name" ]] || return 1
+	valid_site_name "$name" || die "非法站点名：$name"
 	f="$SITES_DIR/${name}.conf"
 	[[ -f "$f" ]] || return 1
 	reset_site_vars
@@ -783,7 +789,7 @@ cert_expiry_of() {
 }
 
 site_apply() {
-	local path prev="" applied=1
+	local path prev="" applied=1 tmp=""
 	if [[ "$SITE_ENGINE" == "caddy" ]]; then
 		caddy_ensure_block
 		caddy_prepare_dirs
@@ -796,8 +802,21 @@ site_apply() {
 		prev="$BACKUP_DIR/$(basename "$path").$(date +%Y%m%d-%H%M%S)"
 		cp -a "$path" "$prev" 2>/dev/null || prev=""
 	fi
-	if ! render_site > "$path"; then
+	# 先渲染到同目录临时文件，再原子替换；避免渲染失败时把线上配置截断
+	tmp="$(mktemp "${path}.tmp.XXXXXX")" || { err "无法创建临时文件：$path"; return 1; }
+	if ! render_site > "$tmp"; then
 		err "写入配置失败：$path"
+		rm -f "$tmp"
+		return 1
+	fi
+	if [[ -f "$path" ]]; then
+		chmod --reference="$path" "$tmp" 2>/dev/null || chmod 644 "$tmp" 2>/dev/null || true
+	else
+		chmod 644 "$tmp" 2>/dev/null || true
+	fi
+	if ! mv -f "$tmp" "$path"; then
+		err "替换配置失败：$path"
+		rm -f "$tmp"
 		return 1
 	fi
 	if [[ "$SITE_ENGINE" == "caddy" ]]; then apply_caddy || applied=0; else apply_nginx || applied=0; fi
@@ -965,6 +984,7 @@ cmd_add() {
 	# ---------- 站点名冲突（提前检查，别问完全部才失败） ----------
 	[[ -n "$name" ]] || name="$(gen_name_from_domain "$domain")"
 	[[ -n "$name" ]] || name="site"
+	valid_site_name "$name" || die "站点名只能用字母、数字、. _ -，且不能包含 ..：$name"
 	if [[ -f "$SITES_DIR/${name}.conf" ]]; then
 		local old_domain
 		old_domain="$(sed -n 's/^SITE_DOMAIN=//p' "$SITES_DIR/${name}.conf" 2>/dev/null | tr -d "'\"" | head -n1)"
@@ -1377,13 +1397,27 @@ cmd_render() {
 # 拆除前先把旧站备份到 $BACKUP_DIR，add 失败时可由 site_restore_overwrite 恢复；
 # 备份目录记在 OVERWRITE_BACKUP_DIR（cmd_add 开头会清空，避免菜单里连用两次串了）。
 site_teardown() {
-	local n="$1"
+	local n="$1" lg
+	valid_site_name "$n" || die "非法站点名：$n"
 	[[ -f "$SITES_DIR/${n}.conf" ]] || return 0
 	local bd="$BACKUP_DIR/overwrite-${n}.$(date +%Y%m%d-%H%M%S)"
-	mkdir -p "$bd" 2>/dev/null || true
-	cp -a "$SITES_DIR/${n}.conf" "$bd/" 2>/dev/null || true
-	[[ -f "$(caddy_site_path "$n")" ]] && cp -a "$(caddy_site_path "$n")" "$bd/" 2>/dev/null || true
-	[[ -f "$(nginx_site_path "$n")" ]] && cp -a "$(nginx_site_path "$n")" "$bd/" 2>/dev/null || true
+	mkdir -p "$bd/nginx" "$bd/caddy" 2>/dev/null || { err "无法创建备份目录：$bd"; return 1; }
+	local ok=1
+	cp -a "$SITES_DIR/${n}.conf" "$bd/" 2>/dev/null || ok=0
+	if [[ -f "$(caddy_site_path "$n")" ]]; then cp -a "$(caddy_site_path "$n")" "$bd/" 2>/dev/null || ok=0; fi
+	if [[ -f "$(nginx_site_path "$n")" ]]; then cp -a "$(nginx_site_path "$n")" "$bd/" 2>/dev/null || ok=0; fi
+	# 日志也要备份，否则 --force 失败回滚后旧日志永久丢失
+	for lg in "$NGINX_LOG_DIR/emby-rp-${n}.log" "$NGINX_LOG_DIR/emby-rp-${n}.error.log"; do
+		if [[ -f "$lg" ]]; then cp -a "$lg" "$bd/nginx/" 2>/dev/null || ok=0; fi
+	done
+	for lg in "$CADDY_LOG_DIR/emby-rp-${n}.log" "$CADDY_LOG_DIR/emby-rp-${n}".log.*; do
+		[[ -f "$lg" ]] || continue
+		cp -a "$lg" "$bd/caddy/" 2>/dev/null || ok=0
+	done
+	if [[ "$ok" -ne 1 ]]; then
+		err "旧站备份不完整，已中止覆盖，未删除任何旧文件"
+		return 1
+	fi
 	OVERWRITE_BACKUP_DIR="$bd"
 	rm -f "$(caddy_site_path "$n")" "$(nginx_site_path "$n")"
 	rm -f "$NGINX_LOG_DIR/emby-rp-${n}.log" "$NGINX_LOG_DIR/emby-rp-${n}.error.log"
@@ -1433,13 +1467,22 @@ cmd_remove() {
 
 # 恢复 --force 覆盖前备份的旧站（add 失败时调用；无备份返回 1）
 site_restore_overwrite() {
-	local n="$1" bd="${OVERWRITE_BACKUP_DIR:-}"
+	local n="$1" bd="${OVERWRITE_BACKUP_DIR:-}" lg
+	valid_site_name "$n" || die "非法站点名：$n"
 	[[ -n "$bd" && -d "$bd" && -f "$bd/${n}.conf" ]] || return 1
 	local eng
 	eng="$(sed -n 's/^SITE_ENGINE=//p' "$bd/${n}.conf" 2>/dev/null | tr -d "'\"" | head -n1)"
 	cp -a "$bd/${n}.conf" "$SITES_DIR/${n}.conf" 2>/dev/null
 	[[ -f "$bd/${n}.caddy" ]] && cp -a "$bd/${n}.caddy" "$(caddy_site_path "$n")" 2>/dev/null
 	[[ -f "$bd/emby-rp-${n}.conf" ]] && cp -a "$bd/emby-rp-${n}.conf" "$(nginx_site_path "$n")" 2>/dev/null
+	# 恢复 teardown 备份的旧日志
+	for lg in "$bd/nginx"/emby-rp-"${n}".log "$bd/nginx"/emby-rp-"${n}".error.log; do
+		[[ -f "$lg" ]] && cp -a "$lg" "$NGINX_LOG_DIR/" 2>/dev/null || true
+	done
+	for lg in "$bd/caddy"/emby-rp-"${n}".log "$bd/caddy"/emby-rp-"${n}".log.*; do
+		[[ -f "$lg" ]] || continue
+		cp -a "$lg" "$CADDY_LOG_DIR/" 2>/dev/null || true
+	done
 	case "$eng" in
 		caddy) apply_caddy >/dev/null 2>&1 || true ;;
 		nginx) apply_nginx >/dev/null 2>&1 || true ;;
@@ -1529,6 +1572,7 @@ cmd_uninstall() {
 	if [[ -n "$names" ]]; then
 		while read -r n; do
 			[[ -n "$n" ]] || continue
+			valid_site_name "$n" || { warn "跳过非法站点名：$n"; continue; }
 			rm -f "$(caddy_site_path "$n")" "$(nginx_site_path "$n")"
 			rm -f "$NGINX_LOG_DIR/emby-rp-${n}.log" "$NGINX_LOG_DIR/emby-rp-${n}.error.log"
 			rm -f "$CADDY_LOG_DIR/emby-rp-${n}.log"

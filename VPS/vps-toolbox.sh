@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.22"
+VERSION="3.23"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -36,7 +36,7 @@ WARPGO_URL="https://gitlab.com/fscarmen/warp/-/raw/main/warp-go.sh"
 DOCKER_GET_URL="https://get.docker.com"
 
 # emby-rp 期望版本（Emby-rp 发新版时同步更新；act_embyproxy 用它做最低版本校验）
-EMBY_RP_VERSION="1.1.4"
+EMBY_RP_VERSION="1.1.5"
 
 # 自身在线地址（自安装/自更新时按顺序尝试，第一个成功即止）
 # 只保留官方源和 jsDelivr：第三方加速镜像不受我们控制，内容被换也看不出来，
