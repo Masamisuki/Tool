@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.21"
+VERSION="3.22"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -165,7 +165,7 @@ run_remote() {
   base="$(printf '%s' "${url%%\?*}" | sed 's|.*/||; s|[^A-Za-z0-9._-]|_|g')"
   [ -n "$base" ] || base="script.sh"
   # 临时目录名带上本进程 PID：多实例并发时 trap 只清自己的，不会删掉另一个实例的下载目录
-  dir="$(mktemp -d "${TMPDIR:-/tmp}/vpstool.$$.XXXXXX")"
+  dir="$(mktemp -d "${TMPDIR:-/tmp}/vpstool.$$.XXXXXX")" || { err "无法创建临时目录"; return 1; }
   tmp="$dir/$base"
 
   step "下载 $name"
@@ -604,7 +604,8 @@ act_warpgo() {
 
   echo
   step "验证出口"
-  local v4 v6
+  # set -u 下必须初始化：没有 curl/wget 时下面的分支不会给它们赋值
+  local v4="" v6=""
   if [ "$HAVE_CURL" = 1 ]; then
     v4=$(curl -4 -s --max-time 10 https://ifconfig.me 2>/dev/null)
     v6=$(curl -6 -s --max-time 10 https://ifconfig.me 2>/dev/null)
@@ -1526,7 +1527,7 @@ act_flyx() {
 
   local dir rc=0
   # 临时目录名带上本进程 PID：多实例并发时 trap 只清自己的
-  dir="$(mktemp -d "${TMPDIR:-/tmp}/vpstool.$$.XXXXXX")"
+  dir="$(mktemp -d "${TMPDIR:-/tmp}/vpstool.$$.XXXXXX")" || { err "无法创建临时目录"; return 1; }
 
   step "下载 panel_install.sh"
   if ! fetch "https://github.com/kure29/flyx/releases/latest/download/panel_install.sh" "$dir/panel_install.sh"; then
@@ -1585,6 +1586,23 @@ act_miaomiaowux() {
 
 # 加 swap：小内存机跑代理时 TCP 缓冲区一涨就可能 OOM 杀进程，swap 是缓冲。
 # 思路照 tcpfit 的 harden --swap：fallocate 建文件（失败回退 dd）、chmod 600、
+# 按第 1 字段精确匹配 swap 文件，避免把路径里的 # \ [ * 等拼进正则
+_fstab_swap_matches() {
+  # 走 ENVIRON 而不是 -v：后者会解释路径里的反斜杠转义
+  FSTAB_SWAP="$1" awk '$1 == ENVIRON["FSTAB_SWAP"] {found=1} END {exit !found}' /etc/fstab 2>/dev/null
+}
+
+_fstab_remove_swap() {
+  local f="$1" tmp
+  [ -f /etc/fstab ] || return 0
+  tmp="$(mktemp "${TMPDIR:-/tmp}/vpstool.$$.fstab.XXXXXX")" || { err "无法创建临时文件"; return 1; }
+  if FSTAB_SWAP="$f" awk '$1 != ENVIRON["FSTAB_SWAP"]' /etc/fstab > "$tmp"; then
+    # 用重定向回写，保留 /etc/fstab 原有的权限和属主
+    cat "$tmp" > /etc/fstab || { rm -f "$tmp"; return 1; }
+  fi
+  rm -f "$tmp"
+}
+
 # mkswap + swapon、写 fstab、swappiness 设 10。
 # 语义：输入的数字是 Swap 总量目标（GB），不是追加量。文件只补差额：
 # 总量目标 - 已有分区 swap = 文件大小；已有文件时直接改它的大小，不另建文件。
@@ -1649,7 +1667,7 @@ act_swap() {
         return 1
       fi
       rm -f "$swapfile"
-      sed -i "\#^$swapfile #d" /etc/fstab 2>/dev/null || true
+      _fstab_remove_swap "$swapfile" || warn "fstab 清理失败，请手动检查 /etc/fstab"
       ok "已移除 $swapfile，当前 Swap 总量 $(free -h | awk '/^Swap/{print $2}')"
       return 0
     fi
@@ -1704,7 +1722,7 @@ act_swap() {
   fi
   chmod 600 "$swapfile" && mkswap "$swapfile" >/dev/null && swapon "$swapfile" \
     || { err "swap 启用失败"; rm -f "$swapfile"; return 1; }
-  grep -q "^$swapfile " /etc/fstab 2>/dev/null || echo "$swapfile none swap sw 0 0" >> /etc/fstab
+  _fstab_swap_matches "$swapfile" || echo "$swapfile none swap sw 0 0" >> /etc/fstab
   # 只在内存真的紧张时才用 swap，避免平时把热数据换出去拖慢代理。
   # 文件里已有该项就改值，没有才追加（tcpfit 只追加不改值，重启后会和实时值不一致）。
   f=/etc/sysctl.conf
@@ -1938,19 +1956,16 @@ act_install_self() {
   # 判断当前是不是从真实文件运行（管道运行的话 $0 不是文件）
   if [ -f "$0" ] && [ -r "$0" ] && head -n1 "$0" 2>/dev/null | grep -q '^#!'; then
     src="$0"
-    info "来源: 当前文件  $src"
+    # 从已安装的 qc 跑进来时强制走网络下载，否则永远无法自我更新。
+    # 直接 cp 到自身会报 "are the same file"，所以这里先清空 src。
+    if [ "$src" -ef "$INSTALL_PATH" ] 2>/dev/null; then
+      src=""
+      info "当前从已安装的 ${CMD_NAME} 运行，正在从网络拉取最新版更新"
+    else
+      info "来源: 当前文件  $src"
+    fi
   else
     info "当前是管道方式运行，从网络下载最新版"
-  fi
-
-  # 已经装好了，而且就是从它自己运行（qc install）—— 什么都不用做。
-  # 以前这里会 cp 到自身，报 "are the same file" 然后失败，甚至把文件删掉。
-  if [ -n "$src" ] && [ "$src" -ef "$INSTALL_PATH" ] 2>/dev/null; then
-    echo
-    ok "本机已经安装好了：$INSTALL_PATH"
-    info "无需重复安装。要更新到最新版，用："
-    dim "    bash <(curl -fsSL ${SELF_URLS[0]}) install"
-    return 0
   fi
 
   mkdir -p /usr/local/bin || { err "无法创建 /usr/local/bin"; return 1; }
