@@ -15,7 +15,7 @@
 set -uo pipefail
 
 CMD_NAME="emby-rp"
-VERSION="1.1.5"
+VERSION="1.1.6"
 
 CONF_DIR="/etc/emby-rp"
 SITES_DIR="$CONF_DIR/sites"
@@ -51,6 +51,8 @@ hr()   { printf '%s%s%s\n' "$C_D" "$(printf '─%.0s' $(seq 1 58))" "$C_0"; }
 ask()  { local p="$1" d="${2:-}" a; printf '%s?%s %s' "$C_C" "$C_0" "$p" >&2; if [[ -n "$d" ]]; then printf ' %s[%s]%s' "$C_D" "$d" "$C_0" >&2; fi; printf ': ' >&2; read -r a || a=""; printf '%s' "${a:-$d}"; }
 ask_secret() { local p="$1" a; printf '%s?%s %s: ' "$C_C" "$C_0" "$p" >&2; read -r a || a=""; printf '%s' "$a"; }
 confirm() { local p="$1" d="${2:-n}" a; [[ "${EMBY_RP_YES:-0}" == "1" ]] && return 0; a="$(ask "$p (y/N)" "$d")"; [[ "$a" =~ ^[Yy] ]]; }
+# 删证书这种影响其它站点的操作，即使 EMBY_RP_YES=1 也必须显式确认
+confirm_explicit() { local p="$1" d="${2:-n}" a; a="$(ask "$p (y/N)" "$d")"; [[ "$a" =~ ^[Yy] ]]; }
 
 # ---------- 基础工具 ----------
 need_root() {	[[ "${EUID}" -eq 0 ]] || die "需要 root 权限：sudo ${CMD_NAME} $*"
@@ -203,7 +205,8 @@ port_holders() {
 }
 
 port_in_use() {
-	ss -lnt 2>/dev/null | awk '{print $4}' | grep -qE "[:.]$1$"
+	# 不用 grep -q：pipefail 下 grep 提前退出会让上游 awk 收到 SIGPIPE，导致假阴性
+	ss -lnt 2>/dev/null | awk -v p="$1" '$4 ~ ("[:.]" p "$") {f=1} END {exit !f}'
 }
 
 install_caddy() {
@@ -295,11 +298,18 @@ caddy_remove_block() {
 	[[ -f "$CADDYFILE" ]] || return 0
 	grep -qF "$CADDY_BEGIN" "$CADDYFILE" || return 0
 	cp -a "$CADDYFILE" "$BACKUP_DIR/Caddyfile.$(date +%Y%m%d-%H%M%S)" 2>/dev/null || true
-	awk -v b="$CADDY_BEGIN" -v e="$CADDY_END" '
+	local tmp
+	tmp="$(mktemp "${CADDYFILE}.tmp.XXXXXX")" || { err "无法创建临时文件：$CADDYFILE"; return 1; }
+	if awk -v b="$CADDY_BEGIN" -v e="$CADDY_END" '
 		index($0,b)==1 {skip=1; next}
 		index($0,e)==1 {skip=0; next}
 		!skip {print}
-	' "$CADDYFILE" > "$CADDYFILE.tmp" && mv "$CADDYFILE.tmp" "$CADDYFILE"
+	' "$CADDYFILE" > "$tmp"; then
+		chmod --reference="$CADDYFILE" "$tmp" 2>/dev/null || chmod 644 "$tmp" 2>/dev/null || true
+		mv -f "$tmp" "$CADDYFILE" || { rm -f "$tmp"; return 1; }
+	else
+		rm -f "$tmp"; return 1
+	fi
 }
 
 caddyfile_has_content() {
@@ -720,6 +730,22 @@ validate_upstream() {
 	[[ "$u" =~ ^https?://[^/[:space:]]+ ]] || die "源站格式不对：$u（例：https://stream-1.example.com 或 http://127.0.0.1:8096）"
 }
 
+# 这些值会被直接写进 nginx/Caddy 配置，必须限制为安全字符
+valid_port() {
+	[[ "$1" =~ ^[0-9]{1,5}$ ]] || return 1
+	local n=$((10#$1))
+	(( n >= 1 && n <= 65535 ))
+}
+
+valid_host_value() {
+	local re='^[A-Za-z0-9._~-]+$'
+	[[ "$1" =~ $re ]]
+}
+valid_rewrite_token() {
+	local re='^[A-Za-z0-9._~:/?&=%-]+$'
+	[[ "$1" =~ $re ]]
+}
+
 # 系统是否开了 IPv6（开了才监听 [::]）
 ipv6_enabled() {
 	local d
@@ -832,7 +858,11 @@ site_apply() {
 		rm -f "$path"
 		warn "新配置已删除。"
 	fi
-	if [[ "$SITE_ENGINE" == "caddy" ]]; then apply_caddy || true; else apply_nginx || true; fi
+	local reapply_rc=0
+	if [[ "$SITE_ENGINE" == "caddy" ]]; then apply_caddy || reapply_rc=$?; else apply_nginx || reapply_rc=$?; fi
+	if [[ "$reapply_rc" -ne 0 ]]; then
+		err "回滚后引擎仍拒绝配置（退出码 $reapply_rc），请手动检查 $path"
+	fi
 	return 1
 }
 
@@ -1020,6 +1050,9 @@ cmd_add() {
 	if [[ -n "${rewrites:-}" && "$engine" != "nginx" ]]; then
 		die "--rewrite（修改响应体里的推流域名）依赖 nginx 的 sub_filter，Caddy 原生不支持；请改用 -e nginx"
 	fi
+	if [[ "${http2:-off}" == "on" && "$engine" != "nginx" ]]; then
+		die "--http2 on 仅支持 nginx（Caddy 渲染不使用该选项）；请改用 -e nginx 或 --http2 off"
+	fi
 
 	# ---------- 模式 ----------
 	if [[ -z "$mode" ]]; then
@@ -1107,6 +1140,18 @@ cmd_add() {
 	else
 		[[ -z "$https_port" ]] && https_port="443"
 	fi
+	valid_port "$http_port"  || die "HTTP 端口不合法：$http_port"
+	valid_port "$https_port" || die "HTTPS 端口不合法：$https_port"
+
+	[[ -z "$host_mode" ]] && host_mode="upstream"
+	case "$host_mode" in
+		upstream|client|upstream-port|value) ;;
+		*) die "--host-mode 只能是 upstream / client / upstream-port / value" ;;
+	esac
+	if [[ "$host_mode" == "value" ]]; then
+		[[ -n "$host_value" ]] || die "--upstream-host 需要给一个 Host 值"
+		valid_host_value "$host_value" || die "--upstream-host 只允许字母、数字、. _ - ~：$host_value"
+	fi
 
 	# ---------- 自签源站自动识别 ----------
 	if [[ "$upstream" == https://* && "$insecure" == "0" ]]; then
@@ -1169,6 +1214,8 @@ cmd_add() {
 				rf="$rk"; rt="$domain"
 			fi
 			[[ -n "$rf" && -n "$rt" ]] || continue
+			valid_rewrite_token "$rf" || die "--rewrite 的旧域名含非法字符：$rf"
+			valid_rewrite_token "$rt" || die "--rewrite 的新域名含非法字符：$rt"
 			SITE_REWRITES="${SITE_REWRITES:+$SITE_REWRITES }$rf=>$rt"
 		done
 	fi
@@ -1435,7 +1482,7 @@ cmd_remove() {
 	local domain="$SITE_DOMAIN"
 	info "即将删除站点 $SITE_NAME（$SITE_DOMAIN）"
 	confirm "确认？" n || { info "已取消。"; return 0; }
-	confirm "同时删除 Let's Encrypt 证书？" n && purge_cert=1
+	confirm_explicit "同时删除 Let's Encrypt 证书？" n && purge_cert=1
 
 	rm -f "$(caddy_site_path "$SITE_NAME")" "$(nginx_site_path "$SITE_NAME")"
 	rm -f "$NGINX_LOG_DIR/emby-rp-${SITE_NAME}.log" "$NGINX_LOG_DIR/emby-rp-${SITE_NAME}.error.log"
@@ -1556,7 +1603,7 @@ cmd_uninstall() {
 	printf '将删除：%s、%s、%s、%s\n' "$CONF_DIR" "$ACME_WEBROOT" "$BIN_PATH" "各站点日志"
 
 	confirm "确认卸载？" n || { info "已取消。"; return 0; }
-	confirm "同时删除 Let's Encrypt 证书？" n && purge_cert=1
+	confirm_explicit "同时删除 Let's Encrypt 证书？" n && purge_cert=1
 	if [[ "$caddy_by_us" == "1" || "$nginx_by_us" == "1" || "$certbot_by_us" == "1" ]]; then
 		confirm "同时卸载本工具装上的软件包（caddy/nginx/certbot）？" n && purge_pkgs=1
 	fi
@@ -1755,7 +1802,13 @@ main() {
 	local cmd="${1:-}"
 	[[ $# -gt 0 ]] && shift
 
-	# root 下每次执行都确保命令已安装 / 已升级（静默）
+	# 只读查询不触发自安装，避免 --version / --help 也写 /usr/local/bin
+	case "$cmd" in
+		version|-V|--version) printf '%s %s\n' "$CMD_NAME" "$VERSION"; return 0 ;;
+		help|-h|--help)       usage; return 0 ;;
+	esac
+
+	# 写操作命令在 root 下确保自身已安装 / 已升级（静默）
 	[[ "$(id -u)" == "0" ]] && self_install quiet
 	case "$cmd" in
 		add|new)          cmd_add "$@" ;;
@@ -1767,8 +1820,6 @@ main() {
 		remove|rm|del)    cmd_remove "$@" ;;
 		uninstall|purge)  cmd_uninstall "$@" ;;
 		menu)             menu ;;
-		version|-V|--version) printf '%s %s\n' "$CMD_NAME" "$VERSION" ;;
-		help|-h|--help)   usage ;;
 		"")               menu ;;
 		*)                die "未知命令：$cmd（${CMD_NAME} --help）" ;;
 	esac
