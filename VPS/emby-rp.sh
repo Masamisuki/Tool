@@ -1807,6 +1807,7 @@ ${CMD_NAME} ${VERSION} — Emby / Jellyfin 反向代理管理器
   uninstall  彻底卸载（含残留自检）  $ ${CMD_NAME} uninstall [--all] [-y]
                                  --all 连证书、引擎包、引擎数据目录一起清（最干净）
   menu       交互菜单（直接执行 ${CMD_NAME} / ${ALIAS_NAME} 无参数也是这个）
+             菜单里的 8) 是彻底卸载，等同 uninstall --all
 
 add 选项：
   -d, --domain <域名>            主域名（必填）
@@ -1880,6 +1881,7 @@ menu() {
 		printf '  5) 查看日志\n'
 		printf '  6) 只渲染配置（不写入）\n'
 		printf '  7) 删除站点\n'
+		printf '  8) 彻底卸载（证书/引擎包/数据目录全清）\n'
 		printf '  0) 退出\n'
 		hr
 		local c; c="$(ask "选择")"
@@ -1891,6 +1893,7 @@ menu() {
 			5) cmd_logs ;;
 			6) cmd_render ;;
 			7) cmd_remove ;;
+			8) cmd_uninstall --all; return 0 ;;
 			0|q|Q) return 0 ;;
 			'') return 0 ;;
 			*) warn "无效选项：$c" ;;
