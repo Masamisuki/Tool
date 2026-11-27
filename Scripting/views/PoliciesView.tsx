@@ -120,7 +120,7 @@ export function PoliciesView() {
       for (const r of results) if (r) sel[r[0]] = r[1]
       setSelections(sel)
     } catch (e) {
-      setError(String(e))
+      setError(surgeApiErrorMessage(e))
     } finally {
       setLoading(false)
     }
@@ -377,7 +377,7 @@ export function GroupDetailView({
       setSelection(policy)
       onChanged()
     } catch (e) {
-      setError(String(e))
+      setError(surgeApiErrorMessage(e))
     } finally {
       setSelecting(null)
     }

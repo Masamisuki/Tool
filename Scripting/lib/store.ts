@@ -1,5 +1,5 @@
 // 当前实例的指标、流量、轮询；实例列表见 instances.ts
-import { useEffect, useState } from "scripting"
+import { useEffect, useRef, useState } from "scripting"
 import {
   fetchOverviewSamples,
   getRecentRequests,
@@ -339,14 +339,17 @@ function shallowEqual(a: unknown, b: unknown): boolean {
 /**
  * 只订阅 store 的一个切片。speedHistory 每秒 patch 一次，useStore 会让所有
  * 已挂载 Tab 每秒整体重渲染；不需要秒级数据的视图应改用本 Hook。
- * selector 需为纯函数（首次渲染时捕获，不随渲染更新）。
+ * selector 通过 ref 保存最新版本：订阅只建立一次，但闭包始终指向当前渲染的
+ * selector，因此 selector 依赖外部状态（如 props）时也能拿到最新值。
  */
 export function useStoreSelector<T>(selector: (s: StoreState) => T): T {
-  const [snap, setSnap] = useState<T>(selector(getState()))
+  const selectorRef = useRef(selector)
+  selectorRef.current = selector
+  const [snap, setSnap] = useState<T>(() => selectorRef.current(getState()))
   useEffect(() => {
     let prev = snap
     const sync = () => {
-      const next = selector(getState())
+      const next = selectorRef.current(getState())
       if (!shallowEqual(prev, next)) {
         prev = next
         setSnap(next)
@@ -515,12 +518,17 @@ function aggregateCurrentSpeeds(entries: Record<string, TrafficEntry>): {
   inSpeed: number
   outSpeed: number
 } {
+  // 与 lib/widgetLive.ts 的 aggregateSpeeds 保持同一口径：Surge 个别网卡可能
+  // 缺失字段或返回非数值，必须过滤，否则累加结果变成 NaN 污染整个面板。
   let inSpeed = 0
   let outSpeed = 0
   for (const name in entries) {
     const e = entries[name]
-    inSpeed += e.inCurrentSpeed
-    outSpeed += e.outCurrentSpeed
+    if (!e) continue
+    const i = Number(e.inCurrentSpeed)
+    const o = Number(e.outCurrentSpeed)
+    if (Number.isFinite(i)) inSpeed += i
+    if (Number.isFinite(o)) outSpeed += o
   }
   return { inSpeed, outSpeed }
 }

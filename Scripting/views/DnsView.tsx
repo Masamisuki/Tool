@@ -82,7 +82,7 @@ export function DnsView() {
       const r = await testDnsDelay(config, domain)
       setTestResult({ ok: true, text: `${domain} 解析延迟 ${Math.round((r?.delay ?? 0) * 1000)} ms` })
     } catch (e) {
-      setTestResult({ ok: false, text: `测试失败：${String(e)}` })
+      setTestResult({ ok: false, text: `测试失败：${surgeApiErrorMessage(e)}` })
     } finally {
       setTesting(false)
     }
@@ -96,7 +96,7 @@ export function DnsView() {
       setError(null)
       setFlushed(false)
     } catch (e) {
-      setError(String(e))
+      setError(surgeApiErrorMessage(e))
     }
   }
 
@@ -108,7 +108,7 @@ export function DnsView() {
       setFlushed(true)
       await load()
     } catch (e) {
-      setError(String(e))
+      setError(surgeApiErrorMessage(e))
     }
   }
 

@@ -12,7 +12,7 @@ import {
   useState,
   VStack,
 } from "scripting"
-import { evaluateScript, getScripts, runCronScript, type SurgeScript } from "../lib/surgeApi"
+import { evaluateScript, getScripts, runCronScript, surgeApiErrorMessage, type SurgeScript } from "../lib/surgeApi"
 import { useStoreSelector } from "../lib/store"
 import { EmptyState, IconBadge, LIST_STYLE, ListRow, Tag } from "../components/Kit"
 import { IS_GLASS, TONES, type Tone } from "../lib/ui"
@@ -60,7 +60,7 @@ export function ScriptsView() {
   useEffect(() => {
     getScripts(config)
       .then((r) => setScripts(r.scripts))
-      .catch((e) => setError(String(e)))
+      .catch((e) => setError(surgeApiErrorMessage(e)))
   }, [config])
 
   async function runCron(name: string) {
@@ -70,7 +70,7 @@ export function ScriptsView() {
       await runCronScript(config, name)
       setResults((m) => ({ ...m, [name]: "✓ 已触发执行" }))
     } catch (e) {
-      setResults((m) => ({ ...m, [name]: `✗ ${String(e)}` }))
+      setResults((m) => ({ ...m, [name]: `✗ ${surgeApiErrorMessage(e)}` }))
     } finally {
       setRunning(null)
     }

@@ -11,7 +11,7 @@ import {
   useState,
   VStack,
 } from "scripting"
-import { getRules } from "../lib/surgeApi"
+import { getRules, surgeApiErrorMessage } from "../lib/surgeApi"
 import { needsSetup, useStoreSelector } from "../lib/store"
 import { connectErrorText, type Tone } from "../lib/ui"
 import { BARE_ROW, EmptyState, LIST_STYLE, SearchField, Tag } from "../components/Kit"
@@ -81,7 +81,7 @@ export function RulesView() {
       setPolicies(r["available-policies"] ?? [])
       setError(null)
     } catch (e) {
-      setError(String(e))
+      setError(surgeApiErrorMessage(e))
     }
   }
 

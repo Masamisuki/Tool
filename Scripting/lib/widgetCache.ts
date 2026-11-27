@@ -352,8 +352,17 @@ export function carryGauges(next: WidgetSnapshot, prev: WidgetSnapshot | null): 
     dnsCache: keep(next.dnsCache, prev.dnsCache),
     bans: keep(next.bans, prev.bans),
   }
-  // 速率为空时也别把曲线抹成空数组，保留上一轮的点
-  if (out.down.length === 0 && prev.down.length > 0) {
+  // 曲线必须 down / up / curveAt 三者等长才自洽。任一为空或长度错位（例如上轮
+  // 只有 down 写入成功），都用上一轮的完整曲线整体回填，避免图表按索引取点时错位。
+  const curveOk =
+    out.down.length > 0 &&
+    out.down.length === out.up.length &&
+    out.down.length === out.curveAt.length
+  const prevOk =
+    prev.down.length > 0 &&
+    prev.down.length === prev.up.length &&
+    prev.down.length === prev.curveAt.length
+  if (!curveOk && prevOk) {
     out.down = prev.down
     out.up = prev.up
     out.curveAt = prev.curveAt

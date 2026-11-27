@@ -82,8 +82,11 @@ function WidgetView({ snapshot, settings }: { snapshot: WidgetSnapshot; settings
     )
   }
 
-  if (family.includes("small")) return <SmallView {...props} />
-  if (family.includes("large")) return <LargeView {...props} />
+  // 用精确匹配而非 includes("large")：后者会把 iOS 27+ 的
+  // systemExtraLargePortrait 一并吞进来，属于隐式误判。这里显式决定：
+  // 超大组件信息与系统大组件一致用 LargeView；未知 family 安全降级到 MediumView。
+  if (family === "systemsmall") return <SmallView {...props} />
+  if (family === "systemlarge" || family === "systemextralargeportrait") return <LargeView {...props} />
   return <MediumView {...props} />
 }
 

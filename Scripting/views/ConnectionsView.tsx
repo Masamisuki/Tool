@@ -14,7 +14,7 @@ import {
   useState,
   VStack,
 } from "scripting"
-import { getActiveRequests, getRecentRequests, killRequest, type SurgeRequest } from "../lib/surgeApi"
+import { getActiveRequests, getRecentRequests, killRequest, surgeApiErrorMessage, type SurgeRequest } from "../lib/surgeApi"
 import {
   extractIpAddress,
   formatBytes,
@@ -85,7 +85,7 @@ function RequestListView({ active }: { active: boolean }) {
       setRequests(r.requests.slice().reverse())
       setError(null)
     } catch (e) {
-      setError(String(e))
+      setError(surgeApiErrorMessage(e))
     }
   }
 
@@ -261,7 +261,7 @@ function RequestDetailView({
       setKillMsg("已终止该连接")
       onKilled?.()
     } catch (e) {
-      setKillMsg(`终止失败：${String(e)}`)
+      setKillMsg(`终止失败：${surgeApiErrorMessage(e)}`)
     }
   }
 

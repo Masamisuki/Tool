@@ -1,6 +1,6 @@
 // 活动 → 事件中心
 import { HStack, List, Section, Text, useState, VStack } from "scripting"
-import { getEvents, type SurgeEvent } from "../lib/surgeApi"
+import { getEvents, surgeApiErrorMessage, type SurgeEvent } from "../lib/surgeApi"
 import { formatEventTime } from "../lib/metrics"
 import { useStoreSelector } from "../lib/store"
 import { useTabAutoRefresh } from "../lib/liveCache"
@@ -31,7 +31,7 @@ export function EventsView() {
       setEvents(r.events.slice().reverse())
       setError(null)
     } catch (e) {
-      setError(String(e))
+      setError(surgeApiErrorMessage(e))
     }
   }
 

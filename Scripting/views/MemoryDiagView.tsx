@@ -17,7 +17,7 @@ import {
 } from "scripting"
 import { Card, IconBadge, PAGE_BG, SectionHeader, Tag, ValueText } from "../components/Kit"
 import { openActivity, savePrefs, useStoreSelector } from "../lib/store"
-import { reloadProfile } from "../lib/surgeApi"
+import { reloadProfile, surgeApiErrorMessage } from "../lib/surgeApi"
 import {
   analyzeMemoryTrend,
   downsample,
@@ -98,7 +98,7 @@ export function MemoryDiagView() {
       await reloadProfile(state.config)
       setActionMsg("配置已重新加载")
     } catch (e) {
-      setActionMsg(`重载失败：${String(e)}`)
+      setActionMsg(`重载失败：${surgeApiErrorMessage(e)}`)
     }
   }
 
