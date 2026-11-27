@@ -15,7 +15,7 @@
 set -uo pipefail
 
 CMD_NAME="emby-rp"
-VERSION="1.1.6"
+VERSION="1.1.7"
 
 CONF_DIR="/etc/emby-rp"
 SITES_DIR="$CONF_DIR/sites"
@@ -212,7 +212,10 @@ port_in_use() {
 install_caddy() {
 	if engine_installed caddy; then
 		ok "Caddy 已安装：$(caddy version 2>/dev/null | head -n1)"
-		[[ "$(state_get ENGINE_CADDY_PREEXISTING 0)" == "1" ]] || state_set ENGINE_CADDY_PREEXISTING 1
+		# 本工具装的引擎不要再标成「原先已存在」，否则卸载判定自相矛盾
+		if [[ "$(state_get ENGINE_CADDY_INSTALLED_BY_US 0)" != "1" ]]; then
+			[[ "$(state_get ENGINE_CADDY_PREEXISTING 0)" == "1" ]] || state_set ENGINE_CADDY_PREEXISTING 1
+		fi
 		return 0
 	fi
 	local mgr; mgr="$(detect_pkg_mgr)"
@@ -241,7 +244,10 @@ install_caddy() {
 install_nginx() {
 	if engine_installed nginx; then
 		ok "Nginx 已安装：$(nginx -v 2>&1)"
-		[[ "$(state_get ENGINE_NGINX_PREEXISTING 0)" == "1" ]] || state_set ENGINE_NGINX_PREEXISTING 1
+		# 本工具装的引擎不要再标成「原先已存在」，否则卸载判定自相矛盾
+		if [[ "$(state_get ENGINE_NGINX_INSTALLED_BY_US 0)" != "1" ]]; then
+			[[ "$(state_get ENGINE_NGINX_PREEXISTING 0)" == "1" ]] || state_set ENGINE_NGINX_PREEXISTING 1
+		fi
 		return 0
 	fi
 	pkg_install nginx || die "Nginx 安装失败。"
@@ -1540,15 +1546,29 @@ site_restore_overwrite() {
 # =============================================================================
 #  uninstall
 # =============================================================================
+# Caddy 自动 HTTPS 证书的数据目录候选（Caddy 不走 Let's Encrypt 目录，证书在这里）
+caddy_data_dirs() {
+	local u h
+	u="$(caddy_service_user 2>/dev/null)"; h="$(getent passwd "$u" 2>/dev/null | cut -d: -f6)"
+	[[ -n "$h" ]] || h="/var/lib/caddy"
+	printf '%s\n' "${XDG_DATA_HOME:-$h/.local/share}/caddy" "/var/lib/caddy/.local/share/caddy" \
+		"/root/.local/share/caddy" | awk '!seen[$0]++'
+}
+
 residue_audit() {
 	info "残留自检…"
 	local hits units
-	hits="$(find / -xdev \( -path /proc -o -path /sys -o -path /dev -o -path /run \) -prune -o \
+	# 不用 -xdev：跨挂载分区扫描（/var、/home 常单独挂载）。
+	# 排除虚拟文件系统与容器/包管理的大目录，避免误报和卡顿。
+	hits="$(find / \( -path /proc -o -path /sys -o -path /dev -o -path /run \
+		-o -path /var/lib/docker -o -path /var/lib/containerd -o -path /snap \
+		-o -path /usr/src -o -path /var/cache -o -path /.oldroot -o -path /ags \
+		-o -name overlay-upper \) -prune -o \
 		\( -iname '*emby-rp*' -o -iname '*emby_rp*' \) -print 2>/dev/null \
-		| grep -vE '^/(var/lib/dpkg|tmp/ep\.sh)' || true)"
+		| grep -vE '^/var/lib/dpkg' || true)"
 	units="$(systemctl list-unit-files 2>/dev/null | grep -i 'emby-rp' || true)"
 	if [[ -z "$hits" && -z "$units" ]]; then
-		ok "未发现残留。"
+		ok "未发现文件名/单元残留。"
 	else
 		if [[ -n "$hits" ]]; then
 			warn "磁盘上仍有以下文件："
@@ -1559,9 +1579,29 @@ residue_audit() {
 			printf '%s\n' "$units" | sed 's/^/    /'
 		fi
 	fi
+
+	# 按域名查 Caddy 自动证书（名字里没有 emby-rp，上面的扫描抓不到）
+	local d dir found=""
+	for d in "${DOMAINS_FOR_AUDIT[@]:-}"; do
+		[[ -n "$d" ]] || continue
+		while read -r dir; do
+			[[ -d "$dir/certificates" ]] || continue
+			local m; m="$(find "$dir/certificates" -mindepth 2 -maxdepth 2 -type d \
+				\( -name "$d" -o -name "*.$d" \) -print 2>/dev/null)"
+			[[ -n "$m" ]] && found+="${found:+$'\n'}    $m"
+		done < <(caddy_data_dirs)
+	done
+	if [[ -n "$found" ]]; then
+		warn "Caddy 自动证书目录仍存在（本工具域名）："
+		printf '%s\n' "$found"
+	fi
+
 	if [[ -d /etc/letsencrypt/renewal ]] && ls /etc/letsencrypt/renewal 2>/dev/null | grep -q .; then
 		info "/etc/letsencrypt/renewal 下仍有条目（可能属于其它站点）："
 		ls /etc/letsencrypt/renewal 2>/dev/null | sed 's/^/    /'
+	fi
+	if [[ -d /etc/letsencrypt/accounts && -n "$(ls -A /etc/letsencrypt/accounts 2>/dev/null)" ]]; then
+		info "/etc/letsencrypt/accounts 仍有账户数据（certbot 全局，删前请确认无其它站点依赖）"
 	fi
 	if [[ -d /var/log/caddy ]] && ls /var/log/caddy 2>/dev/null | grep -q 'emby-rp'; then
 		warn "/var/log/caddy 下仍有 emby-rp 日志"
@@ -1583,8 +1623,22 @@ residue_audit() {
 
 cmd_uninstall() {
 	need_root uninstall
-	local purge_cert=0 purge_engine=0 purge_pkgs=0
+	local purge_cert=0 purge_pkgs=0 deep=0 yes=0 all=0
 	local caddy_by_us nginx_by_us certbot_by_us caddy_repo
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+			-y|--yes) yes=1; shift ;;
+			--all)    all=1; shift ;;
+			-h|--help)
+				printf '用法：%s uninstall [-y] [--all]\n' "$CMD_NAME"
+				printf '  -y     跳过普通确认（删证书、删包仍需分别确认）\n'
+				printf '  --all  连同证书、本工具装的软件包及引擎数据目录一并清除\n'
+				return 0 ;;
+			*) die "uninstall 未知参数：$1" ;;
+		esac
+	done
+	if [[ $all -eq 1 ]]; then purge_cert=1; purge_pkgs=1; deep=1; yes=1; fi
+
 	caddy_by_us="$(state_get ENGINE_CADDY_INSTALLED_BY_US 0)"
 	nginx_by_us="$(state_get ENGINE_NGINX_INSTALLED_BY_US 0)"
 	certbot_by_us="$(state_get CERTBOT_INSTALLED_BY_US 0)"
@@ -1601,11 +1655,16 @@ cmd_uninstall() {
 		printf '%s\n' "$names" | sed 's/^/  - /'
 	fi
 	printf '将删除：%s、%s、%s、%s\n' "$CONF_DIR" "$ACME_WEBROOT" "$BIN_PATH" "各站点日志"
+	[[ $all -eq 1 ]] && printf '%s--all：连同证书、引擎包与引擎数据目录一并清除%s\n' "$C_Y" "$C_0"
 
-	confirm "确认卸载？" n || { info "已取消。"; return 0; }
-	confirm_explicit "同时删除 Let's Encrypt 证书？" n && purge_cert=1
-	if [[ "$caddy_by_us" == "1" || "$nginx_by_us" == "1" || "$certbot_by_us" == "1" ]]; then
-		confirm "同时卸载本工具装上的软件包（caddy/nginx/certbot）？" n && purge_pkgs=1
+	if [[ $yes -eq 0 ]]; then
+		confirm "确认卸载？" n || { info "已取消。"; return 0; }
+	fi
+	if [[ $all -eq 0 ]]; then
+		confirm_explicit "同时删除 Let's Encrypt / Caddy 证书？" n && purge_cert=1
+		if [[ "$caddy_by_us" == "1" || "$nginx_by_us" == "1" || "$certbot_by_us" == "1" ]]; then
+			confirm "同时卸载本工具装上的软件包（caddy/nginx/certbot）？" n && { purge_pkgs=1; deep=1; }
+		fi
 	fi
 
 	if [[ -d "$SITES_DIR" ]]; then
@@ -1614,6 +1673,7 @@ cmd_uninstall() {
 			[[ -n "$d" ]] && domains+=("$d")
 		done < <(sed -n 's/^SITE_DOMAIN=//p' "$SITES_DIR"/*.conf 2>/dev/null)
 	fi
+	DOMAINS_FOR_AUDIT=("${domains[@]:-}")
 
 	# 1) 站点配置与日志
 	if [[ -n "$names" ]]; then
@@ -1633,15 +1693,26 @@ cmd_uninstall() {
 		caddy_remove_block && info "Caddyfile 托管块已移除"
 	fi
 
-	# 3) 证书
-	if [[ $purge_cert -eq 1 && ${#domains[@]} -gt 0 ]]; then
+	# 3) 证书：Let's Encrypt（certbot）+ Caddy 自动证书
+	if [[ $purge_cert -eq 1 ]]; then
+		local dir m
 		for d in "${domains[@]}"; do
-			[[ -d "/etc/letsencrypt/live/$d" ]] || continue
-			if have certbot && certbot delete --cert-name "$d" --non-interactive >/dev/null 2>&1; then
-				ok "已删除证书：$d"
+			[[ -n "$d" ]] || continue
+			if [[ -d "/etc/letsencrypt/live/$d" ]] && have certbot \
+			   && certbot delete --cert-name "$d" --non-interactive >/dev/null 2>&1; then
+				ok "已删除 Let's Encrypt 证书：$d"
 			else
-				warn "证书删除失败：$d"
+				[[ -d "/etc/letsencrypt/live/$d" ]] && warn "证书删除失败：$d"
 			fi
+			# Caddy 自动证书在 data 目录，按域名精确删，不动其它站点
+			while read -r dir; do
+				[[ -d "$dir/certificates" ]] || continue
+				while read -r m; do
+					[[ -n "$m" ]] || continue
+					rm -rf "$m" && ok "已删除 Caddy 自动证书：$m"
+				done < <(find "$dir/certificates" -mindepth 2 -maxdepth 2 -type d \
+					\( -name "$d" -o -name "*.$d" \) -print 2>/dev/null)
+			done < <(caddy_data_dirs)
 		done
 	fi
 
@@ -1686,6 +1757,28 @@ cmd_uninstall() {
 		ok "已删除 Caddy 软件源与 GPG 密钥"
 	fi
 
+	# 8) 引擎数据目录深度清理（仅本工具装的引擎，避免误删用户数据）
+	if [[ $deep -eq 1 ]]; then
+		local dir
+		if [[ "$certbot_by_us" == "1" ]]; then
+			rm -rf /etc/letsencrypt/accounts /etc/letsencrypt/archive /etc/letsencrypt/live \
+				/etc/letsencrypt/renewal /var/log/letsencrypt
+			ok "已清理 certbot 账户 / 续期 / 日志目录"
+		fi
+		if [[ "$nginx_by_us" == "1" ]]; then
+			rm -rf /etc/nginx /var/log/nginx
+			ok "已清理 nginx 配置与日志目录"
+		fi
+		if [[ "$caddy_by_us" == "1" ]]; then
+			while read -r dir; do
+				[[ -d "$dir" ]] || continue
+				rm -rf "$dir" && ok "已清理 Caddy 数据目录：$dir"
+			done < <(caddy_data_dirs)
+			rm -rf /etc/caddy
+			ok "已清理 /etc/caddy"
+		fi
+	fi
+
 	hr
 	residue_audit
 	hr
@@ -1711,7 +1804,8 @@ ${CMD_NAME} ${VERSION} — Emby / Jellyfin 反向代理管理器
   logs       看日志（-f 跟踪）    $ ${CMD_NAME} logs [name] [-f]
   render     只打印渲染结果，不写文件
   remove     删除站点            $ ${CMD_NAME} remove <name>
-  uninstall  彻底卸载（含残留自检）
+  uninstall  彻底卸载（含残留自检）  $ ${CMD_NAME} uninstall [--all] [-y]
+                                 --all 连证书、引擎包、引擎数据目录一起清（最干净）
   menu       交互菜单（直接执行 ${CMD_NAME} / ${ALIAS_NAME} 无参数也是这个）
 
 add 选项：
@@ -1759,6 +1853,12 @@ split 模式下默认 keep（不剥前缀），需要把 Emby 的 Base URL 设�
   Emby:     设置 → 高级 → 主机(Base URL) = /emby
   Jellyfin: 控制台 → 网络 → Base URL   = /emby
 若后端是别人的、动不了 Base URL，请加 --strip（前缀会被剥离，官方 Web UI 会半残）。
+
+彻底卸载（推荐）：
+  sudo ${CMD_NAME} uninstall --all
+  除默认清除项外，还会删除 Let's Encrypt / Caddy 证书、本工具装上的
+  caddy/nginx/certbot 包及其数据目录（账户、续期、日志、证书）。
+  注意：只会删「本工具装上」的引擎与数据，机器上原有的引擎不受影响。
 
 环境变量：
   EMBY_RP_YES=1     所有确认自动为“是”（适合脚本化）
