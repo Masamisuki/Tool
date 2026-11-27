@@ -21,8 +21,8 @@ import {
   formatSpeedParts,
   ifaceDisplayName,
   isDirectPolicy,
-  policyTraffic,
   requestBytes,
+  requestTraffic,
 } from "../lib/metrics"
 import { DOWN_TONE, TONES, UI, UP_TONE } from "../lib/ui"
 import type { TrafficEntry } from "../lib/surgeApi"
@@ -81,8 +81,6 @@ export function TrafficView() {
   const [sortBy, setSortBy] = useState<SortKey>("current")
   // 秒级字段单独订阅，排序/聚合结果再 useMemo，避免一次 speeds 变动就重排全部条目
   const traffic = useStoreSelector((s) => s.traffic)
-  const samples = useStoreSelector((s) => s.samples)
-  const metricsAvailable = useStoreSelector((s) => s.metricsAvailable)
   const running = useStoreSelector((s) => s.running)
   const inSpeed = useStoreSelector((s) => s.speeds.inSpeed)
   const outSpeed = useStoreSelector((s) => s.speeds.outSpeed)
@@ -94,15 +92,18 @@ export function TrafficView() {
       ([, v]) => v.inCurrentSpeed + v.outCurrentSpeed > 0
     )
     const ranked = sortedEntries(traffic?.connector, "total")
-      .map(([name, v]) => ({ name, total: requestBytes(v) }))
+      .map(([name, v]) => {
+        const t = requestTraffic(v)
+        return { name, total: t.total, inBytes: t.inBytes, outBytes: t.outBytes }
+      })
       .filter((r) => r.total > 0)
       .slice(0, 10)
     const maxTotal = ranked.length > 0 ? ranked[0].total : 1
 
-    // 策略流量排行来自 /v1/metrics 的 policy counter：引擎启动以来累计，
-    // 不经过测速流量污染，作为「节点流量排行」的权威补充。
-    const policyRows = policyTraffic(samples).slice(0, 10)
-    const maxPolicyTotal = policyRows.length > 0 ? policyRows[0].total : 1
+    // 只有确实存在测速流量时才标注「已剔除测速」，避免旧版 Surge 下文案失真
+    const hasTestBytes = Boolean(
+      traffic && Object.values(traffic.connector ?? {}).some((v) => (v.testBytes ?? 0) > 0)
+    )
 
     let directBytes = 0
     let proxyBytes = 0
@@ -123,8 +124,7 @@ export function TrafficView() {
       activeNodes,
       ranked,
       maxTotal,
-      policyRows,
-      maxPolicyTotal,
+      hasTestBytes,
       directBytes,
       proxyBytes,
       splitTotal,
@@ -132,15 +132,14 @@ export function TrafficView() {
       directPct,
       proxyPct,
     }
-  }, [traffic, sortBy, samples])
+  }, [traffic, sortBy])
   const {
     interfaces,
     connectors,
     activeNodes,
     ranked,
     maxTotal,
-    policyRows,
-    maxPolicyTotal,
+    hasTestBytes,
     directBytes,
     proxyBytes,
     splitTotal,
@@ -184,7 +183,7 @@ export function TrafficView() {
               <SplitLegend color={TONES.green.fg} label="直连" bytes={directBytes} pct={directPct} />
               <SplitLegend color={TONES.accent.fg} label="代理" bytes={proxyBytes} pct={proxyPct} />
             </HStack>
-            {traffic && Object.values(traffic.connector ?? {}).some((v) => (v.testBytes ?? 0) > 0) ? (
+            {hasTestBytes ? (
               <Text font={11} foregroundStyle="tertiaryLabel">已剔除代理测速流量</Text>
             ) : null}
           </Card>
@@ -241,37 +240,20 @@ export function TrafficView() {
         </Card>
 
         <Card spacing={14}>
-          <SectionHeader title="节点流量排行" caption="本次引擎运行累计 · 已剔除测速" />
+          <SectionHeader
+            title="节点流量排行"
+            caption={hasTestBytes ? "本次引擎运行累计 · 已剔除测速" : "本次引擎运行累计"}
+          />
           {ranked.length === 0 ? (
             <EmptyState icon="chart.bar" title="暂无流量数据" />
           ) : (
             ranked.map((r, i) => (
-              <GradientBar
-                key={r.name}
-                rank={i + 1}
-                label={r.name}
-                valueText={formatBytes(r.total)}
-                ratio={r.total / maxTotal}
-                colors={BAR_COLORS[i % BAR_COLORS.length]}
-              />
-            ))
-          )}
-        </Card>
-
-        <Card spacing={14}>
-          <SectionHeader title="策略流量排行" caption="按策略累计 · /v1/metrics" />
-          {metricsAvailable === false ? (
-            <EmptyState icon="gauge" title="当前 Surge 不支持 /v1/metrics" message="需 iOS 5.22+ / Mac 6.9+" />
-          ) : policyRows.length === 0 ? (
-            <EmptyState icon="chart.bar" title="暂无策略流量数据" message="有流量经过节点后显示" />
-          ) : (
-            policyRows.map((r, i) => (
               <VStack key={r.name} alignment="leading" spacing={4}>
                 <GradientBar
                   rank={i + 1}
                   label={r.name}
                   valueText={formatBytes(r.total)}
-                  ratio={r.total / maxPolicyTotal}
+                  ratio={r.total / maxTotal}
                   colors={BAR_COLORS[i % BAR_COLORS.length]}
                 />
                 <Text font={11} foregroundStyle="secondaryLabel">

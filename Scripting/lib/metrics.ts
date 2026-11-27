@@ -62,52 +62,42 @@ export function seriesByLabel(
     .map((s) => ({ label: s.labels[label], value: s.value }))
 }
 
-export type PolicyTraffic = {
-  name: string
+export type RequestTraffic = {
   inBytes: number
   outBytes: number
   total: number
 }
 
 /**
- * 从 /v1/metrics 的 surge_policy_{in,out}_bytes_total{policy} 聚合每个策略的
- * 本次引擎运行累计流量。两个 counter 按 policy 名配对；只保留有限且非负的值，
- * 单个方向缺失按 0 计。counter 在引擎重启后归零，取当前值即为新一轮累计，无需差分。
+ * 真实请求流量 = 累计 in + out - 代理测速流量 testBytes。
+ * testBytes 是上下行合计，无法区分方向，这里按原始上下行占比分摊到两侧，
+ * 保证 inBytes + outBytes === total。旧版 Surge 无该字段时按 0 处理。
  */
-export function policyTraffic(samples: MetricSample[] | null): PolicyTraffic[] {
-  if (!samples) return []
-  const rows = new Map<string, PolicyTraffic>()
-  const upsert = (name: string, dir: "in" | "out", value: number) => {
-    if (!name || !Number.isFinite(value) || value < 0) return
-    let row = rows.get(name)
-    if (!row) {
-      row = { name, inBytes: 0, outBytes: 0, total: 0 }
-      rows.set(name, row)
-    }
-    if (dir === "in") row.inBytes = value
-    else row.outBytes = value
-    row.total = row.inBytes + row.outBytes
+export function requestTraffic(e: {
+  in?: number
+  out?: number
+  testBytes?: number
+}): RequestTraffic {
+  const inBytes = Number.isFinite(e.in) ? e.in ?? 0 : 0
+  const outBytes = Number.isFinite(e.out) ? e.out ?? 0 : 0
+  const rawTotal = inBytes + outBytes
+  const test = Number.isFinite(e.testBytes) ? e.testBytes ?? 0 : 0
+  const total = Math.max(0, rawTotal - test)
+  const scale = rawTotal > 0 ? total / rawTotal : 0
+  return {
+    inBytes: inBytes * scale,
+    outBytes: outBytes * scale,
+    total,
   }
-  for (const s of samples) {
-    if (s.name === "surge_policy_in_bytes_total") upsert(s.labels.policy, "in", s.value)
-    else if (s.name === "surge_policy_out_bytes_total") upsert(s.labels.policy, "out", s.value)
-  }
-  return [...rows.values()].sort((a, b) => b.total - a.total)
 }
 
-/**
- * 真实请求流量 = 累计 in + out - 代理测速流量 testBytes。
- * 旧版 Surge 没有 testBytes，按 0 处理；结果下限钳到 0，避免脏数据出现负数。
- */
+/** 只要真实请求总量时的便捷入口，口径与 requestTraffic 完全一致 */
 export function requestBytes(e: {
   in?: number
   out?: number
   testBytes?: number
 }): number {
-  const inBytes = Number.isFinite(e.in) ? e.in ?? 0 : 0
-  const outBytes = Number.isFinite(e.out) ? e.out ?? 0 : 0
-  const test = Number.isFinite(e.testBytes) ? e.testBytes ?? 0 : 0
-  return Math.max(0, inBytes + outBytes - test)
+  return requestTraffic(e).total
 }
 
 export function buildInfo(
