@@ -22,6 +22,7 @@ import {
   getPolicyGroupSelection,
   getPolicyGroups,
   getGroupTestResults,
+  getPolicyGroupIcons,
   getProxyGroupOrder,
   orderPolicyGroupNames,
   selectPolicyGroup,
@@ -35,7 +36,7 @@ import {
 import { formatDelay, pickBenchmark, resolvePolicyLatency, testResultScore, type LatencyStatus } from "../lib/metrics"
 import { useStoreSelector } from "../lib/store"
 import { useTabAutoRefresh } from "../lib/liveCache"
-import { connectErrorText, IS_GLASS, TONES } from "../lib/ui"
+import { connectErrorText, IS_GLASS, roundedShape, TONES } from "../lib/ui"
 import { BARE_ROW, Card, EmptyState, IconBadge, LIST_STYLE, SearchField, Tag, latencyTone } from "../components/Kit"
 import { RoutingChips } from "../components/SegmentChips"
 
@@ -74,10 +75,29 @@ function DelayPill({ text, fg, bg }: { text: string; fg: any; bg: any }) {
   )
 }
 
+/** 策略组图标：优先用 Surge 配置里 icon-url 指定的网络图，失败回退到通用方块 */
+function GroupIcon({ url, size = 34 }: { url?: string; size?: number }) {
+  const [failed, setFailed] = useState(false)
+  if (url && !failed) {
+    return (
+      <Image
+        imageUrl={url}
+        resizable={true}
+        scaleToFit={true}
+        frame={{ width: size, height: size }}
+        clipShape={roundedShape(Math.round(size * 0.22))}
+        onError={() => setFailed(true)}
+      />
+    )
+  }
+  return <IconBadge icon="square.stack.3d.up.fill" tone="accent" size={size} />
+}
+
 export function PoliciesView() {
   const config = useStoreSelector((s) => s.config)
   const [groups, setGroups] = useState<Record<string, PolicyOption[]> | null>(null)
   const [groupOrder, setGroupOrder] = useState<string[]>([])
+  const [groupIcons, setGroupIcons] = useState<Record<string, string>>({})
   const [selections, setSelections] = useState<Record<string, string>>({})
   const [benchmarks, setBenchmarks] = useState<Record<string, PolicyBenchmarkResult> | null>(null)
   const [testResults, setTestResults] = useState<Record<string, unknown> | null>(null)
@@ -99,11 +119,16 @@ export function PoliciesView() {
       setTestResults(tr ?? {})
       const apiNames = Object.keys(g)
       try {
-        // 组顺序解析自整份配置，已做内存缓存；下拉刷新时强制重取
-        const order = await getProxyGroupOrder(config, force)
+        // 组顺序与 icon-url 都解析自整份配置，共用内存缓存；下拉刷新时强制重取
+        const [order, icons] = await Promise.all([
+          getProxyGroupOrder(config, force),
+          getPolicyGroupIcons(config, force),
+        ])
         setGroupOrder(orderPolicyGroupNames(apiNames, order))
+        setGroupIcons(icons)
       } catch {
         setGroupOrder(apiNames)
+        setGroupIcons({})
       }
       // 逐组查询当前选中项（url-test 等组可能不支持，忽略失败）
       const results = await Promise.all(
@@ -193,7 +218,7 @@ export function PoliciesView() {
                 }
               >
                 <HStack spacing={12}>
-                  <IconBadge icon="square.stack.3d.up.fill" tone="accent" size={34} />
+                  <GroupIcon url={groupIcons[name]} />
                   <VStack alignment="leading" spacing={3} frame={{ maxWidth: "infinity", alignment: "leading" }}>
                     <Text font={16} fontWeight="semibold" lineLimit={1} minScaleFactor={0.8}>{name}</Text>
                     <HStack spacing={4}>

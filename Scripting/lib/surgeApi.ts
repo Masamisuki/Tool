@@ -578,9 +578,13 @@ export function formatProfileValue(value: string): string {
   return parts.join(",\n")
 }
 
-// [Proxy Group] 顺序要拉整份配置才能解析，代价高且只在配置重载时才会变。
+// [Proxy Group] 顺序和图标都要拉整份配置才能解析，代价高且只在配置重载时才会变。
 // 缓存到内存：面板内重载配置会失效；Surge 侧改配置后可下拉刷新强制重取。
-let proxyGroupOrderCache: { key: string; order: string[] } | null = null
+let proxyGroupOrderCache: {
+  key: string
+  order: string[]
+  icons: Record<string, string>
+} | null = null
 
 function configCacheKey(c: SurgeConfig): string {
   return `${c.protocol}://${c.host.trim()}:${c.port.trim()}`
@@ -590,14 +594,28 @@ export function invalidateProfileCache() {
   proxyGroupOrderCache = null
 }
 
-export async function getProxyGroupOrder(c: SurgeConfig, force = false): Promise<string[]> {
+/** 一次拉取整份配置，同时解析组顺序与 icon-url，避免重复请求 */
+async function loadProxyGroupMeta(c: SurgeConfig, force: boolean) {
   const key = configCacheKey(c)
-  if (!force && proxyGroupOrderCache?.key === key) return proxyGroupOrderCache.order
+  if (!force && proxyGroupOrderCache?.key === key) return proxyGroupOrderCache
   const raw = await getCurrentProfile(c)
   const profile = typeof raw === "string" ? raw : (raw.profile ?? "")
-  const order = parseProxyGroupOrder(profile)
-  proxyGroupOrderCache = { key, order }
-  return order
+  const meta = {
+    key,
+    order: parseProxyGroupOrder(profile),
+    icons: parsePolicyGroupIcons(profile),
+  }
+  proxyGroupOrderCache = meta
+  return meta
+}
+
+export async function getProxyGroupOrder(c: SurgeConfig, force = false): Promise<string[]> {
+  return (await loadProxyGroupMeta(c, force)).order
+}
+
+/** 策略组的 icon-url（Surge 配置里 icon-url= 指定的网络图标），键为组名 */
+export async function getPolicyGroupIcons(c: SurgeConfig, force = false): Promise<Record<string, string>> {
+  return (await loadProxyGroupMeta(c, force)).icons
 }
 
 /** 从配置文本解析 [Proxy Group] 出现顺序，对齐 Surge App 列表 */
@@ -616,6 +634,38 @@ export function parseProxyGroupOrder(profile: string): string[] {
     names.push(line.slice(0, eq).trim())
   }
   return names
+}
+
+/**
+ * 从 [Proxy Group] 段解析每个策略组的 icon-url。
+ * 行格式：Name = type, member1, ..., icon-url=https://...（URL 可能带 = 或被双引号包裹）。
+ * 组名与 icon-url 均去掉包裹引号，与 /v1/policy_groups 返回的组名对齐。
+ */
+export function parsePolicyGroupIcons(profile: string): Record<string, string> {
+  const icons: Record<string, string> = {}
+  let inGroup = false
+  for (const raw of profile.split(/\r?\n/)) {
+    const line = raw.trim()
+    if (/^\[.+\]$/.test(line)) {
+      inGroup = /^\[Proxy Group\]$/i.test(line)
+      continue
+    }
+    if (!inGroup || !line || line.startsWith("#") || line.startsWith(";") || line.startsWith("//")) continue
+    const eq = line.indexOf("=")
+    if (eq <= 0) continue
+    const unquote = (s: string) => {
+      const t = s.trim()
+      return t.length >= 2 && t.startsWith('"') && t.endsWith('"') ? t.slice(1, -1) : t
+    }
+    const name = unquote(line.slice(0, eq))
+    const rest = line.slice(eq + 1)
+    // 逗号分隔的参数里找 icon-url=，取到下一个逗号或行尾（URL 里的 = 保留）
+    const m = rest.match(/(?:^|,)\s*icon-url\s*=\s*([^,]+)/i)
+    if (!name || !m) continue
+    const url = unquote(m[1])
+    if (url) icons[name] = url
+  }
+  return icons
 }
 
 export function orderPolicyGroupNames(names: string[], profileOrder: string[]): string[] {
