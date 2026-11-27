@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.26"
+VERSION="3.27"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -1367,7 +1367,10 @@ act_aria2() {
         # 直接后台启动，不包子 shell：( ... & ) 会留一个 bash 父进程攥着终端不退出
         setsid aria2c --dir=/opt/downloads --seed-time=0 --bt-tracker="$ARIA2_TRACKERS" "$url" >"$log" 2>&1 < /dev/null &
         sleep 2
-        if pgrep -a aria2c 2>/dev/null | awk -v u="$url" '{for(i=1;i<=NF;i++) if($i==u) f=1} END{exit f?0:1}'; then
+        # 小文件直链可能在 2 秒内下完退出，单看进程会误报「启动失败」。
+        # 进程还在 = 下载中；进程已退但日志有 Download complete = 秒下完（也是成功）。
+        if pgrep -a aria2c 2>/dev/null | awk -v u="$url" '{for(i=1;i<=NF;i++) if($i==u) f=1} END{exit f?0:1}' \
+           || grep -qiE 'Download (complete|complete:)|下载完成' "$log" 2>/dev/null; then
           ok "已开始下载，日志：$log"
           dim "  选 3 可以查看进度；退出菜单、断开 SSH 都不会停"
         else
@@ -1448,7 +1451,8 @@ act_aria2() {
           fi
           [ -n "$myip" ] || myip=$(hostname -I 2>/dev/null | awk '{print $1}')
           ok "网页下载服务运行中：http://${myip:-服务器IP}:$srvport"
-          dim "  无密码，任何人打开链接都能下载，用完记得关"
+          warn "  注意：此服务无密码、明文传输，任何能访问该端口的人都能列出并下载 /opt/downloads 全部文件"
+          warn "  建议仅在受信任网络使用，或配合防火墙限制来源 IP；用完立即关闭"
           if confirm "是否关闭它？"; then
             # 只关本工具启动的那个（端口 + /opt/downloads 目录都对上才杀），不碰别的 http.server
             pkill -f "python3 -m http\.server $srvport --directory /opt/downloads" 2>/dev/null || true
@@ -1479,7 +1483,8 @@ act_aria2() {
           fi
           [ -n "$myip" ] || myip=$(hostname -I 2>/dev/null | awk '{print $1}')
           ok "已开启：http://${myip:-服务器IP}:$port"
-          dim "  无密码，任何人打开链接都能下载，用完记得回来选 5 关闭"
+          warn "  注意：此服务无密码、明文传输，任何能访问该端口的人都能列出并下载 /opt/downloads 全部文件"
+          warn "  建议仅在受信任网络使用，或配合防火墙限制来源 IP；用完回来选 5 关闭"
         else
           err "启动失败，看日志：/tmp/http-$port.log"
         fi
