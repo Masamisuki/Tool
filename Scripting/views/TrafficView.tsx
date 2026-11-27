@@ -15,7 +15,15 @@ import { GradientBar } from "../components/GradientBar"
 import { Card, EmptyState, IconBadge, MetricTile, PAGE_BG, SectionHeader } from "../components/Kit"
 import { ActivityChips } from "../components/SegmentChips"
 import { refreshNow, useStoreSelector } from "../lib/store"
-import { formatBytes, formatSpeed, formatSpeedParts, ifaceDisplayName, isDirectPolicy } from "../lib/metrics"
+import {
+  formatBytes,
+  formatSpeed,
+  formatSpeedParts,
+  ifaceDisplayName,
+  isDirectPolicy,
+  policyTraffic,
+  requestBytes,
+} from "../lib/metrics"
 import { DOWN_TONE, TONES, UI, UP_TONE } from "../lib/ui"
 import type { TrafficEntry } from "../lib/surgeApi"
 
@@ -40,7 +48,7 @@ function sortedEntries(
         ? e.inCurrentSpeed + e.outCurrentSpeed
         : by === "peak"
           ? e.inMaxSpeed + e.outMaxSpeed
-          : e.in + e.out
+          : requestBytes(e)
     return score(b[1]) - score(a[1])
   })
 }
@@ -73,6 +81,8 @@ export function TrafficView() {
   const [sortBy, setSortBy] = useState<SortKey>("current")
   // 秒级字段单独订阅，排序/聚合结果再 useMemo，避免一次 speeds 变动就重排全部条目
   const traffic = useStoreSelector((s) => s.traffic)
+  const samples = useStoreSelector((s) => s.samples)
+  const metricsAvailable = useStoreSelector((s) => s.metricsAvailable)
   const running = useStoreSelector((s) => s.running)
   const inSpeed = useStoreSelector((s) => s.speeds.inSpeed)
   const outSpeed = useStoreSelector((s) => s.speeds.outSpeed)
@@ -84,15 +94,21 @@ export function TrafficView() {
       ([, v]) => v.inCurrentSpeed + v.outCurrentSpeed > 0
     )
     const ranked = sortedEntries(traffic?.connector, "total")
-      .map(([name, v]) => ({ name, total: v.in + v.out }))
+      .map(([name, v]) => ({ name, total: requestBytes(v) }))
       .filter((r) => r.total > 0)
       .slice(0, 10)
     const maxTotal = ranked.length > 0 ? ranked[0].total : 1
 
+    // 策略流量排行来自 /v1/metrics 的 policy counter：引擎启动以来累计，
+    // 不经过测速流量污染，作为「节点流量排行」的权威补充。
+    const policyRows = policyTraffic(samples).slice(0, 10)
+    const maxPolicyTotal = policyRows.length > 0 ? policyRows[0].total : 1
+
     let directBytes = 0
     let proxyBytes = 0
     for (const [name, v] of connectors) {
-      const total = v.in + v.out
+      // 剔除代理测速流量，只统计真实请求产生的流量
+      const total = requestBytes(v)
       if (isDirectPolicy(name)) directBytes += total
       else proxyBytes += total
     }
@@ -107,6 +123,8 @@ export function TrafficView() {
       activeNodes,
       ranked,
       maxTotal,
+      policyRows,
+      maxPolicyTotal,
       directBytes,
       proxyBytes,
       splitTotal,
@@ -114,13 +132,15 @@ export function TrafficView() {
       directPct,
       proxyPct,
     }
-  }, [traffic, sortBy])
+  }, [traffic, sortBy, samples])
   const {
     interfaces,
     connectors,
     activeNodes,
     ranked,
     maxTotal,
+    policyRows,
+    maxPolicyTotal,
     directBytes,
     proxyBytes,
     splitTotal,
@@ -164,6 +184,9 @@ export function TrafficView() {
               <SplitLegend color={TONES.green.fg} label="直连" bytes={directBytes} pct={directPct} />
               <SplitLegend color={TONES.accent.fg} label="代理" bytes={proxyBytes} pct={proxyPct} />
             </HStack>
+            {traffic && Object.values(traffic.connector ?? {}).some((v) => (v.testBytes ?? 0) > 0) ? (
+              <Text font={11} foregroundStyle="tertiaryLabel">已剔除代理测速流量</Text>
+            ) : null}
           </Card>
         ) : null}
 
@@ -218,7 +241,7 @@ export function TrafficView() {
         </Card>
 
         <Card spacing={14}>
-          <SectionHeader title="节点流量排行" caption="本次引擎运行累计" />
+          <SectionHeader title="节点流量排行" caption="本次引擎运行累计 · 已剔除测速" />
           {ranked.length === 0 ? (
             <EmptyState icon="chart.bar" title="暂无流量数据" />
           ) : (
@@ -231,6 +254,30 @@ export function TrafficView() {
                 ratio={r.total / maxTotal}
                 colors={BAR_COLORS[i % BAR_COLORS.length]}
               />
+            ))
+          )}
+        </Card>
+
+        <Card spacing={14}>
+          <SectionHeader title="策略流量排行" caption="按策略累计 · /v1/metrics" />
+          {metricsAvailable === false ? (
+            <EmptyState icon="gauge" title="当前 Surge 不支持 /v1/metrics" message="需 iOS 5.22+ / Mac 6.9+" />
+          ) : policyRows.length === 0 ? (
+            <EmptyState icon="chart.bar" title="暂无策略流量数据" message="有流量经过节点后显示" />
+          ) : (
+            policyRows.map((r, i) => (
+              <VStack key={r.name} alignment="leading" spacing={4}>
+                <GradientBar
+                  rank={i + 1}
+                  label={r.name}
+                  valueText={formatBytes(r.total)}
+                  ratio={r.total / maxPolicyTotal}
+                  colors={BAR_COLORS[i % BAR_COLORS.length]}
+                />
+                <Text font={11} foregroundStyle="secondaryLabel">
+                  {`↓ ${formatBytes(r.inBytes)}  ·  ↑ ${formatBytes(r.outBytes)}`}
+                </Text>
+              </VStack>
             ))
           )}
         </Card>

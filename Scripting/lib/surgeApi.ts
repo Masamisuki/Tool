@@ -467,6 +467,8 @@ export type TrafficEntry = {
   outCurrentSpeed: number
   inMaxSpeed: number
   outMaxSpeed: number
+  /** 代理测速产生的流量（iOS 6.0+/Mac 6.11+），统计真实请求流量时应从 in/out 中扣除 */
+  testBytes?: number
   lineHash?: string
 }
 
