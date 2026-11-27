@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.25"
+VERSION="3.26"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -36,7 +36,7 @@ WARPGO_URL="https://gitlab.com/fscarmen/warp/-/raw/main/warp-go.sh"
 DOCKER_GET_URL="https://get.docker.com"
 
 # emby-rp 期望版本（Emby-rp 发新版时同步更新；act_embyproxy 用它做最低版本校验）
-EMBY_RP_VERSION="1.1.6"
+EMBY_RP_VERSION="1.1.7"
 
 # 自身在线地址（自安装/自更新时按顺序尝试，第一个成功即止）
 # 只保留官方源和 jsDelivr：第三方加速镜像不受我们控制，内容被换也看不出来，
@@ -483,7 +483,7 @@ act_bbrv3() {
   info "后续："
   dim "  ① 装了新内核 → 重启生效: reboot"
   dim "  ② 重启后验证:        uname -r | grep joeyblog"
-  dim "  ③ 再跑 tcpfit 调参数: qc → 6"
+  dim "  ③ 再跑 tcpfit 调参数: qc → 3"
   dim "  ④ 卸载:              重跑本项 → 上游菜单选 9"
 }
 
@@ -590,7 +590,9 @@ act_embyproxy() {
   dim "  emby list            列出站点"
   dim "  emby check <站点名>  连通性 / 证书自检"
   dim "  emby logs <站点名> -f 跟踪访问日志"
-  dim "  emby uninstall       彻底卸载（含残留自检）"
+  dim "  emby uninstall       卸载（逐步确认）"
+  dim "  emby uninstall --all 一键彻底卸载（证书/包/数据目录全清，无残留）"
+  dim "  也可进菜单选 8 = 彻底卸载（等同 --all）"
   echo
   dim "  前后端分离 + 推流域写法的例子："
   dim "  emby add -d api.你的域名 -e nginx -u https://服务商API域 \\"
