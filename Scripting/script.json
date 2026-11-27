@@ -9,7 +9,7 @@
   "contributors" : [
 
   ],
-  "version" : "3.1.9",
+  "version" : "3.2.0",
   "entry" : "index.tsx",
   "remoteResource" : {
     "url" : "https:\/\/github.com\/Masamisuki\/Tool\/tree\/main\/Scripting",
@@ -22,10 +22,10 @@
     "email" : "still.bag7241@fastmail.com",
     "name" : "Daniel"
   },
-  "description" : "Surge monitoring panel 3.1: dashboard, routing, activity and settings tabs with secure multi-instance switching, external resource management and GeoIP lookup via Surge HTTP API.",
+  "description" : "Surge monitoring panel 3.2: dashboard, routing, activity and settings tabs with secure multi-instance switching, external resource management, GeoIP lookup and per-policy traffic with test-download filtering via Surge HTTP API.",
   "icon" : "gauge.with.needle.fill",
   "localizedDescriptions" : {
-    "zh" : "Surge 监控面板 3.1：仪表盘、分流、活动、设置四个标签，安全多实例切换，外部资源管理与 IP 归属查询。"
+    "zh" : "Surge 监控面板 3.2：仪表盘、分流、活动、设置四个标签，安全多实例切换，外部资源管理、IP 归属查询与按策略流量统计（含测速流量剔除）。"
   },
   "localizedNames" : {
     "zh" : "Surge 面板"
