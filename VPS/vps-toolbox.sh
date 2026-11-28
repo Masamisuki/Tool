@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.29"
+VERSION="3.30"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -2104,7 +2104,7 @@ banner() {
     printf '  %s✔%s %s 命令已安装，任何地方输入 %s%s%s 即可打开本菜单\n' \
       "$GREEN" "$NC" "$CMD_NAME" "$BOLD" "$CMD_NAME" "$NC"
   else
-    printf '  %s提示：选 19 安装 %s%s%s 命令，以后直接敲 %s%s%s 进菜单%s\n' \
+    printf '  %s提示：选 18 安装 %s%s%s 命令，以后直接敲 %s%s%s 进菜单%s\n' \
       "$DIM" "$BOLD" "$CMD_NAME" "$NC" "$BOLD" "$CMD_NAME" "$NC" "$NC"
   fi
   echo
@@ -2114,22 +2114,22 @@ menu() {
   printf '  %s%2s)%s  一键基础初始化\n' "$CYAN$BOLD" "1" "$NC"
   printf '  %s%2s)%s  BBR v3 优化脚本\n' "$CYAN$BOLD" "2" "$NC"
   printf '  %s%2s)%s  TCP 调优\n' "$CYAN$BOLD" "3" "$NC"
-  printf '  %s%2s)%s  BBRv3 内核\n' "$CYAN$BOLD" "5" "$NC"
-  printf '  %s%2s)%s  SSH 安全配置脚本\n' "$CYAN$BOLD" "6" "$NC"
-  printf '  %s%2s)%s  WARP (warp-go)\n' "$CYAN$BOLD" "7" "$NC"
-  printf '  %s%2s)%s  IPv6 管理\n' "$CYAN$BOLD" "8" "$NC"
-  printf '  %s%2s)%s  Docker 安装\n' "$CYAN$BOLD" "9" "$NC"
-  printf '  %s%2s)%s  Emby 反代\n' "$CYAN$BOLD" "10" "$NC"
-  printf '  %s%2s)%s  Flyx 面板\n' "$CYAN$BOLD" "11" "$NC"
-  printf '  %s%2s)%s  妙妙屋X 安装\n' "$CYAN$BOLD" "12" "$NC"
-  printf '  %s%2s)%s  Komari Lite\n' "$CYAN$BOLD" "13" "$NC"
-  printf '  %s%2s)%s  NodeQuality\n' "$CYAN$BOLD" "14" "$NC"
-  printf '  %s%2s)%s  TcpQuality\n' "$CYAN$BOLD" "15" "$NC"
-  printf '  %s%2s)%s  iperf3 服务端\n' "$CYAN$BOLD" "16" "$NC"
-  printf '  %s%2s)%s  aria2 下载工具\n' "$CYAN$BOLD" "17" "$NC"
-  printf '  %s%2s)%s  查看系统状态汇总\n' "$CYAN$BOLD" "18" "$NC"
-  printf '  %s%2s)%s  安装/卸载 qc 快捷命令\n' "$CYAN$BOLD" "19" "$NC"
-  printf '  %s%2s)%s  %s重装系统 (DD)%s\n' "$CYAN$BOLD" "20" "$NC" "$RED" "$NC"
+  printf '  %s%2s)%s  BBRv3 内核\n' "$CYAN$BOLD" "4" "$NC"
+  printf '  %s%2s)%s  SSH 安全配置脚本\n' "$CYAN$BOLD" "5" "$NC"
+  printf '  %s%2s)%s  WARP (warp-go)\n' "$CYAN$BOLD" "6" "$NC"
+  printf '  %s%2s)%s  IPv6 管理\n' "$CYAN$BOLD" "7" "$NC"
+  printf '  %s%2s)%s  Docker 安装\n' "$CYAN$BOLD" "8" "$NC"
+  printf '  %s%2s)%s  Emby 反代\n' "$CYAN$BOLD" "9" "$NC"
+  printf '  %s%2s)%s  Flyx 面板\n' "$CYAN$BOLD" "10" "$NC"
+  printf '  %s%2s)%s  妙妙屋X 安装\n' "$CYAN$BOLD" "11" "$NC"
+  printf '  %s%2s)%s  Komari Lite\n' "$CYAN$BOLD" "12" "$NC"
+  printf '  %s%2s)%s  NodeQuality\n' "$CYAN$BOLD" "13" "$NC"
+  printf '  %s%2s)%s  TcpQuality\n' "$CYAN$BOLD" "14" "$NC"
+  printf '  %s%2s)%s  iperf3 服务端\n' "$CYAN$BOLD" "15" "$NC"
+  printf '  %s%2s)%s  aria2 下载工具\n' "$CYAN$BOLD" "16" "$NC"
+  printf '  %s%2s)%s  查看系统状态汇总\n' "$CYAN$BOLD" "17" "$NC"
+  printf '  %s%2s)%s  安装/卸载 qc 快捷命令\n' "$CYAN$BOLD" "18" "$NC"
+  printf '  %s%2s)%s  %s重装系统 (DD)%s\n' "$CYAN$BOLD" "19" "$NC" "$RED" "$NC"
   printf '  %s%2s)%s  %s退出%s\n' "$CYAN$BOLD" "0" "$NC" "$DIM" "$NC"
   hr
 }
@@ -2146,23 +2146,23 @@ main() {
       1)  act_bootstrap ;;
       2)  act_net_tune ;;
       3)  act_tcpfit ;;
-      4)  warn "第 4 项（加 swap）已移除"; pause ;;
-      5)  act_bbrv3 ;;
-      6)  act_keysh ;;
-      7)  act_warpgo ;;
-      8)  act_ipv6 ;;
-      9)  act_docker ;;
-      10) act_embyproxy ;;
-      11) act_flyx ;;
-      12) act_miaomiaowux ;;
-      13) act_lite ;;
-      14) act_nodequality ;;
-      15) act_tcpquality ;;
-      16) act_iperf3 ;;
-      17) act_aria2 ;;
-      18) act_status ;;
-      19) act_qc_menu ;;
-      20) act_reinstall ;;
+      4)  act_bbrv3 ;;
+      5)  act_keysh ;;
+      6)  act_warpgo ;;
+      7)  act_ipv6 ;;
+      8)  act_docker ;;
+      9) act_embyproxy ;;
+      10) act_flyx ;;
+      11) act_miaomiaowux ;;
+      12) act_lite ;;
+      13) act_nodequality ;;
+      14) act_tcpquality ;;
+      15) act_iperf3 ;;
+      16) act_aria2 ;;
+      17) act_status ;;
+      18) act_qc_menu ;;
+      19) act_reinstall ;;
+
       0|q|Q|quit|exit) printf '\n  %s再见%s\n\n' "$CYAN" "$NC"; exit 0 ;;
       "") continue ;;
       *)  err "无效选项：$choice" ;;
