@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.28"
+VERSION="3.29"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -1722,159 +1722,6 @@ act_miaomiaowux() {
     bash
 }
 
-# 加 swap：小内存机跑代理时 TCP 缓冲区一涨就可能 OOM 杀进程，swap 是缓冲。
-# 思路照 tcpfit 的 harden --swap：fallocate 建文件（失败回退 dd）、chmod 600、
-# 按第 1 字段精确匹配 swap 文件，避免把路径里的 # \ [ * 等拼进正则
-_fstab_swap_matches() {
-  # 走 ENVIRON 而不是 -v：后者会解释路径里的反斜杠转义
-  FSTAB_SWAP="$1" awk '$1 == ENVIRON["FSTAB_SWAP"] {found=1} END {exit !found}' /etc/fstab 2>/dev/null
-}
-
-_fstab_remove_swap() {
-  local f="$1" tmp
-  [ -f /etc/fstab ] || return 0
-  tmp="$(mktemp "${TMPDIR:-/tmp}/vpstool.$$.fstab.XXXXXX")" || { err "无法创建临时文件"; return 1; }
-  if FSTAB_SWAP="$f" awk '$1 != ENVIRON["FSTAB_SWAP"]' /etc/fstab > "$tmp"; then
-    # 用重定向回写，保留 /etc/fstab 原有的权限和属主
-    cat "$tmp" > /etc/fstab || { rm -f "$tmp"; return 1; }
-  fi
-  rm -f "$tmp"
-}
-
-# mkswap + swapon、写 fstab、swappiness 设 10。
-# 语义：输入的数字是 Swap 总量目标（GB），不是追加量。文件只补差额：
-# 总量目标 - 已有分区 swap = 文件大小；已有文件时直接改它的大小，不另建文件。
-act_swap() {
-  step "加 swap（小内存机防止进程被 OOM 杀掉）"
-  local swapfile="/swapfile" existing_file="" size gb f swapdir fsize
-  local total_kb=0 file_kb=0 other_kb=0 target_kb=0 want_kb=0 file_kb_new=0 file_mb=0 free_mb=0 need_mb=0 diff_kb=0
-  info "当前内存: $(free -m | awk '/^Mem:/{printf "%dMB 总 / %dMB 可用", $2, $7}')"
-  info "当前 Swap: $(free -m | awk '/^Swap:/{printf "%dMB 总 / %dMB 已用", $2, $3}')"
-  echo
-  # 从 /proc/swaps 取精确 KB 数：总量、已有文件及大小；读不到时退回 free -m
-  if [ -r /proc/swaps ]; then
-    existing_file="$(awk 'NR>1 && $2=="file" {print $1; exit}' /proc/swaps)"
-    total_kb=$(awk 'NR>1 {s+=$3} END {print s+0}' /proc/swaps)
-    if [ -n "$existing_file" ]; then
-      file_kb=$(awk -v f="$existing_file" 'NR>1 && $1==f {print $3; exit}' /proc/swaps)
-      file_kb=${file_kb:-0}
-    fi
-  else
-    total_kb=$(( $(free -m 2>/dev/null | awk '/^Swap:/{print $2}') * 1024 ))
-  fi
-  other_kb=$(( total_kb - file_kb ))
-  if [ -n "$existing_file" ]; then
-    swapfile="$existing_file"
-    info "检测到已有 swap 文件：$swapfile"
-  elif [ "$total_kb" -gt 0 ]; then
-    info "检测到已有分区 swap：约 $(( total_kb / 1024 ))MB"
-  elif [ -e /swapfile ]; then
-    # 已存在但没启用的 /swapfile 不能盖 —— 那可能是用户自己准备的
-    err "/swapfile 已存在但未启用。先确认它的用途，需要的话手动删除后再跑"
-    return 1
-  fi
-  if ! ask "  swap 总量目标（GB，1-20，默认 2）: " size; then return 0; fi
-  size="${size:-2}"
-  size="$(printf '%s' "$size" | tr -d '[:space:]')"
-  # "2" 和 "2G" 都收；不收 "2M"（fallocate 建 2MB，dd 回退建 2GB，差 1000 倍）
-  gb="${size%[Gg]}"
-  case "$gb" in
-    ''|*[!0-9]*) err "大小请填 1-20 之间的整数（例如 2 或 2G）"; return 1 ;;
-  esac
-  if [ "$gb" -lt 1 ] || [ "$gb" -gt 20 ]; then
-    err "大小请填 1-20 之间的整数（例如 2 或 2G）"
-    return 1
-  fi
-  target_kb=$(( gb * 1024 * 1024 ))
-  want_kb=$(( target_kb - other_kb ))
-  # ±2MB 算达标：文件比差额多留 1MB 余量（见下），dd 回退 rounding 也可能多 1MB
-  if [ -n "$existing_file" ]; then
-    diff_kb=$(( file_kb - want_kb ))
-    if [ "${diff_kb#-}" -le 2048 ]; then
-      info "Swap 总量已经是 ${gb}G，不用改"
-      return 0
-    fi
-    if [ "$want_kb" -le 2048 ]; then
-      # 其它 swap 已够目标，文件不需要了：确认后停用并删掉
-      if ! confirm "其它 swap 已有 $(( other_kb / 1024 ))MB，达到 ${gb}G 目标，要移除 swap 文件 $swapfile 吗？"; then
-        info "已取消"
-        return 0
-      fi
-      if ! swapoff "$swapfile" 2>/dev/null; then
-        err "swapoff 失败：内存可能不足以把 swap 里的页换回来，未做任何改动。释放内存后重试"
-        return 1
-      fi
-      rm -f "$swapfile"
-      _fstab_remove_swap "$swapfile" || warn "fstab 清理失败，请手动检查 /etc/fstab"
-      ok "已移除 $swapfile，当前 Swap 总量 $(free -h | awk '/^Swap/{print $2}')"
-      return 0
-    fi
-  else
-    diff_kb=$(( total_kb - target_kb ))
-    if [ "${diff_kb#-}" -le 2048 ]; then
-      info "Swap 总量已经是 ${gb}G，不用改"
-      return 0
-    fi
-    if [ "$want_kb" -le 0 ]; then
-      info "已有 swap 总量约 $(( total_kb / 1024 ))MB，已达到目标，不用加"
-      return 0
-    fi
-  fi
-  # 文件比差额多留 1MB：swap 头占一页（x86 上 4KB，ARM 上可能 16/64KB），
-  # 不留余量的话 free -m 看到的总量会比目标少 1MB
-  file_kb_new=$(( want_kb + 1024 ))
-  file_mb=$(( (file_kb_new + 1023) / 1024 ))
-  if [ $(( want_kb % 1048576 )) = 0 ]; then
-    fsize="$(( want_kb / 1048576 ))G"
-  else
-    fsize="$(( (want_kb + 1023) / 1024 ))M"
-  fi
-  # 文件所在目录要留够空间：新文件 + 512M 余量；改大小时旧文件占的空间算回来
-  swapdir="$(dirname "$swapfile")"
-  free_mb=$(df --output=avail -BM "$swapdir" 2>/dev/null | tail -1 | tr -dc '0-9')
-  if [ -n "$existing_file" ] && [ -n "$free_mb" ]; then
-    free_mb=$(( free_mb + file_kb / 1024 ))
-  fi
-  need_mb=$(( file_mb + 512 ))
-  if [ -n "$free_mb" ] && [ "$free_mb" -lt "$need_mb" ] 2>/dev/null; then
-    err "$swapdir 可用空间不足（剩余约 ${free_mb}M，需要约 ${need_mb}M），已取消"
-    return 1
-  fi
-  # 改大小：先停用旧的；swapoff 失败（内存不够把页换回来）就停手，不动文件
-  if [ -n "$existing_file" ]; then
-    info "停用旧 swap 再重建：$swapfile …"
-    if ! swapoff "$swapfile" 2>/dev/null; then
-      err "swapoff 失败：内存可能不足以把 swap 里的页换回来，未做任何改动。释放内存后重试"
-      return 1
-    fi
-    rm -f "$swapfile"
-  fi
-  if [ "$other_kb" -gt 0 ]; then
-    info "目标总量 ${gb}G，现有分区 swap $(( other_kb / 1024 ))M，补文件 $fsize：$swapfile …"
-  else
-    info "创建 ${fsize} swap：$swapfile …"
-  fi
-  if ! fallocate -l "${file_kb_new}K" "$swapfile" 2>/dev/null; then
-    dd if=/dev/zero of="$swapfile" bs=1M count="$file_mb" status=none \
-      || { err "swap 文件创建失败"; rm -f "$swapfile"; return 1; }
-  fi
-  chmod 600 "$swapfile" && mkswap "$swapfile" >/dev/null && swapon "$swapfile" \
-    || { err "swap 启用失败"; rm -f "$swapfile"; return 1; }
-  _fstab_swap_matches "$swapfile" || echo "$swapfile none swap sw 0 0" >> /etc/fstab
-  # 只在内存真的紧张时才用 swap，避免平时把热数据换出去拖慢代理。
-  # 文件里已有该项就改值，没有才追加（tcpfit 只追加不改值，重启后会和实时值不一致）。
-  f=/etc/sysctl.conf
-  touch "$f" 2>/dev/null || { err "无法写入 $f"; return 1; }
-  if grep -qE '^#?[[:space:]]*vm\.swappiness[[:space:]]*=' "$f"; then
-    sed -i -E 's|^#?[[:space:]]*vm\.swappiness[[:space:]]*=.*|vm.swappiness = 10|' "$f"
-  else
-    printf 'vm.swappiness = 10\n' >> "$f"
-  fi
-  sysctl -qw vm.swappiness=10 2>/dev/null || true
-  ok "swap 已启用：$swapfile（$fsize），当前 Swap 总量 $(free -h | awk '/^Swap/{print $2}')"
-  info "vm.swappiness = $(sysctl -n vm.swappiness 2>/dev/null)"
-}
-
 act_status() {
   step "系统状态汇总"
   local cc qd
@@ -2267,7 +2114,6 @@ menu() {
   printf '  %s%2s)%s  一键基础初始化\n' "$CYAN$BOLD" "1" "$NC"
   printf '  %s%2s)%s  BBR v3 优化脚本\n' "$CYAN$BOLD" "2" "$NC"
   printf '  %s%2s)%s  TCP 调优\n' "$CYAN$BOLD" "3" "$NC"
-  printf '  %s%2s)%s  加 swap\n' "$CYAN$BOLD" "4" "$NC"
   printf '  %s%2s)%s  BBRv3 内核\n' "$CYAN$BOLD" "5" "$NC"
   printf '  %s%2s)%s  SSH 安全配置脚本\n' "$CYAN$BOLD" "6" "$NC"
   printf '  %s%2s)%s  WARP (warp-go)\n' "$CYAN$BOLD" "7" "$NC"
@@ -2300,7 +2146,7 @@ main() {
       1)  act_bootstrap ;;
       2)  act_net_tune ;;
       3)  act_tcpfit ;;
-      4)  act_swap ;;
+      4)  warn "第 4 项（加 swap）已移除"; pause ;;
       5)  act_bbrv3 ;;
       6)  act_keysh ;;
       7)  act_warpgo ;;
@@ -2338,7 +2184,6 @@ VPS 常用工具箱
   bootstrap     一键基础初始化（依赖 + 时区 + journald 日志）
   tunenet       net-tcp-tune 调优
   tcpfit        tcpfit 调优
-  swap          加 swap（小内存机防 OOM；输入的是总量目标，默认 2G）
   bbrv3         BBRv3 内核（byJoey/Actions-bbr-v3，装内核）
   key           SSH 加固 (key.sh)
   emby          emby-rp —— Emby HTTPS 反代（Caddy/Nginx，含前后端分离）
@@ -2380,7 +2225,6 @@ case "${1:-}" in
   mmwx|miaomiaowux) act_miaomiaowux ;;
   docker|dockerd)         act_docker ;;
   qc|cmd)                 act_qc_menu ;;
-  swap)                   act_swap ;;
   install)
     # 装完直接进入菜单，省得再敲一次 qc
     if act_install_self; then
