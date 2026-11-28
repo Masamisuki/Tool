@@ -1,0 +1,11 @@
+#!name=YouTube 去广告+翻译 桥接补丁
+#!desc=解决 YouTube Enhance 与 DualSubs 在 player/get_watch 上争抢同一条 response 脚本的冲突。配合两个原模块使用，二者需先按说明移除各自的 player/get_watch 响应脚本。
+#!category=gholts
+#!requirement=SYSTEM = 'iOS'
+
+[Script]
+# 唯一接管 player / get_watch 的响应脚本：内部依次执行去广告改写、翻译改写
+youtube.bridge = type=http-response,pattern=^https:\/\/youtubei\.googleapis\.com\/youtubei\/v1\/(?:player|get_watch)(?:\?.*)?$,requires-body=1,max-size=-1,binary-body-mode=1,engine=webview,script-path=https://raw.githubusercontent.com/Masamisuki/Tool/main/YouTube-Surge-Bridge/youtube-bridge.js,timeout=15
+
+[MITM]
+hostname = %APPEND% youtubei.googleapis.com, www.youtube.com, m.youtube.com, tv.youtube.com, *.googlevideo.com
