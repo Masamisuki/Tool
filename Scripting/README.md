@@ -1,14 +1,26 @@
 # Surge Panel for Scripting
 
-一个运行在 iOS [Scripting](https://github.com/Scripting) App 上的 Surge 监控面板。通过 Surge HTTP API + Prometheus Metrics 提供四个标签（仪表盘 / 分流 / 活动 / 设置），支持多个实例切换，可挂到 Scripting 首页 Tab。3.0 起采用全新卡片式设计，iOS 26 上控件使用 Liquid Glass。
+一个运行在 iOS [Scripting](https://github.com/Scripting) App 上的 Surge 监控面板。通过 Surge HTTP API + Prometheus Metrics 提供四个标签（仪表盘 / 分流 / 活动 / 设置），支持多个实例切换，可挂到 Scripting 首页 Tab。3.0 起采用全新卡片式设计，iOS 26 上控件使用 Liquid Glass。另附一组**桌面 / 锁屏小组件**，可脱离面板自行取数刷新，按时间线显示 Surge 实时状态。
 
 ## 功能
 
 - **多实例**：本机 / 网关等多个 HTTP API；仪表盘点实例名弹出菜单直接切换；设置里添加、编辑、测试连通、删除。一次只连接一个实例。
 - **仪表盘**：连接状态、实时上下行主卡片（近 1 分钟速率图，1 秒采样，对齐 [YASD](https://github.com/geekdada/yasd)），MitM·捕获·重写·脚本快捷开关，内存 / 运行时长 / 活动连接 / DNS 指标块（点按直达详情），内存趋势，最新事件
-- **分流**：策略组 | 规则。策略组按配置 `[Proxy Group]` 顺序；搜索；点按切换；延迟彩色胶囊；自动组测速与「最优」标记；`policy-path` 外部节点标为「外部」并可测速；嵌套组可再进入。规则可搜索并按类型着色
+- **分流**：策略组 | 规则。策略组按配置 `[Proxy Group]` 顺序，优先显示配置里 `icon-url` 指定的图标（失败回退通用图标）；搜索；点按切换；延迟彩色胶囊；自动组测速与「最优」标记；`policy-path` 外部节点标为「外部」并可测速；嵌套组可再进入。规则可搜索并按类型着色
 - **活动**：流量 | 连接 | DNS | 事件。流量含实时合计、分流占比、网卡 / 节点明细与排行；连接可在活动连接与最近请求间切换，可搜索排序、终止连接，详情显示远端 IP 的国家 / ASN / 组织；DNS 含静态 Host 与动态缓存、刷新与延迟测试、IP 归属查询
-- **设置**：实例卡片与连接状态；引擎（出站模式、全局策略、日志级别）；功能（功能开关、模块、外部资源、脚本、当前配置）；面板（刷新间隔、历史长度、隐藏地址）；更新说明；重载配置 / 清空历史 / 停止引擎
+- **设置**：实例卡片与连接状态；引擎（出站模式、全局策略、日志级别）；功能（功能开关、模块、外部资源、脚本、当前配置）；面板（刷新间隔、历史长度、隐藏地址）；小组件（显示内容、尺寸预览、立即刷新）；更新说明；重载配置 / 清空历史 / 停止引擎
+
+## 桌面小组件
+
+在「设置 → 小组件」里配置显示内容、预览各尺寸并立即刷新；长按桌面添加 Scripting 小组件即可选用。小组件**不依赖面板常驻**：它自己从 Keychain 读取 API Key，直接请求 Surge HTTP API，因此不打开 App 也能按时间线刷新；取数失败时回退到面板上次写入的缓存快照，并标注数据时间，避免显示成实时值。
+
+- **尺寸**：小 / 中 / 大三种桌面尺寸，另有锁屏的 inline、circular、rectangular 三种样式
+  - 小：累计上下行 + 两个状态块；中 / 大：累计上下行 + 最多四个状态块，大尺寸额外列出各网卡累计流量（含上下行构成条）
+  - 锁屏：inline 显示下行速率，circular 显示速率表盘，rectangular 显示实例名、上下行速率与请求数
+- **可显示指标**：内存占用、活动请求、DNS 缓存、运行时长、网卡流量明细（各自可开关；内存 / DNS / 运行时长来自 `/v1/metrics`，商店版无此接口时按 0 显示为「—」）
+- **刷新**：采用 `after` 策略预约下一次刷新，间隔 5 分钟（与原版 Surge Metrics 一致）。iOS 只保证「尽快」兑现，不保证准点；系统推迟刷新时会显示缓存标记
+- **缓存桥**：面板运行时会把快照与设置写入共享缓存供小组件读取，卡片数据长度不一致时沿用上一轮完整曲线，避免图表错位
+- **注意**：首次使用需先运行一次面板让数据落盘，否则小组件显示「暂无数据」；点按小组件可跳转回 Surge Panel
 
 ## 使用
 
@@ -71,6 +83,8 @@ Scripting 的 `allowInsecureRequest` 只负责允许明文 HTTP，并不能跳�
 - 数据层：`lib/surgeApi.ts` 封装 HTTP API（GeoIP 结果按实例缓存在内存）；`lib/instances.ts` 多实例与迁移；`lib/store.ts` 当前实例的 metrics / 1Hz traffic
 - 实时速率：`/v1/traffic` 1Hz、内存 60 点；折线 `monotone`、Y 轴从 0
 - 首页：顶部分段 + 翻页；Scripting 浮层底栏可见，内容铺到屏幕底
+- 小组件：`widget.tsx` 入口在 present 前完成取数并 `Script.exit()`；`lib/widgetLive.ts` 在组件进程内直连 `/v1/traffic` + `/v1/metrics`（带超时），失败回退 `lib/widgetCache.ts` 的共享快照；小组件侧只引入 widget 安全模块，不加载会读设备信息 / 起定时器的 `store.ts`、`ui.ts`
+- 策略组图标：`lib/surgeApi.ts` 从配置 `[Proxy Group]` 段的 `icon-url` 解析网络图标，与组顺序共用一份缓存；加载失败回退通用图标。改图标后需下拉刷新策略组页或重载配置才会重新读取
 - 不做：External Controller / Ponte / USB、Mac 设备管理、Surge 配置档切换、系统代理 / Enhanced Mode、MITM CA 下载
 
 ## License
