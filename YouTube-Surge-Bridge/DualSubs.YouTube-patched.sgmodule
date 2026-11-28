@@ -1,0 +1,54 @@
+#!name = 🍿️ DualSubs: ▶️ YouTube (桥接版)
+#!desc = YouTube 增强及双语字幕(歌词)。改动：Player.response.proto 与 GetWatch.response.proto 已移除，改由桥接补丁接管。
+#!openUrl = https://dualsubs.github.io/preferences/
+#!author = VirgilClyne[https://github.com/VirgilClyne]
+#!homepage = https://DualSubs.github.io/guide/youtube
+#!icon = https://github.com/DualSubs/YouTube/raw/main/src/assets/icon_rounded.png
+#!category = 🍿️ DualSubs
+#!date = 2026-10-16 01:54:49
+#!version = 1.6.0
+#!arguments = Type:"Official",Types:"Translate",AutoCC:true,Position:"Forward",Vendor:"Google",ShowOnly:false,Storage:"PersistentStore",LogLevel:"WARN"
+#!arguments-desc = Type: [字幕] 启用类型
+ ├ Official: 官方字幕（合成器）
+ └ Translate: 翻译字幕（翻译器）
+请选择要使用的字幕，双语字幕将使用您选择类型呈现。
+
+Types: [歌词] 启用类型
+ └ Translate: 翻译歌词（翻译器）
+请选择要添加的歌词选项，如果为多选，则会自动决定提供的歌词类型。
+
+AutoCC: [字幕] 自动显示
+是否总是自动开启字幕显示。
+
+Position: [字幕] 主语言（源语言）字幕位置
+ ├ Forward: 上面（第一行）
+ └ Reverse: 下面（第二行）
+主语言（源语言）字幕的显示位置。
+
+Vendor: [翻译器] 服务商API
+ ├ Google: Google Translate
+ └ Microsoft: Microsoft Translator（需填写API）
+请选择翻译器所使用的服务商API，更多翻译选项请使用BoxJs。
+
+ShowOnly: [翻译器] 只显示“自动翻译”字幕
+是否仅显示“自动翻译”字幕，不显示源语言字幕。
+
+Storage: [储存] 配置类型
+ ├ Argument: 插件配置优先
+ ├ PersistentStore: 持久化存储优先
+ └ database: 仅使用默认配置
+默认优先使用设置面板或 BoxJs 保存的配置，其次使用插件配置，最后使用脚本默认配置。
+
+LogLevel: [调试] 日志等级
+ ├ OFF: 关闭
+ ├ ERROR: ❌ 错误
+ ├ WARN: ⚠️ 警告
+ ├ INFO: ℹ️ 信息
+ ├ DEBUG: 🅱️ 调试
+ └ ALL: 全部
+选择脚本日志的输出等级，低于所选等级的日志将全部输出。
+ [Rule] URL-REGEX,^https?:\/\/([\w-]+)\.googlevideo\.com\/initplayback(\?.*oad=.+)$,REJECT-TINYGIF [Map Local] ^https:\/\/dualsubs\.github\.io\/api\/YouTube(?:\?.*)?$ data-type=file data="https://github.com/DualSubs/YouTube/releases/download/v1.6.0/DualSubs.YouTube.PreferencePanes.json" status-code=200 header="Content-Type:application/json; charset=utf-8|Cache-Control:no-store|X-PreferencePanes-Version:1.6.0" [Script] PreferencePanes.API = type=http-request, pattern=^https:\/\/dualsubs\.github\.io\/api\/(?:get|set|delete)(?:\?.*)?$, requires-body=1, max-size=65536, script-path=https://github.com/NSNanoCat/PreferencePanes/releases/download/v1.3.1/api.js # YouTube 🍿️ DualSubs.YouTube.Player.request.json = type=http-request, pattern=^https?:\/\/(www|m|tv)\.youtube\.com\/youtubei\/v1\/player(\?.+)?$, requires-body=1, engine=webview, script-path=https://github.com/DualSubs/YouTube/releases/download/v1.6.0/request.bundle.js, argument=Type="{{{Type}}}"&Types="{{{Types}}}"&AutoCC="{{{AutoCC}}}"&Position="{{{Position}}}"&Vendor="{{{Vendor}}}"&ShowOnly="{{{ShowOnly}}}"&Storage="{{{Storage}}}"&LogLevel="{{{LogLevel}}}" 🍿️ DualSubs.YouTube.Player.response.json = type=http-response, pattern=^https?:\/\/(www|m|tv)\.youtube\.com\/youtubei\/v1\/player(\?.+)?$, requires-body=1, engine=webview, script-path=https://github.com/DualSubs/YouTube/releases/download/v1.6.0/response.bundle.js, argument=Type="{{{Type}}}"&Types="{{{Types}}}"&AutoCC="{{{AutoCC}}}"&Position="{{{Position}}}"&Vendor="{{{Vendor}}}"&ShowOnly="{{{ShowOnly}}}"&Storage="{{{Storage}}}"&LogLevel="{{{LogLevel}}}"
+# 改动点：以下两条已移除，由桥接补丁接管（youtubei.googleapis.com 的 player / get_watch）
+# 🍿️ DualSubs.YouTube.Player.response.proto = ...（已移除）
+# 🍿️ DualSubs.YouTube.GetWatch.response.proto = ...（已移除）
+ 🍿️ DualSubs.YouTube.TimedText.request = type=http-request, pattern=^https?:\/\/(www|m)\.youtube\.com\/api\/timedtext(\?.+)?$, engine=webview, script-path=https://github.com/DualSubs/YouTube/releases/download/v1.6.0/request.bundle.js, argument=Type="{{{Type}}}"&Types="{{{Types}}}"&AutoCC="{{{AutoCC}}}"&Position="{{{Position}}}"&Vendor="{{{Vendor}}}"&ShowOnly="{{{ShowOnly}}}"&Storage="{{{Storage}}}"&LogLevel="{{{LogLevel}}}" 🍿️ DualSubs.YouTube.Composite.TimedText.response = type=http-response, pattern=^https?:\/\/(www|m)\.youtube\.com\/api\/timedtext\?(.*)subtype=(Official|External), requires-body=1, script-path=https://github.com/DualSubs/Universal/releases/latest/download/Composite.Subtitles.response.bundle.js, argument=Type="{{{Type}}}"&Types="{{{Types}}}"&AutoCC="{{{AutoCC}}}"&Position="{{{Position}}}"&Vendor="{{{Vendor}}}"&ShowOnly="{{{ShowOnly}}}"&Storage="{{{Storage}}}"&LogLevel="{{{LogLevel}}}" 🍿️ DualSubs.YouTube.Translate.TimedText.response = type=http-response, pattern=^https?:\/\/(www|m)\.youtube\.com\/api\/timedtext\?(.*)subtype=Translate, requires-body=1, script-path=https://github.com/DualSubs/Universal/releases/latest/download/Translate.response.bundle.js, argument=Type="{{{Type}}}"&Types="{{{Types}}}"&AutoCC="{{{AutoCC}}}"&Position="{{{Position}}}"&Vendor="{{{Vendor}}}"&ShowOnly="{{{ShowOnly}}}"&Storage="{{{Storage}}}"&LogLevel="{{{LogLevel}}}" # YouTube Music 🍿️ DualSubs.YouTubeMusic.Browse.request.json = type=http-request, pattern=^https?:\/\/music\.youtube\.com\/youtubei\/v1\/browse(\?.+)?$, requires-body=1, engine=webview, script-path=https://github.com/DualSubs/YouTube/releases/download/v1.6.0/request.bundle.js, argument=Type="{{{Type}}}"&Types="{{{Types}}}"&AutoCC="{{{AutoCC}}}"&Position="{{{Position}}}"&Vendor="{{{Vendor}}}"&ShowOnly="{{{ShowOnly}}}"&Storage="{{{Storage}}}"&LogLevel="{{{LogLevel}}}" 🍿️ DualSubs.YouTube.Browse.request.proto = type=http-request, pattern=^https?:\/\/youtubei\.googleapis\.com\/youtubei\/v1\/browse(\?.+)?$, requires-body=1, binary-body-mode=1, engine=webview, script-path=https://github.com/DualSubs/YouTube/releases/download/v1.6.0/request.bundle.js, argument=Type="{{{Type}}}"&Types="{{{Types}}}"&AutoCC="{{{AutoCC}}}"&Position="{{{Position}}}"&Vendor="{{{Vendor}}}"&ShowOnly="{{{ShowOnly}}}"&Storage="{{{Storage}}}"&LogLevel="{{{LogLevel}}}" 🍿️ DualSubs.YouTubeMusic.Translate.Lyrics.response.json = type=http-response, pattern=^https?:\/\/music\.youtube\.com\/youtubei\/v1\/browse\?(.*)subtype=Translate, requires-body=1, script-path=https://github.com/DualSubs/Universal/releases/latest/download/Translate.response.bundle.js, argument=Type="{{{Type}}}"&Types="{{{Types}}}"&AutoCC="{{{AutoCC}}}"&Position="{{{Position}}}"&Vendor="{{{Vendor}}}"&ShowOnly="{{{ShowOnly}}}"&Storage="{{{Storage}}}"&LogLevel="{{{LogLevel}}}" 🍿️ DualSubs.YouTubeMusic.Translate.Lyrics.response.proto = type=http-response, pattern=^https?:\/\/youtubei\.googleapis\.com\/youtubei\/v1\/browse\?(.*)subtype=Translate, requires-body=1, binary-body-mode=1, script-path=https://github.com/DualSubs/Universal/releases/latest/download/Translate.response.bundle.js, argument=Type="{{{Type}}}"&Types="{{{Types}}}"&AutoCC="{{{AutoCC}}}"&Position="{{{Position}}}"&Vendor="{{{Vendor}}}"&ShowOnly="{{{ShowOnly}}}"&Storage="{{{Storage}}}"&LogLevel="{{{LogLevel}}}" [MITM] hostname = %APPEND% dualsubs.github.io, www.youtube.com, m.youtube.com, tv.youtube.com, music.youtube.com, youtubei.googleapis.com, -redirector*.googlevideo.com, *.googlevideo.com
