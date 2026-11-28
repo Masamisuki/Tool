@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.31"
+VERSION="3.32"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -65,7 +65,6 @@ declare -A REMOTE_MARKERS=(
   ["get-docker.sh"]="Docker Engine for Linux installation script."
   ["mmwx-install"]="# 妙妙屋X - Xray 服务器管理与订阅拼车系统 安装脚本"
   ["reinstall.sh（用法）"]="### BEGIN reinstall.sh ###"
-  ["nexttrace"]="API_HOST=\"www.nxtrace.org\""
 )
 
 # ---------------------------------------------------------------- tty 检测
@@ -1121,280 +1120,6 @@ act_tcpquality() {
     bash
 }
 
-# 探测当前 SSH 监听端口：优先 sshd -T，其次 ss，最后默认 22
-# 启用防火墙前必须放行它，否则会把自己锁在外面
-_fw_ssh_port() {
-  local p=""
-  if command -v sshd >/dev/null 2>&1; then
-    p="$(sshd -T 2>/dev/null | awk '/^port /{print $2; exit}')"
-  fi
-  if [ -z "$p" ] && command -v ss >/dev/null 2>&1; then
-    p="$(ss -tln 2>/dev/null | awk '/:22$|:[0-9]+$/ {print $4}' | sed 's/.*://' | sort -un | head -1)"
-  fi
-  [ -n "$p" ] || p="22"
-  printf '%s' "$p"
-}
-
-# 防火墙管理：只操作 ufw / firewalld 二者之一，不碰 iptables 裸规则
-# 三网回程路由测试（NextTrace）
-# 节点用各大运营商公开 DNS，避免依赖会失效的第三方测试节点
-_NT_NODES=(
-  "电信|119.29.29.29"
-  "联通|223.5.5.5"
-  "移动|114.114.114.114"
-  "电信(备用)|115.159.222.226"
-  "联通(备用)|123.125.81.6"
-  "移动(备用)|211.136.20.203"
-)
-
-act_backhaul() {
-  step "三网回程路由测试（NextTrace）"
-  local choice idx label ip proto
-  if ! command -v nexttrace >/dev/null 2>&1; then
-    info "NextTrace 未安装，先装它（官方安装脚本，带内容校验）"
-    dim "  安装脚本会把 nexttrace 放到 /usr/local/bin"
-    echo
-    if ! confirm "确认安装 NextTrace？"; then warn "已取消"; return 0; fi
-    run_remote "nexttrace" "https://raw.githubusercontent.com/sjlleo/nexttrace/main/nt_install.sh" sh || {
-      err "NextTrace 安装失败，可手动执行： bash <(curl -Ls https://raw.githubusercontent.com/sjlleo/nexttrace/main/nt_install.sh)"
-      return 1
-    }
-    if ! command -v nexttrace >/dev/null 2>&1; then
-      err "安装脚本跑完了但找不到 nexttrace 命令，请检查上面输出"
-      return 1
-    fi
-  else
-    ok "NextTrace 已安装：$(command -v nexttrace)"
-  fi
-  echo
-  while true; do
-    info "  1) 电信回程"
-    info "  2) 联通回程"
-    info "  3) 移动回程"
-    info "  4) 三网全测（依次跑上面三个）"
-    info "  5) 指定 IP / 域名追踪"
-    info "  6) 卸载 NextTrace"
-    info "  0) 返回"
-    if ! ask "  请选择 [0-6]: " choice; then return 0; fi
-    case "$choice" in
-      1|2|3)
-        idx=$((choice - 1))
-        label="${_NT_NODES[$idx]%%|*}"
-        ip="${_NT_NODES[$idx]#*|}"
-        echo
-        info "=== $label 回程 → $ip ==="
-        dim "  -report 输出路由图；若想看延迟/丢包加 -q 2"
-        nexttrace -report "$ip" 2>&1 | sed 's/^/  /'
-        ;;
-      4)
-        echo
-        for idx in 0 1 2; do
-          label="${_NT_NODES[$idx]%%|*}"
-          ip="${_NT_NODES[$idx]#*|}"
-          echo
-          info "=== $label 回程 → $ip ==="
-          nexttrace -report "$ip" 2>&1 | sed 's/^/  /'
-        done
-        ;;
-      5)
-        if ! ask "  IP 或域名: " ip; then continue; fi
-        ip="$(printf '%s' "$ip" | tr -d '[:space:]')"
-        [ -n "$ip" ] || { warn "输入为空"; continue; }
-        echo
-        if ! ask "  协议 [icmp/tcp/udp，默认 icmp]: " proto; then continue; fi
-        proto="${proto:-icmp}"
-        case "$proto" in
-          icmp) nexttrace -report "$ip" 2>&1 | sed 's/^/  /' ;;
-          tcp)  nexttrace -T -report "$ip" 2>&1 | sed 's/^/  /' ;;
-          udp)  nexttrace -U -report "$ip" 2>&1 | sed 's/^/  /' ;;
-          *) err "协议只能是 icmp / tcp / udp" ;;
-        esac
-        ;;
-      6)
-        echo
-        dim "  NextTrace 是一个独立的二进制文件，卸载就是删它："
-        dim "    $(command -v nexttrace 2>/dev/null)"
-        if confirm_explicit "确认卸载 NextTrace？"; then
-          local ntpath; ntpath="$(command -v nexttrace 2>/dev/null)"
-          if [ -n "$ntpath" ] && [ -f "$ntpath" ]; then
-            rm -f "$ntpath" && ok "已删除 $ntpath" || err "删除失败"
-          else
-            warn "找不到 NextTrace 文件路径，请手动删除"
-          fi
-          # 残留自检
-          if command -v nexttrace >/dev/null 2>&1; then
-            warn "nexttrace 命令仍可找到，卸载可能不完整"
-          else
-            ok "残留自检通过，已卸载干净"
-          fi
-        else
-          info "已取消"
-        fi
-        ;;
-      0) return 0 ;;
-      *) err "无效选项：$choice" ;;
-    esac
-  done
-}
-
-act_firewall() {
-  step "防火墙端口管理（ufw / firewalld）"
-  local fw="" sshport choice port proto
-  if command -v ufw >/dev/null 2>&1; then
-    fw="ufw"
-  elif command -v firewalld >/dev/null 2>&1 || command -v firewall-cmd >/dev/null 2>&1; then
-    fw="firewalld"
-  else
-    warn "未检测到 ufw 或 firewalld"
-    dim "  本工具只管理这两种防火墙；iptables/nftables 裸规则请手动处理"
-    dim "  安装：apt install -y ufw  或  dnf install -y firewalld"
-    return 0
-  fi
-  sshport="$(_fw_ssh_port)"
-  info "防火墙引擎：$fw"
-  info "当前 SSH 端口：$sshport（启用防火墙前务必放行，否则会锁死登录）"
-  echo
-  while true; do
-    info "  1) 查看状态与已放行端口"
-    info "  2) 放行端口（TCP/UDP）"
-    info "  3) 删除放行规则"
-    info "  4) 启用 / 关闭防火墙"
-    info "  0) 返回"
-    if ! ask "  请选择 [0-4]: " choice; then return 0; fi
-    case "$choice" in
-      1)
-        echo
-        if [ "$fw" = "ufw" ]; then
-          ufw status verbose 2>/dev/null || { err "读取 ufw 状态失败（可能需要 root）"; continue; }
-        else
-          if ! firewall-cmd --state >/dev/null 2>&1; then
-            dim "  firewalld 未运行"
-          else
-            info "状态：$(firewall-cmd --state 2>/dev/null)"
-            info "已放行端口："
-            firewall-cmd --list-ports 2>/dev/null | tr ' ' '\n' | grep -q . \
-              && firewall-cmd --list-ports 2>/dev/null | tr ' ' '\n' | sed 's/^/    /' \
-              || dim "    (无)"
-            info "已放行服务："
-            firewall-cmd --list-services 2>/dev/null | tr ' ' '\n' | sed 's/^/    /'
-          fi
-        fi
-        ;;
-      2)
-        if ! ask "  端口（1-65535）: " port; then continue; fi
-        port="$(printf '%s' "$port" | tr -d '[:space:]')"
-        case "$port" in ''|*[!0-9]*) err "端口不合法：$port"; continue ;; esac
-        if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then err "端口不合法：$port"; continue; fi
-        if ! ask "  协议 [tcp/udp/both，默认 tcp]: " proto; then continue; fi
-        proto="${proto:-tcp}"
-        case "$proto" in
-          tcp|udp|both) ;;
-          *) err "协议只能是 tcp / udp / both"; continue ;;
-        esac
-        if [ "$fw" = "ufw" ]; then
-          if [ "$proto" = "both" ]; then
-            ufw allow "$port" >/dev/null 2>&1 && ok "ufw 已放行 $port/tcp + $port/udp" || err "放行失败"
-          else
-            ufw allow "$port/$proto" >/dev/null 2>&1 && ok "ufw 已放行 $port/$proto" || err "放行失败"
-          fi
-        else
-          # firewalld 要先确保服务在运行
-          if ! firewall-cmd --state >/dev/null 2>&1; then systemctl start firewalld >/dev/null 2>&1 || true; fi
-          if [ "$proto" = "both" ]; then
-            firewall-cmd --permanent --add-port="$port/tcp" >/dev/null 2>&1 && \
-            firewall-cmd --permanent --add-port="$port/udp" >/dev/null 2>&1 && \
-            firewall-cmd --reload >/dev/null 2>&1 && ok "firewalld 已放行 $port/tcp + $port/udp" || err "放行失败"
-          else
-            firewall-cmd --permanent --add-port="$port/$proto" >/dev/null 2>&1 && \
-            firewall-cmd --reload >/dev/null 2>&1 && ok "firewalld 已放行 $port/$proto" || err "放行失败"
-          fi
-        fi
-        ;;
-      3)
-        if ! ask "  要删除的端口: " port; then continue; fi
-        port="$(printf '%s' "$port" | tr -d '[:space:]')"
-        case "$port" in ''|*[!0-9]*) err "端口不合法：$port"; continue ;; esac
-        # 防呆：不允许删 SSH 端口
-        if [ "$port" = "$sshport" ]; then
-          err "拒绝删除 SSH 端口 $sshport —— 删了会立刻锁死登录"
-          continue
-        fi
-        if ! ask "  协议 [tcp/udp/both，默认 tcp]: " proto; then continue; fi
-        proto="${proto:-tcp}"
-        case "$proto" in
-          tcp|udp|both) ;;
-          *) err "协议只能是 tcp / udp / both"; continue ;;
-        esac
-        if ! confirm "确认删除 $port/$proto 的放行规则？"; then warn "已取消"; continue; fi
-        if [ "$fw" = "ufw" ]; then
-          if [ "$proto" = "both" ]; then
-            ufw delete allow "$port" >/dev/null 2>&1 && ok "已删除 $port 规则" || err "删除失败（规则可能不存在）"
-          else
-            ufw delete allow "$port/$proto" >/dev/null 2>&1 && ok "已删除 $port/$proto" || err "删除失败（规则可能不存在）"
-          fi
-        else
-          if [ "$proto" = "both" ]; then
-            firewall-cmd --permanent --remove-port="$port/tcp" >/dev/null 2>&1
-            firewall-cmd --permanent --remove-port="$port/udp" >/dev/null 2>&1
-          else
-            firewall-cmd --permanent --remove-port="$port/$proto" >/dev/null 2>&1
-          fi
-          firewall-cmd --reload >/dev/null 2>&1 && ok "已删除 $port/$proto 规则" || err "删除失败"
-        fi
-        ;;
-      4)
-        echo
-        if [ "$fw" = "ufw" ]; then
-          if ufw status 2>/dev/null | grep -qi '^Status: active'; then
-            dim "  当前状态：已启用"
-            if confirm "是否关闭 ufw？"; then
-              ufw disable >/dev/null 2>&1 && ok "ufw 已关闭" || err "关闭失败"
-            fi
-          else
-            dim "  当前状态：未启用"
-            echo
-            warn "启用前请确认 SSH 端口 $sshport 已放行，否则会锁死登录！"
-            dim "  已放行的端口："
-            ufw status 2>/dev/null | grep -E 'ALLOW' | sed 's/^/    /' || dim "    (无)"
-            echo
-            # 用 confirm_explicit 强制手输 yes，杜绝误触
-            if confirm_explicit "已确认 SSH $sshport 放行、要启用 ufw？"; then
-              # 再次兜底：启用前自动补一条 SSH 放行（幂等，已存在不会重复）
-              ufw allow "$sshport/tcp" >/dev/null 2>&1 || true
-              ufw --force enable >/dev/null 2>&1 && ok "ufw 已启用（已自动确保 SSH $sshport 放行）" || err "启用失败"
-            else
-              info "已取消"
-            fi
-          fi
-        else
-          if firewall-cmd --state >/dev/null 2>&1; then
-            dim "  当前状态：已启用"
-            if confirm "是否关闭 firewalld？"; then
-              systemctl stop firewalld >/dev/null 2>&1 && ok "firewalld 已关闭" || err "关闭失败"
-              systemctl disable firewalld >/dev/null 2>&1 || true
-            fi
-          else
-            dim "  当前状态：未启用"
-            echo
-            warn "启用前请确认 SSH 端口 $sshport 已放行，否则会锁死登录！"
-            if confirm_explicit "已确认 SSH $sshport 放行、要启用 firewalld？"; then
-              # 兜底：临时+永久各补一条 SSH 放行
-              firewall-cmd --permanent --add-port="$sshport/tcp" >/dev/null 2>&1 || true
-              systemctl enable --now firewalld >/dev/null 2>&1 || { err "启用失败"; continue; }
-              firewall-cmd --add-port="$sshport/tcp" >/dev/null 2>&1 || true
-              ok "firewalld 已启用（已自动确保 SSH $sshport 放行）"
-            else
-              info "已取消"
-            fi
-          fi
-        fi
-        ;;
-      0) return 0 ;;
-      *) err "无效选项：$choice" ;;
-    esac
-  done
-}
-
 act_iperf3() {
   step "iperf3 服务端 —— 状态 / 启动 / 停止"
   info "需要测速时才启动，用完可以关掉（不占端口、不随开机启动）"
@@ -2405,8 +2130,6 @@ menu() {
   printf '  %s%2s)%s  查看系统状态汇总\n' "$CYAN$BOLD" "17" "$NC"
   printf '  %s%2s)%s  安装/卸载 qc 快捷命令\n' "$CYAN$BOLD" "18" "$NC"
   printf '  %s%2s)%s  %s重装系统 (DD)%s\n' "$CYAN$BOLD" "19" "$NC" "$RED" "$NC"
-  printf '  %s%2s)%s  防火墙端口管理\n' "$CYAN$BOLD" "20" "$NC"
-  printf '  %s%2s)%s  三网回程测试 (NextTrace)\n' "$CYAN$BOLD" "21" "$NC"
   printf '  %s%2s)%s  %s退出%s\n' "$CYAN$BOLD" "0" "$NC" "$DIM" "$NC"
   hr
 }
@@ -2416,7 +2139,7 @@ main() {
   while true; do
     banner
     menu
-    if ! ask "  ${BOLD}请输入选项${NC} [0-20]: " choice; then
+    if ! ask "  ${BOLD}请输入选项${NC} [0-19]: " choice; then
       printf '\n  %s输入结束，退出%s\n\n' "$CYAN" "$NC"; exit 0
     fi
     case "${choice:-}" in
@@ -2439,8 +2162,6 @@ main() {
       17) act_status ;;
       18) act_qc_menu ;;
       19) act_reinstall ;;
-      20) act_firewall ;;
-      21) act_backhaul ;;
 
       0|q|Q|quit|exit) printf '\n  %s再见%s\n\n' "$CYAN" "$NC"; exit 0 ;;
       "") continue ;;
@@ -2480,8 +2201,6 @@ VPS 常用工具箱
   install       安装 qc 快捷命令，装完自动进入菜单
   uninstall     卸载 qc 快捷命令
   reinstall     重装系统 (会清空机器)
-  firewall      防火墙端口管理（ufw/firewalld，带防锁死保护）
-  backhaul      三网回程路由测试（NextTrace，别名 nt）
   help          显示本帮助
 USAGE
 }
@@ -2521,8 +2240,6 @@ case "${1:-}" in
     ;;
   uninstall)              act_uninstall_self ;;
   reinstall|dd)           act_reinstall ;;
-  firewall|fw)            act_firewall ;;
-  backhaul|nexttrace|nt)  act_backhaul ;;
   -h|--help|help)         usage ;;
   *) printf '%s\n' "未知参数: $1"; echo; usage; exit 1 ;;
 esac
