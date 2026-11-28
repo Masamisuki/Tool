@@ -16,7 +16,7 @@
 # ==============================================================================
 set -uo pipefail
 
-VERSION="3.27"
+VERSION="3.28"
 
 # 安装后的命令名
 CMD_NAME="qc"
@@ -1318,6 +1318,109 @@ _aria2_ensure_installed() {
   ok "已安装：$(aria2c --version 2>&1 | head -1)"
 }
 
+# 彻底卸载 aria2：停进程 → 删下载目录/日志 → 卸包 → 残留自检
+_aria2_uninstall() {
+  step "卸载 aria2（彻底清理）"
+  hr
+  info "将执行以下清理："
+  info "  1) 停止 aria2c 下载进程"
+  info "  2) 停止本工具开启的网页下载服务"
+  info "  3) 删除下载目录 /opt/downloads（含全部文件）"
+  info "  4) 删除日志 /tmp/aria2*.log、/tmp/http-<端口>.log"
+  info "  5) 卸载 aria2 软件包"
+  echo
+  if command -v aria2c >/dev/null 2>&1; then
+    info "aria2 版本：$(aria2c --version 2>&1 | head -1)"
+  else
+    dim "  aria2c 命令不存在（可能已经卸载）"
+  fi
+  if [ -d /opt/downloads ]; then
+    local cnt sz
+    cnt=$(find /opt/downloads -mindepth 1 -maxdepth 1 2>/dev/null | wc -l)
+    sz=$(du -sh /opt/downloads 2>/dev/null | awk '{print $1}')
+    info "下载目录：/opt/downloads（${cnt} 项，${sz:-?}）"
+  fi
+  local srvport
+  srvport=$(pgrep -a -f "python3 -m http\.server.*--directory /opt/downloads" 2>/dev/null | grep -o 'http.server [0-9]*' | awk '{print $2}' | head -1)
+  [ -n "$srvport" ] && info "网页下载服务：运行中（端口 $srvport）"
+  echo
+  warn "下载文件与日志删除后不可恢复；aria2 包会被卸载（不区分原先是谁装的）"
+  if ! confirm_explicit "确认彻底卸载 aria2？"; then info "已取消"; return 0; fi
+
+  # 1) 停进程
+  local stopped=0
+  if pgrep -x aria2c >/dev/null 2>&1; then
+    pkill -x aria2c 2>/dev/null || true
+    stopped=1
+  fi
+  if pgrep -f "python3 -m http\.server.*--directory /opt/downloads" >/dev/null 2>&1; then
+    # 逐个核对命令行，只杀本工具启动的实例，不碰别的 http.server
+    local p cmd
+    for p in $(pgrep -f "python3 -m http\.server.*--directory /opt/downloads" 2>/dev/null); do
+      cmd=$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)
+      case "$cmd" in
+        *"--directory /opt/downloads"*) kill "$p" 2>/dev/null || true ;;
+      esac
+    done
+    stopped=1
+  fi
+  [ "$stopped" = 1 ] && { sleep 1; ok "相关进程已停止"; }
+
+  # 2) 删目录和日志（find -delete 连隐藏文件一起清）
+  rm -rf /opt/downloads
+  rm -f /tmp/aria2*.log /tmp/http-[0-9]*.log
+  ok "下载目录与日志已删除"
+
+  # 3) 卸包
+  local rc=0
+  if   command -v apt-get >/dev/null 2>&1; then
+    DEBIAN_FRONTEND=noninteractive apt-get purge -y -qq aria2 >/dev/null 2>&1 || rc=$?
+    # purge 后 dpkg 若残留 rc 状态，再清一次
+    if command -v dpkg-query >/dev/null 2>&1 && dpkg-query -W -f='${db:Status-Abbrev}' aria2 2>/dev/null | grep -q '^rc'; then
+      dpkg --purge aria2 >/dev/null 2>&1 || true
+    fi
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf remove -y -q aria2 >/dev/null 2>&1 || rc=$?
+  elif command -v yum >/dev/null 2>&1; then
+    yum remove -y -q aria2 >/dev/null 2>&1 || rc=$?
+  elif command -v apk >/dev/null 2>&1; then
+    apk del aria2 >/dev/null 2>&1 || rc=$?
+  else
+    err "找不到支持的包管理器，请手动卸载 aria2 包"
+    rc=1
+  fi
+  # 以「命令是否还在」为准判断结果，比包管理器退出码更可靠（如包本就不存在时 purge 会返回非 0）
+  if ! command -v aria2c >/dev/null 2>&1; then
+    ok "aria2 软件包已卸载"
+  else
+    warn "aria2c 仍存在，卸载可能未成功（包管理器退出码 $rc），请手动检查"
+  fi
+
+  # 4) 残留自检
+  hr
+  info "残留自检："
+  local left=0 x
+  command -v aria2c >/dev/null 2>&1 && { err "aria2c 命令仍存在"; left=1; }
+  pgrep -x aria2c >/dev/null 2>&1 && { err "aria2c 进程仍在运行"; left=1; }
+  pgrep -f "python3 -m http\.server.*--directory /opt/downloads" >/dev/null 2>&1 && { err "网页下载服务仍在运行"; left=1; }
+  [ -e /opt/downloads ] && { err "/opt/downloads 仍存在"; left=1; }
+  x=$(find /tmp -maxdepth 1 \( -name 'aria2*.log' -o -name 'http-[0-9]*.log' \) -print 2>/dev/null)
+  if [ -n "$x" ]; then
+    err "以下日志仍存在："
+    printf '%s\n' "$x" | sed 's/^/    /'
+    left=1
+  fi
+  if command -v dpkg-query >/dev/null 2>&1; then
+    dpkg-query -W -f='${db:Status-Abbrev}\n' aria2 2>/dev/null | grep -q '^rc' && warn "dpkg 中 aria2 仍有 rc 状态记录（非文件残留）"
+  fi
+  if [ "$left" = 0 ]; then
+    ok "未发现残留，卸载干净"
+  else
+    warn "仍有上述残留，请按提示手动处理"
+  fi
+  hr
+}
+
 act_aria2() {
   step "aria2 下载工具"
   local choice url id log free_mb lastprog lastfile port myip srvport
@@ -1328,8 +1431,9 @@ act_aria2() {
     info "  3) 查看下载进度"
     info "  4) 清除下载文件"
     info "  5) 网页下载服务（开端口，浏览器里下）"
+    info "  6) 卸载 aria2（含下载文件，彻底清理）"
     info "  0) 返回"
-    if ! ask "  请选择 [0-5]: " choice; then return 0; fi
+    if ! ask "  请选择 [0-6]: " choice; then return 0; fi
     case "$choice" in
       1)
         _aria2_ensure_installed || continue
@@ -1489,6 +1593,7 @@ act_aria2() {
           err "启动失败，看日志：/tmp/http-$port.log"
         fi
         ;;
+      6) _aria2_uninstall ;;
       0) return 0 ;;
       *) err "无效选项：$choice" ;;
     esac
